@@ -1,0 +1,20 @@
+name: Release
+on:
+  push:
+    tags: ['*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: GitHub release for HACS
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          pre=""
+          case "$TAG" in *a[0-9]*|*b[0-9]*|*rc[0-9]*) pre="--prerelease";; esac
+          awk 'NR > 1 && /^# / { exit } { print }' RELEASE-NOTES.md > notes.md  # this version's section only
+          gh release create "$TAG" --title "OpenThermostat $TAG" --notes-file notes.md $pre

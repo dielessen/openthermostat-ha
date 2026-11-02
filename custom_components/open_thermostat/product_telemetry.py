@@ -1,0 +1,155 @@
+"""Read-only existing hub telemetry; never imports E32 rooms or publishes commands."""
+import json
+from homeassistant.components import mqtt
+from homeassistant.core import callback
+from homeassistant.helpers import entity_registry as er
+from .const import CONF_TOPIC_PREFIX, DOMAIN
+from .installation_group import ensure_installation_group
+
+
+async def async_setup_sensors(hass, entry, async_add_entities, *, native_metrics=False):
+    from .sensor import HUB_METRICS, VERSIONED_METRICS, HubMetric, DhwStatus
+    group_id = ensure_installation_group(hass, entry)
+    prefix = entry.data[CONF_TOPIC_PREFIX]
+    if native_metrics:
+        from .device_diagnostics import async_setup_device_diagnostics
+        await async_setup_device_diagnostics(hass, entry, async_add_entities, config_subentry_id=group_id)
+    tracker = hass.data[DOMAIN][entry.entry_id]["heating_tracker"]
+    online = False
+    entities = {}
+    command_entity = None
+    # The DHW presentation reads legacy ems_status, which modern firmware never sends.
+    dhw = None if native_metrics else DhwStatus(prefix, tracker)
+    if dhw is not None:
+        async_add_entities([dhw], config_subentry_id=group_id)
+
+    @callback
+    def refresh():
+        if command_entity is not None:
+            command_entity.refresh()
+        if dhw is not None:
+            dhw.update_from_tracker()
+        for entity in entities.values():
+            if entity._observation_field:
+                entity.update_from_tracker()
+
+    entry.async_on_unload(tracker.async_add_listener(refresh))
+
+    @callback
+    def availability(message):
+        nonlocal online
+        online = message.payload == ("online" if native_metrics else "on")
+        if command_entity is not None:
+            command_entity.set_online(online)
+        for entity in entities.values():
+            entity.set_online(online)
+
+    def handler(topic):
+        @callback
+        def receive(message):
+            nonlocal command_entity, online
+            if len(message.payload) > 8192:
+                return
+            try:
+                payload = json.loads(message.payload)
+            except (TypeError, ValueError):
+                return
+            if not isinstance(payload, dict):
+                return
+            if topic == 'ems_status':
+                if native_metrics and not getattr(message, 'retain', False):
+                    # Native availability is emitted on firmware connect only.
+                    # A live packet also proves liveness after an HA-only restart.
+                    online = True
+                from .controller_request import ControllerRequestSensor, supported
+                from .native_entity_cleanup import (hide_never_reported, note_value, value_gate_due,
+                                                    value_gated_enabled_default)
+                if command_entity is None and supported(payload):
+                    command_entity=ControllerRequestSensor(prefix)
+                    # Only an attended boiler trial gives it a value: a new record starts disabled.
+                    command_entity._attr_entity_registry_enabled_default=value_gated_enabled_default(
+                        hass,command_entity.unique_id,(payload.get('controller_request') or {}).get('known') is True)
+                    async_add_entities([command_entity],config_subentry_id=group_id)
+                if command_entity is not None:
+                    command_entity.update_payload(payload,online,retained=getattr(message,'retain',False))
+                    if command_entity.row is not None and command_entity.row.get('known'):
+                        if not command_entity.noted_value:
+                            command_entity.noted_value=note_value(hass,command_entity.unique_id)
+                    elif not command_entity.noted_value and value_gate_due(hass,entry,"controller_request"):
+                        hide_never_reported(hass,entry,[command_entity.unique_id])
+                if native_metrics:
+                    return  # Native command topic cannot populate legacy boiler measurements.
+            added = []
+            for metric in HUB_METRICS[topic]:
+                key = topic, metric
+                if key not in entities:
+                    entities[key] = HubMetric(prefix, topic, metric, entry.entry_id, tracker=tracker)
+                    added.append(entities[key])
+                entities[key].update_payload(payload, online)
+                # Preserve old statistic identities as quarantined history.
+                old_id = er.async_get(hass).async_get_entity_id("sensor", DOMAIN, f"{prefix}_hub_{metric}")
+                old = er.async_get(hass).async_get(old_id) if old_id else None
+                if topic == "ems_metrics" and metric in VERSIONED_METRICS and old and old.config_entry_id == entry.entry_id:
+                    legacy_key = topic, metric + "_legacy"
+                    if legacy_key not in entities:
+                        entities[legacy_key] = HubMetric(prefix, topic, metric, entry.entry_id, definition_version=1)
+                        added.append(entities[legacy_key])
+                    entities[legacy_key].update_payload(payload, online)
+            if added:
+                async_add_entities(added, config_subentry_id=group_id)
+        return receive
+
+    await mqtt.async_wait_for_mqtt_client(hass)
+    status_topic=f"{prefix}/v1/fw/availability" if native_metrics else f"{prefix}/status"
+    entry.async_on_unload(await mqtt.async_subscribe(hass, status_topic, availability))
+    for topic in HUB_METRICS:
+        if native_metrics and topic in {"ems_metrics", "device_status"}:
+            continue  # Single owner: validated native cache preserves v2 identities.
+        route=f"{prefix}/v1/fw/telemetry/controller_request" if native_metrics and topic=='ems_status' else f"{prefix}/{topic}"
+        entry.async_on_unload(await mqtt.async_subscribe(hass, route, handler(topic)))
+
+
+async def async_setup_binary_sensors(hass, entry, async_add_entities):
+    if "v1_runtime" in hass.data.get(DOMAIN, {}).get(entry.entry_id, {}):
+        return  # Native mode: these legacy status topics are never published.
+    from .binary_sensor import BOILER_STATES, BoilerState, HubConnection
+    group_id = ensure_installation_group(hass, entry)
+    prefix = entry.data[CONF_TOPIC_PREFIX]
+    tracker = hass.data[DOMAIN][entry.entry_id]["heating_tracker"]
+    connection = HubConnection(prefix)
+    states = {key: BoilerState(prefix, key, tracker=tracker) for key in BOILER_STATES}
+    async_add_entities([connection, *states.values()], config_subentry_id=group_id)
+    online = False
+
+    @callback
+    def refresh():
+        for entity in states.values():
+            if entity._observation_field:
+                entity.update_from_tracker()
+
+    entry.async_on_unload(tracker.async_add_listener(refresh))
+
+    @callback
+    def availability(message):
+        nonlocal online
+        online = message.payload == "on"
+        connection.update_value(online)
+        for entity in states.values():
+            entity.set_online(online)
+
+    @callback
+    def status(message):
+        if len(message.payload) > 8192:
+            return
+        try:
+            payload = json.loads(message.payload)
+        except (TypeError, ValueError):
+            return
+        if not isinstance(payload, dict):
+            return
+        for key, entity in states.items():
+            entity.update_value(payload.get(BOILER_STATES[key][0]), online)
+
+    await mqtt.async_wait_for_mqtt_client(hass)
+    entry.async_on_unload(await mqtt.async_subscribe(hass, f"{prefix}/status", availability))
+    entry.async_on_unload(await mqtt.async_subscribe(hass, f"{prefix}/ems_status", status))

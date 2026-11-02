@@ -1,0 +1,603 @@
+"""OpenThermostat room entities and optional dashboard."""
+
+import logging
+from contextlib import AsyncExitStack
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+
+from .const import (CONF_CREATE_DASHBOARD, CONF_TOPIC_PREFIX, DOMAIN, E32_DEVICE_NAME, MANUFACTURER,
+                    OLD_MANUFACTURER, PLATFORMS, TEST_SETUP_DEVICE_NAMES)
+from .dashboard import RoomDashboard
+from .heating import HeatingTracker
+
+_LOGGER = logging.getLogger(__name__)
+_RELOAD_DASHBOARDS = DOMAIN + "_reload_dashboards"
+
+
+# Dashboard cards (week_planner): set up only through the UI, no YAML.
+from homeassistant.helpers import config_validation as _cv  # noqa: E402
+CONFIG_SCHEMA = _cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass, config) -> bool:
+    """Domain level, once per HA run: the cards' JavaScript and websocket commands.
+
+    Independent of any installation, its runtime state or the dashboard, so a
+    browser always finds custom:openthermostat-* (the card itself waits for the E32).
+    """
+    from .week_planner import async_setup_planner
+    try:
+        await async_setup_planner(hass)
+    except Exception:  # the dashboard start retries; never block the installations
+        _LOGGER.exception("The OpenThermostat dashboard cards could not be registered yet")
+    return True
+
+
+def _drop_setup_state(hass, entry_id, state):
+    """A failed old setup may only remove its own published state."""
+    entries = hass.data.get(DOMAIN, {})
+    if entries.get(entry_id) is state:
+        entries.pop(entry_id, None)
+
+
+async def async_remove_config_entry_device(hass, entry, device) -> bool:
+    """Allow deleting an E32 room or Bluetooth sensor device the E32 no longer reports."""
+    from .heating_link import removable_device
+    return removable_device(hass, entry, device)
+
+
+def _rename_old_manufacturer(hass, entry):
+    """Devices an older release registered under the old manufacturer (hub, E32 rooms, Bluetooth
+    sensors) show OpenThermostat, also before any of their entities is added again.
+    Metadata only: the device, its identifiers and its entities stay the same."""
+    registry = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(registry, entry.entry_id):
+        if device.manufacturer == OLD_MANUFACTURER:
+            registry.async_update_device(device.id, manufacturer=MANUFACTURER)
+
+
+def _drop_test_setup_name(hass, entry):
+    """The hub device's long name from the project's test setup (TEST_SETUP_DEVICE_NAMES) goes: its entities
+    read "OpenThermostat E32 …" again instead of "E32-regelaar — ketel en diagnose …". Only that exact name;
+    a name the user chose stays. The entity IDs never change with a device name."""
+    registry = dr.async_get(hass)
+    device = registry.async_get_device_by_identifier((DOMAIN, entry.data[CONF_TOPIC_PREFIX]), entry.entry_id)
+    if device is not None and device.name_by_user in TEST_SETUP_DEVICE_NAMES:
+        registry.async_update_device(device.id, name_by_user=None)
+
+
+async def _cleanup_setup_bench(hass, entry_id, owner):
+    from .v1_bench_actions import KEY, async_unregister_entry
+    if hass.data.get(KEY, {}).get(entry_id) is owner:
+        await async_unregister_entry(hass, entry_id)
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up the thermostat hub and its room entities."""
+    prefix = entry.data[CONF_TOPIC_PREFIX]
+    state = hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"duration_minutes": {}}
+    # Register each inverse before startup: failures and CancelledError both
+    # unwind partial subscriptions, platforms and presentation in reverse order.
+    async with AsyncExitStack() as cleanup:
+        cleanup.callback(_drop_setup_state, hass, entry.entry_id, state)
+        tracker = HeatingTracker(hass, entry)
+        state["heating_tracker"] = tracker
+        cleanup.push_async_callback(tracker.async_stop)
+        await tracker.async_start()
+        dr.async_get(hass).async_get_or_create(
+            config_entry_id=entry.entry_id, identifiers={(DOMAIN, prefix)},
+            name="OpenThermostat", manufacturer=MANUFACTURER, model="OpenThermostat")
+        _rename_old_manufacturer(hass, entry)
+        _drop_test_setup_name(hass, entry)
+        if entry.options.get(CONF_CREATE_DASHBOARD, False):
+            dashboard = RoomDashboard(hass, prefix, entry.entry_id)
+            state["dashboard"] = dashboard
+            cleanup.push_async_callback(dashboard.async_stop)
+            await dashboard.async_start()
+        cleanup.push_async_callback(hass.config_entries.async_unload_platforms, entry, PLATFORMS)
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        cleanup.pop_all()
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload the room climate platform and its MQTT subscriptions."""
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        await hass.data[DOMAIN][entry.entry_id]["heating_tracker"].async_stop()
+        if dashboard := hass.data[DOMAIN][entry.entry_id].get("dashboard"):
+            await dashboard.async_stop()
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+    return unloaded
+
+# Explicit mode dispatcher. Existing entries default to legacy; IDs stay intact.
+_legacy_setup_entry = async_setup_entry
+_legacy_unload_entry = async_unload_entry
+
+async def _async_options_updated(hass, entry):
+    from .v1_model import integration_mode, MODE_SHADOW
+    # Withdraw current SOURCE control before ANY native config/subentry reload
+    # await. A changed draft cannot keep a ready owner while reload is queued.
+    state=hass.data.get(DOMAIN,{}).get(entry.entry_id,{})
+    from .room_groups import presentation_only_update, remember_configuration
+    if presentation_only_update(hass, entry):
+        # Only the room / installation groups of the integration page changed: no reload.
+        return
+    from .e32_backup import passphrase_only_update
+    if passphrase_only_update(state, entry):
+        # Only the backup passphrase was stored (once, e32_backup): nothing to reload.
+        remember_configuration(hass, entry)
+        return
+    from .e32_access import apply_password, password_only_update
+    if password_only_update(state, entry):
+        # Only the E32 password changed (re-authentication): use it, no reload or plan review.
+        apply_password(hass, entry, state)
+        remember_configuration(hass, entry)
+        return
+    from .energy_input import energy_only_update
+    if energy_only_update(state, entry):
+        # Only the optional energy inputs changed: follow them, no reload (no plan review).
+        if (forwarder:=state.get("energy_forwarder")) is not None:
+            forwarder.reconfigure()
+        if (advice:=state.get("heating_advice")) is not None:
+            advice.reevaluate()
+        remember_configuration(hass, entry)
+        return
+    runtime=state.get("v1_runtime");connection=state.get("v1_connection")
+    if (getattr(runtime,"native_plan_source",None) is not None
+            and connection is not None and not connection.closed and connection.client is not None):
+        connection.client.require_native_plan_review()
+    if (getattr(runtime,"graph_controller_source",None) is not None
+            and connection is not None and not connection.closed and connection.client is not None):
+        connection.client.require_graph_source_review()
+    if integration_mode(entry) == MODE_SHADOW:
+        from .v1_heating_graph import reconcile_removed_rooms
+        if reconcile_removed_rooms(hass, entry):
+            # Native update schedules one follow-up callback; avoid duplicate reload.
+            return
+    # Keep the same presentation during our native config reload. Removing the
+    # panel discards an open editor's draft and even its successful save receipt.
+    # Runtime/transport still unload normally; this object owns only HA cards.
+    from .product import is_product
+    dashboard = state.get("dashboard")
+    preserve = (dashboard is not None and is_product(entry)
+                and integration_mode(entry) == MODE_SHADOW
+                and entry.options.get(CONF_CREATE_DASHBOARD, False))
+    retained = hass.data.setdefault(_RELOAD_DASHBOARDS, {})
+    if preserve:
+        state.pop("dashboard")
+        retained[entry.entry_id] = dashboard
+    try:
+        await hass.config_entries.async_reload(entry.entry_id)
+    finally:
+        if preserve and retained.get(entry.entry_id) is dashboard:
+            retained.pop(entry.entry_id)
+            await dashboard.async_stop()
+
+async def async_migrate_entry(hass, entry):
+    if entry.version > 3:
+        return False
+    if entry.version < 3:
+        from .product import PRODUCT_CONFIG, PRODUCT_VERSION, INSTALLATION, ha_version_supported
+        from .v1_model import MODE_SHADOW, integration_mode
+        data = {**entry.data, "integration_mode": entry.data.get("integration_mode", "legacy")}
+        managed = integration_mode(entry) == MODE_SHADOW
+        if managed and not ha_version_supported(hass):
+            return False
+        if managed:
+            data[PRODUCT_CONFIG] = PRODUCT_VERSION
+        subs = dict(entry.subentries)
+        if managed:
+            central = [s for s in subs.values() if s.subentry_type == "heating"]
+            if len(central) > 1 or (central and INSTALLATION in data):
+                return False
+            if central:
+                data[INSTALLATION] = dict(central[0].data)
+                subs.pop(central[0].subentry_id)
+        # Migration changes presentation/routes, never runtime or actuator authority.
+        changes = dict(version=3, data=data,
+            title="OpenThermostat" if managed and entry.title.startswith("OpenThermostat shadow (") else entry.title,
+        )
+        if managed:
+            # Same pinned transaction; listeners see complete product metadata.
+            hass.config_entries._async_update_entry(entry, subentries=subs, **changes)
+            object.__setattr__(entry, "_supported_subentry_types", None)
+        else:
+            hass.config_entries.async_update_entry(entry, **changes)
+    return True
+
+# SOURCE-owned selection only. No entry option, registry, service or incoming
+# manifest can set this. Default remains None/api1; real installation pins require
+# independent review. Selecting this branch creates DATA-only, never control.
+_GRAPH_DATA_SOURCE_PROFILE = None
+
+def _selected_graph_data_profile(entry):
+    from .v1_model import has_graph_rooms,integration_mode,MODE_SHADOW
+    if not has_graph_rooms(entry) or integration_mode(entry)!=MODE_SHADOW or _GRAPH_DATA_SOURCE_PROFILE is None:
+        return None
+    from homeassistant.exceptions import ConfigEntryError
+    from .graph_wire import GraphSourceProfile
+    profile=_GRAPH_DATA_SOURCE_PROFILE
+    try:
+        if not isinstance(profile,GraphSourceProfile) or profile.draft_source is None or profile.entry_unique_id is None:
+            raise ValueError("complete source bundle and native entry pin required")
+        if profile.entry_unique_id!=entry.unique_id:
+            return None # Source selection cannot capture another hub/entry.
+        profile.validate()
+    except (ValueError,TypeError):
+        raise ConfigEntryError("graph_profile_unsupported") from None
+    return profile
+
+# Trusted reviewed logical context profiles, never options or discovery data.
+# Empty preserves existing conservative API1 behavior; no physical qualification.
+_COMFORT_CONTEXT_SOURCE_PROFILES = ()
+_CONTROLLER_POLICY_SOURCE_PROFILES = ()
+
+# Reviewed installation-owned diagnostic pins only. Empty until separately
+# reviewed; options, discovery and first reports never populate this tuple.
+_ORIGINAL_TV02_DIAGNOSTIC_SOURCES = ()
+
+def _selected_original_tv02_sources(entry):
+    from .original_tv02 import Tv02DiagnosticSource
+    from .v1_model import MODE_SHADOW, integration_mode
+    if integration_mode(entry) != MODE_SHADOW:
+        return ()
+    sources = _ORIGINAL_TV02_DIAGNOSTIC_SOURCES
+    if (type(sources) is not tuple or len(sources) > 64
+            or any(type(source) is not Tv02DiagnosticSource
+                or type(source.entry_unique_id) is not str or not source.entry_unique_id
+                for source in sources)):
+        _LOGGER.warning("Original TV02 diagnostics disabled: invalid source selection")
+        return ()
+    return tuple(source for source in sources if source.entry_unique_id == entry.unique_id)
+
+async def _async_selected_original_tv02_sources(hass, entry):
+    from .v1_model import MODE_SHADOW, integration_mode
+    if integration_mode(entry) != MODE_SHADOW:
+        return ()
+    # Explicit compiled installation pins take precedence, including a malformed
+    # selection: never substitute another source after its review failed.
+    if _ORIGINAL_TV02_DIAGNOSTIC_SOURCES != ():
+        return _selected_original_tv02_sources(entry)
+    from .diagnostic_source_manifest import async_selected_sources
+    return await async_selected_sources(hass, entry)
+
+_GRAPH_CONTROLLER_ENTRY_SOURCES = ()
+
+def _selected_graph_controller_source(entry):
+    from homeassistant.exceptions import ConfigEntryError
+    from .v1_model import integration_mode,MODE_SHADOW
+    if integration_mode(entry)!=MODE_SHADOW or _GRAPH_CONTROLLER_ENTRY_SOURCES==():return None
+    from .graph_control_source import GraphControllerEntrySource
+    from .topology_control_source import TopologyControllerEntrySource
+    try:
+        sources=_GRAPH_CONTROLLER_ENTRY_SOURCES
+        if type(sources) is not tuple or len(sources)>8:raise ValueError("source_invalid")
+        selected=[]
+        for source in sources:
+            if not isinstance(source,(GraphControllerEntrySource,TopologyControllerEntrySource)):raise ValueError("source_invalid")
+            source.validate()
+            if source.controller.entry_unique_id==entry.unique_id:selected.append(source)
+        if len(selected)>1:raise ValueError("source_multiple_owners")
+        return selected[0] if selected else None
+    except (ValueError,TypeError,KeyError):
+        raise ConfigEntryError("graph_control_source_invalid") from None
+
+
+# Independent installation-SHADOW contract; compiled fixtures or separately
+# reviewed local logical selection, never DATA/readiness/physical authority.
+# Empty means unsupported, not inferred source/physical qualification.
+_NATIVE_PLAN_SOURCE_PROFILES = ()
+
+def _selected_native_plan_source(entry):
+    from .native_plan import NativePlanSource
+    from .v1_model import integration_mode,MODE_SHADOW
+    from homeassistant.exceptions import ConfigEntryError
+    if integration_mode(entry)!=MODE_SHADOW:return None
+    try:
+        profiles=_NATIVE_PLAN_SOURCE_PROFILES
+        if type(profiles) is not tuple or len(profiles)>8:raise ValueError("native_profile_limit")
+        selected=[]
+        for source in profiles:
+            if type(source) is not NativePlanSource:raise ValueError("native_profile_type")
+            source.validate()
+            if source.policy.entry_unique_id==entry.unique_id:selected.append(source)
+        from .native_provisioning import source_from_selection
+        local=source_from_selection(entry)
+        if local is not None:selected.append(local)
+        if len(selected)>1:raise ValueError("native_multiple_owners")
+        return selected[0] if selected else None
+    except (ValueError,TypeError,KeyError):
+        raise ConfigEntryError("native_plan_profile_unsupported") from None
+
+def _selected_controller_policy_source_profile(entry):
+    from homeassistant.exceptions import ConfigEntryError
+    from .comfort_sources import ControllerPolicySourceProfile
+    from .v1_model import MODE_SHADOW,integration_mode
+    if integration_mode(entry)!=MODE_SHADOW:return None
+    try:
+        profiles=_CONTROLLER_POLICY_SOURCE_PROFILES
+        if type(profiles) is not tuple or len(profiles)>8:
+            raise ValueError("controller_policy_profile_invalid")
+        selected=[]
+        for profile in profiles:
+            if not isinstance(profile,ControllerPolicySourceProfile):
+                raise ValueError("controller_policy_profile_invalid")
+            profile.validate()
+            if profile.entry_unique_id==entry.unique_id:selected.append(profile)
+        if len(selected)>1:raise ValueError("controller_policy_multiple_owners")
+        return selected[0] if selected else None
+    except (ValueError,TypeError):
+        raise ConfigEntryError("controller_policy_profile_invalid") from None
+
+def _selected_context_source_profiles(entry):
+    from homeassistant.exceptions import ConfigEntryError
+    from .comfort_sources import ContextSourceProfile
+    from .v1_model import MODE_SHADOW,integration_mode
+    if integration_mode(entry)!=MODE_SHADOW:
+        return ()
+    try:
+        profiles=_COMFORT_CONTEXT_SOURCE_PROFILES
+        if type(profiles) is not tuple or len(profiles)>16:
+            raise ValueError("context_profile_invalid")
+        for profile in profiles:
+            if not isinstance(profile,ContextSourceProfile):
+                raise ValueError("context_profile_invalid")
+            profile.validate()
+        return tuple(p for p in profiles if p.entry_unique_id==entry.unique_id)
+    except (ValueError,TypeError):
+        raise ConfigEntryError("context_profile_invalid") from None
+
+def _shadow_platforms(product):
+    """Setup and unload use the same list; product entries add the E32 room operation."""
+    from homeassistant.const import Platform
+    platforms = [Platform.CLIMATE, Platform.SENSOR]
+    if product:
+        platforms += [Platform.BINARY_SENSOR, Platform.UPDATE, Platform.SELECT, Platform.NUMBER, Platform.DATETIME]
+        platforms.append(Platform.SWITCH)  # the E32 flow options (e32_flow)
+        platforms.append(Platform.BUTTON)  # back up the E32 settings now (e32_backup)
+    return platforms
+
+async def _async_mqtt_ready(hass):
+    """False while the MQTT integration's client is retrying or still starting and does not come.
+
+    Only an MQTT entry that is retrying (broker unreachable) or still setting up
+    counts; without an MQTT entry, or with one not (yet) loaded otherwise, the
+    setup goes on as before (its subscriptions report their own errors).
+    """
+    from homeassistant.components import mqtt
+    from homeassistant.config_entries import ConfigEntryState
+    entries = hass.config_entries.async_entries("mqtt")
+    if not entries or entries[0].disabled_by is not None:
+        return True
+    state = entries[0].state
+    if state is ConfigEntryState.SETUP_RETRY:
+        return False
+    if state is ConfigEntryState.SETUP_IN_PROGRESS:
+        return bool(await mqtt.async_wait_for_mqtt_client(hass))
+    return True
+
+
+async def async_setup_entry(hass, entry):
+    from .v1_model import integration_mode, MODE_LEGACY, MODE_SHADOW, RoomBinding
+    mode = integration_mode(entry)
+    from .v1_model import has_graph_rooms, CONF_ENABLED
+    graph_profile=_selected_graph_data_profile(entry)
+    graph_control_source=_selected_graph_controller_source(entry)
+    from homeassistant.exceptions import ConfigEntryError
+    try:
+        native_plan_source=_selected_native_plan_source(entry)
+        unusable_source=False
+    except ConfigEntryError:
+        # A saved native room profile this release cannot use (a product entry
+        # linked by Connect E32): start without it, like a stale one below, and
+        # let Repairs finish the E32 link without it, instead of a dead entry.
+        from .native_provisioning import SOURCE_OPTION
+        from .room_plan import has_room_plan
+        if not (has_room_plan(entry) and SOURCE_OPTION in entry.options):
+            raise
+        _LOGGER.warning("OpenThermostat %s: the saved native room profile cannot be used; starting without "
+                        "it (Repairs: finish the E32 link)", entry.title)
+        native_plan_source=None
+        unusable_source=True
+    from .e32_link import stale_native_source
+    # An older HA room deleted after Connect E32: start without that native room
+    # profile (and without its link) instead of failing; Repairs offers the fix.
+    stale_link=unusable_source or stale_native_source(entry,native_plan_source)
+    if stale_link:
+        native_plan_source=None
+    if native_plan_source is not None and (graph_profile is not None or graph_control_source is not None):
+        from homeassistant.exceptions import ConfigEntryError
+        raise ConfigEntryError("native_plan_owner_role_conflict")
+    if graph_control_source is not None or native_plan_source is not None:
+        prior=hass.data.get(DOMAIN,{}).get(entry.entry_id,{})
+        if (connection:=prior.get("v1_connection")) is not None and not connection.closed:
+            from homeassistant.exceptions import ConfigEntryError
+            raise ConfigEntryError("graph_control_existing_owner_active")
+    if graph_profile is not None and graph_control_source is not None:
+        from homeassistant.exceptions import ConfigEntryError
+        raise ConfigEntryError("graph_control_data_owner_conflict")
+    if (has_graph_rooms(entry) and mode == MODE_SHADOW and entry.options.get(CONF_ENABLED, False) and not stale_link
+            and graph_profile is None and graph_control_source is None and native_plan_source is None):
+        # An older Home Assistant room with the link on but no native room profile
+        # (however the entry got there): no runtime can serve that room. A product
+        # entry linked by Connect E32 starts without the runtime (the E32 rooms,
+        # telemetry, boiler values and forwarding need none) and Repairs offers
+        # "remove the old room", instead of a dead entry.
+        from .product import is_product
+        from .room_plan import has_room_plan
+        if is_product(entry) and has_room_plan(entry):
+            _LOGGER.warning("OpenThermostat %s: an older Home Assistant room has no native room profile; "
+                            "starting without it (Repairs: remove the old room)", entry.title)
+            stale_link = True
+    if has_graph_rooms(entry) and (mode != MODE_SHADOW or (entry.options.get(CONF_ENABLED, False) and not stale_link and graph_profile is None and graph_control_source is None and native_plan_source is None)):
+        from homeassistant.exceptions import ConfigEntryError
+        raise ConfigEntryError("graph_room_contract_unavailable")
+    if mode == MODE_LEGACY:
+        result = await _legacy_setup_entry(hass, entry)
+        if result:
+            from .metrics_reports import async_register_entry, async_unregister_entry
+            async_register_entry(hass, entry)
+            entry.async_on_unload(lambda: async_unregister_entry(hass, entry.entry_id))
+            entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+        return result
+    if mode != MODE_SHADOW:
+        return False
+    if not await _async_mqtt_ready(hass):
+        # The MQTT integration is set up but its client is not available (yet):
+        # Home Assistant retries this entry, instead of one without its E32 topics.
+        from homeassistant.exceptions import ConfigEntryNotReady
+        raise ConfigEntryNotReady("mqtt_unavailable")
+    from .v1_heating_graph import reconcile_removed_rooms
+    reconcile_removed_rooms(hass, entry)
+    # The hub's leftover test-setup name (TEST_SETUP_DEVICE_NAMES) also goes on this route: before 1.0 it
+    # was dropped on the legacy route only, so a shadow-mode installation kept it.
+    _drop_test_setup_name(hass, entry)
+    from .v1_runtime import ShadowRuntime
+    from .product import is_product
+    product = is_product(entry)
+    rooms = [RoomBinding.from_dict(dict(s.data)) for s in entry.subentries.values()
+             if s.subentry_type == "zone"]
+    context_profiles=_selected_context_source_profiles(entry)
+    controller_policy=_selected_controller_policy_source_profile(entry)
+    if graph_control_source is not None:
+        if controller_policy not in (None,graph_control_source.controller):
+            from homeassistant.exceptions import ConfigEntryError
+            raise ConfigEntryError("graph_control_source_owner_conflict")
+        controller_policy=graph_control_source.controller
+    if native_plan_source is not None:
+        if controller_policy is not None:
+            from homeassistant.exceptions import ConfigEntryError
+            raise ConfigEntryError("native_plan_policy_role_conflict")
+        controller_policy=native_plan_source.policy
+    runtime_kwargs={}
+    if native_plan_source is not None:
+        runtime_kwargs["native_plan_source"]=native_plan_source
+    if graph_control_source is not None:
+        runtime_kwargs["graph_controller_source"]=graph_control_source
+    if graph_profile is not None:
+        runtime_kwargs["graph_data_profile"]=graph_profile
+    if context_profiles:
+        runtime_kwargs["context_source_profiles"]=context_profiles
+    if controller_policy is not None:
+        runtime_kwargs["controller_policy_source_profile"]=controller_policy
+    try:
+        runtime=ShadowRuntime(hass,entry,rooms,**runtime_kwargs)
+    except ValueError:
+        if controller_policy is not None:
+            from homeassistant.exceptions import ConfigEntryError
+            raise ConfigEntryError("controller_policy_profile_binding") from None
+        if context_profiles:
+            from homeassistant.exceptions import ConfigEntryError
+            raise ConfigEntryError("context_profile_binding") from None
+        raise
+    state = {"v1_runtime": runtime}
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = state
+    async with AsyncExitStack() as cleanup:
+        cleanup.callback(_drop_setup_state, hass, entry.entry_id, state)
+        cleanup.push_async_callback(runtime.async_stop)
+        group_kwargs = {}
+        if product:
+            from .installation_group import ensure_installation_group
+            group_kwargs["config_subentry_id"] = ensure_installation_group(hass, entry)
+        dr.async_get(hass).async_get_or_create(
+            config_entry_id=entry.entry_id, identifiers={(DOMAIN, entry.data[CONF_TOPIC_PREFIX])},
+            name=E32_DEVICE_NAME, manufacturer=MANUFACTURER, model="OpenThermostat", **group_kwargs)
+        _rename_old_manufacturer(hass, entry)
+        if product:
+            # One group per E32 room on the integration page (before the platforms add entities).
+            from .room_groups import async_setup_room_groups
+            async_setup_room_groups(hass, entry, group_kwargs["config_subentry_id"])
+            # The dashboard cards' modules, also without the managed dashboard (idempotent, never raises).
+            from .week_planner import async_ensure_cards
+            await async_ensure_cards(hass)
+            tracker = HeatingTracker(hass, entry)
+            state["heating_tracker"] = tracker
+            cleanup.push_async_callback(tracker.async_stop)
+            await tracker.async_start()
+            # Daily backups of the E32 settings (before the platforms: the button and sensor use them).
+            from .e32_backup import async_setup_backups
+            try:
+                backups = await async_setup_backups(hass, entry, state)
+            except Exception:  # optional: never blocks the rooms
+                _LOGGER.exception("OpenThermostat %s: the E32 backups could not be started", entry.title)
+            else:
+                if backups is not None:
+                    cleanup.callback(backups.stop)
+        if not stale_link:
+            await runtime.async_start()
+        if runtime.enabled:
+            from .v1_mqtt import NativeShadowConnection
+            diagnostic_sources = await _async_selected_original_tv02_sources(hass, entry)
+            diagnostic_kwargs = {"tv02_sources": diagnostic_sources} if diagnostic_sources else {}
+            connection = (NativeShadowConnection(runtime, graph_profile, **diagnostic_kwargs)
+                          if graph_profile is not None else NativeShadowConnection(runtime, **diagnostic_kwargs))
+            state["v1_connection"] = connection
+            cleanup.push_async_callback(connection.async_close)
+            await connection.async_start()
+        from .v1_bench_actions import KEY as BENCH_KEY, async_register_entry
+        async_register_entry(hass, entry)
+        cleanup.push_async_callback(_cleanup_setup_bench, hass, entry.entry_id,
+                                    hass.data.get(BENCH_KEY, {}).get(entry.entry_id))
+        platforms = _shadow_platforms(product)
+        cleanup.push_async_callback(hass.config_entries.async_unload_platforms, entry, platforms)
+        await hass.config_entries.async_forward_entry_setups(entry, platforms)
+        if entry.options.get(CONF_CREATE_DASHBOARD,False):
+            dashboard=hass.data.get(_RELOAD_DASHBOARDS, {}).pop(entry.entry_id, None)
+            existing_dashboard = dashboard is not None
+            if dashboard is None:
+                dashboard=RoomDashboard(hass,entry.data[CONF_TOPIC_PREFIX],entry.entry_id)
+            state["dashboard"]=dashboard
+            cleanup.push_async_callback(dashboard.async_stop)
+            if not existing_dashboard:
+                await dashboard.async_start()
+            dashboard.set_rooms(set(runtime.rooms))
+        from .metrics_reports import async_register_entry, async_unregister_entry
+        cleanup.callback(async_unregister_entry, hass, entry.entry_id)
+        async_register_entry(hass, entry)
+        entry.async_on_unload(lambda: async_unregister_entry(hass, entry.entry_id))
+        entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+        if product:
+            from .room_groups import remember_configuration
+            remember_configuration(hass, entry)
+            from .e32_link import update_legacy_rooms_issue
+            update_legacy_rooms_issue(hass, entry)
+        cleanup.pop_all()
+    return True
+
+async def async_remove_entry(hass, entry):
+    """A removed installation leaves no Repairs item behind."""
+    from homeassistant.helpers import issue_registry as ir
+    from .e32_link import issue_id
+    ir.async_delete_issue(hass, DOMAIN, issue_id(entry))
+    # Every other item of this installation too (room sources, setting devices, metrics, ...).
+    for domain, other in list(ir.async_get(hass).issues):
+        if domain == DOMAIN and entry.entry_id in other:
+            ir.async_delete_issue(hass, DOMAIN, other)
+    # Its E32 settings backups too (the passphrase that opens their secrets went with the entry).
+    from .e32_backup import async_remove_backups
+    await async_remove_backups(hass, entry.entry_id)
+    # The last installation removed: browsers stop loading the dashboard cards (week_planner).
+    if not any(other.entry_id != entry.entry_id for other in hass.config_entries.async_entries(DOMAIN)):
+        from .week_planner import async_remove_card_modules
+        async_remove_card_modules(hass)
+
+async def async_unload_entry(hass, entry):
+    state = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    if "v1_runtime" not in state:
+        return await _legacy_unload_entry(hass, entry)
+    from .v1_bench_actions import async_unregister_entry
+    await async_unregister_entry(hass, entry.entry_id)
+    # Withdraw listener/task/transport ownership before any mode transfer.
+    await state["v1_runtime"].async_stop()
+    from .product import is_product
+    unloaded = await hass.config_entries.async_unload_platforms(entry, _shadow_platforms(is_product(entry)))
+    if unloaded:
+        if tracker := state.get("heating_tracker"):
+            await tracker.async_stop()
+        if dashboard:=state.get("dashboard"):
+            await dashboard.async_stop()
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+    return unloaded

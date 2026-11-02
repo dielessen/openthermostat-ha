@@ -1,0 +1,199 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "room_demand": {
+        "default": "mdi:fire-off",
+        "state": {
+          "on": "mdi:fire"
+        }
+      },
+      "burner_short_cycling": {
+        "default": "mdi:fire",
+        "state": {
+          "on": "mdi:fire-alert"
+        }
+      },
+      "radiators_heating": {
+        "default": "mdi:radiator-off",
+        "state": {
+          "on": "mdi:radiator"
+        }
+      },
+      "heating_problem": {
+        "default": "mdi:radiator",
+        "state": {
+          "on": "mdi:radiator-disabled"
+        }
+      }
+    },
+    "datetime": {
+      "room_inactive_until": {
+        "default": "mdi:calendar-clock"
+      }
+    },
+    "number": {
+      "room_fallback_setpoint": {
+        "default": "mdi:thermometer-alert"
+      },
+      "radiator_rated_power": {
+        "default": "mdi:radiator"
+      }
+    },
+    "select": {
+      "flow_curve_design_flow_c": {
+        "default": "mdi:chart-line"
+      },
+      "room_state": {
+        "default": "mdi:power",
+        "state": {
+          "inactive": "mdi:power-off"
+        }
+      }
+    },
+    "sensor": {
+      "heat_request": {
+        "default": "mdi:water-thermometer"
+      },
+      "heating_gas": {
+        "default": "mdi:radiator"
+      },
+      "hot_water_gas": {
+        "default": "mdi:water-boiler"
+      },
+      "controller_requested_flow_temperature": {
+        "default": "mdi:flask-outline"
+      },
+      "room_setpoint": {
+        "default": "mdi:thermometer-check"
+      },
+      "room_status": {
+        "default": "mdi:list-status",
+        "state": {
+          "ok": "mdi:check-circle-outline",
+          "fallback": "mdi:thermometer-alert",
+          "stale": "mdi:clock-alert-outline",
+          "lost": "mdi:access-point-network-off",
+          "inactive": "mdi:power-off",
+          "window_open": "mdi:window-open-variant",
+          "window_pending": "mdi:window-open"
+        }
+      },
+      "shadow_e32_heating_time_today": {
+        "default": "mdi:timer-outline"
+      },
+      "shadow_tado_heating_time_today": {
+        "default": "mdi:timer-outline"
+      },
+      "shadow_e32_starts_today": {
+        "default": "mdi:counter"
+      },
+      "shadow_tado_starts_today": {
+        "default": "mdi:counter"
+      },
+      "shadow_agreement_today": {
+        "default": "mdi:compare-horizontal"
+      },
+      "takeover_readiness": {
+        "default": "mdi:clipboard-check-outline",
+        "state": {
+          "ready": "mdi:check-circle-outline",
+          "waiting": "mdi:timer-sand",
+          "not_ready": "mdi:alert-circle-outline",
+          "not_applicable": "mdi:minus-circle-outline"
+        }
+      },
+      "burner_starts_last_hour": {
+        "default": "mdi:counter"
+      },
+      "room_learning": {
+        "default": "mdi:school-outline",
+        "state": {
+          "collecting": "mdi:database-clock-outline",
+          "learning": "mdi:school-outline",
+          "ready": "mdi:check-decagram-outline"
+        }
+      },
+      "room_flow_advice": {
+        "default": "mdi:thermometer-lines"
+      },
+      "room_heating_start": {
+        "default": "mdi:clock-start"
+      },
+      "dhw_taps_today": {
+        "default": "mdi:faucet"
+      },
+      "dhw_keep_warm_today": {
+        "default": "mdi:water-boiler"
+      },
+      "dhw_burner_time_today": {
+        "default": "mdi:timer-outline"
+      },
+      "radiator_heating_time": {
+        "default": "mdi:timer-outline"
+      },
+      "heating_advice": {
+        "default": "mdi:lightbulb-on-outline",
+        "state": {
+          "0": "mdi:lightbulb-outline"
+        }
+      },
+      "flow_source": {
+        "default": "mdi:thermometer-water"
+      },
+      "flow_curve_slope": {
+        "default": "mdi:chart-line"
+      },
+      "gas_calibration": {
+        "default": "mdi:meter-gas"
+      },
+      "night_heating_gas": {
+        "default": "mdi:weather-night"
+      },
+      "e32_last_backup": {
+        "default": "mdi:backup-restore"
+      }
+    },
+    "switch": {
+      "flow_weather_curve": {
+        "default": "mdi:sun-thermometer"
+      },
+      "flow_apply_learned": {
+        "default": "mdi:school"
+      }
+    },
+    "button": {
+      "e32_backup_now": {
+        "default": "mdi:content-save-cog"
+      }
+    }
+  },
+  "services": {
+    "export_metrics_csv": {
+      "service": "mdi:file-delimited-outline"
+    },
+    "set_comfort": {
+      "service": "mdi:sofa-outline"
+    },
+    "source_bench_start": {
+      "service": "mdi:play-circle-outline"
+    },
+    "source_bench_stop": {
+      "service": "mdi:stop-circle-outline"
+    },
+    "source_bench_status": {
+      "service": "mdi:information-outline"
+    },
+    "set_room_override": {
+      "service": "mdi:thermometer-plus"
+    },
+    "clear_room_override": {
+      "service": "mdi:calendar-sync"
+    },
+    "set_away": {
+      "service": "mdi:home-export-outline"
+    },
+    "clear_away": {
+      "service": "mdi:home-import-outline"
+    }
+  }
+}

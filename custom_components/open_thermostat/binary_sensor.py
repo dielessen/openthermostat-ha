@@ -1,0 +1,301 @@
+"""Heating states for OpenThermostat rooms."""
+
+import json
+import logging
+
+from homeassistant.components import mqtt
+from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
+from homeassistant.components.mqtt.models import ReceiveMessage
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
+from .room_identity import room_device_name, room_key
+from .const import CONF_TOPIC_PREFIX, DOMAIN, MANUFACTURER
+from .heating import HeatingTracker, boolean_state
+
+_LOGGER = logging.getLogger(__name__)
+
+STATES = {
+    "enabled": ("enabledState", "Heating enabled", None),
+    "heating": ("isBeingHeatedState", "Heating", BinarySensorDeviceClass.HEAT),
+}
+
+BOILER_STATES = {
+    "boiler_heating_enabled": ("heatingEnabled", "Boiler heating enabled", None),
+    "boiler_hot_water_enabled": ("warmWaterEnabled", "Boiler hot water enabled", None),
+    "boiler_burner_active": ("burningGas", "Boiler burner active", BinarySensorDeviceClass.HEAT),
+    "boiler_pump_active": ("pumpEnabled", "Boiler pump active", BinarySensorDeviceClass.RUNNING),
+    "boiler_heating_active": ("heatingActive", "Boiler heating active", BinarySensorDeviceClass.HEAT),
+    "boiler_hot_water_active": ("warmWaterActive", "Boiler hot water active", BinarySensorDeviceClass.HEAT),
+    "boiler_siphon_filling": ("fillingSiphon", "Boiler siphon filling", None),
+    "boiler_fan_active": ("fanEnabled", "Boiler fan active", BinarySensorDeviceClass.RUNNING),
+    "boiler_pump_venting": ("pumpVenting", "Boiler pump venting", None),
+}
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Subscribe to room state and availability messages."""
+    from .product import is_product
+    if is_product(entry):
+        if "v1_runtime" in hass.data.get(DOMAIN, {}).get(entry.entry_id, {}):
+            from .heating_link import async_setup_demand
+            await async_setup_demand(hass, entry, async_add_entities)  # E32 room heat demand
+            from .e32_valves import async_setup_binary_sensors as async_setup_valve_problems
+            try:
+                await async_setup_valve_problems(hass, entry, async_add_entities)  # radiator valve problems
+            except Exception:  # noqa: BLE001 - optional; the room demand stays
+                _LOGGER.exception("OpenThermostat: setting up the radiator valve problems failed")
+        from .product_telemetry import async_setup_binary_sensors
+        await async_setup_binary_sensors(hass, entry, async_add_entities)
+        return
+    prefix = entry.data[CONF_TOPIC_PREFIX]
+    hub = dr.async_get(hass).async_get_device_by_identifier((DOMAIN, prefix), entry.entry_id)
+    hub_id = hub.id if hub else None
+    sensors: dict[tuple[str, str], RoomState] = {}
+    boiler_sensors: dict[str, BoilerState] = {}
+    radiator_sensors: dict[str, RadiatorHeating] = {}
+    tracker: HeatingTracker = hass.data[DOMAIN][entry.entry_id]["heating_tracker"]
+    connection = HubConnection(prefix)
+    async_add_entities([connection])
+    online = False
+    active_keys: set[str] = set()
+
+    @callback
+    def handle_status(message: ReceiveMessage) -> None:
+        nonlocal online
+        online = message.payload == "on"
+        connection.update_value(online)
+        for (key, _state), entity in sensors.items():
+            entity.set_online(online and key in active_keys)
+        for entity in boiler_sensors.values():
+            entity.set_online(online)
+
+    @callback
+    def handle_rooms(message: ReceiveMessage) -> None:
+        nonlocal active_keys
+        try:
+            payload = json.loads(message.payload)
+        except (TypeError, ValueError):
+            _LOGGER.warning("Invalid OpenThermostat room status on %s", message.topic)
+            return
+        rooms = payload.get("rooms") if isinstance(payload, dict) else None
+        if not isinstance(rooms, list):
+            return
+
+        added = []
+        for index, room in enumerate(rooms):
+            if not isinstance(room, dict):
+                continue
+            key = room_key(room)
+            if key is None:
+                continue
+            for state, (field, _name, _device_class) in STATES.items():
+                value = room.get(field)
+                state_key = (key, state)
+                entity = sensors.get(state_key)
+                if entity is None:
+                    if value not in ("on", "off"):
+                        continue
+                    entity = RoomState(prefix, index, key, room.get("name"), state, hub_id)
+                    sensors[state_key] = entity
+                    added.append(entity)
+                entity.update_value(value, online)
+        active_keys = {key for room in rooms if isinstance(room, dict) if (key := room_key(room)) is not None}
+        for (key, _state), entity in sensors.items():
+            if key not in active_keys:
+                entity.set_online(False)
+        if added:
+            async_add_entities(added)
+
+    @callback
+    def handle_ems_status(message: ReceiveMessage) -> None:
+        try:
+            payload = json.loads(message.payload)
+        except (TypeError, ValueError):
+            _LOGGER.warning("Invalid OpenThermostat EMS status on %s", message.topic)
+            return
+        if not isinstance(payload, dict):
+            return
+        added = []
+        for state, (field, _name, _device_class) in BOILER_STATES.items():
+            entity = boiler_sensors.get(state)
+            if entity is None:
+                entity = BoilerState(prefix, state, tracker=tracker)
+                boiler_sensors[state] = entity
+                added.append(entity)
+            entity.update_value(payload.get(field), online)
+        if added:
+            async_add_entities(added)
+
+    await mqtt.async_wait_for_mqtt_client(hass)
+    entry.async_on_unload(await mqtt.async_subscribe(hass, f"{prefix}/status", handle_status))
+    entry.async_on_unload(await mqtt.async_subscribe(hass, f"{prefix}/room_data", handle_rooms))
+    entry.async_on_unload(await mqtt.async_subscribe(hass, f"{prefix}/ems_status", handle_ems_status))
+
+    @callback
+    def update_radiators() -> None:
+        for entity in boiler_sensors.values():
+            if entity._observation_field:
+                entity.update_from_tracker()
+        added = []
+        for key, room in tracker.rooms.items():
+            entity = radiator_sensors.get(key)
+            if entity is None:
+                entity = RadiatorHeating(prefix, room.index, key, room.name, hub_id, tracker)
+                radiator_sensors[key] = entity
+                added.append(entity)
+            entity.update_from_tracker()
+        if added:
+            async_add_entities(added)
+
+    entry.async_on_unload(tracker.async_add_listener(update_radiators))
+
+
+class RoomState(BinarySensorEntity):
+    """A heating status associated with its room device."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+
+    def __init__(self, prefix: str, index: int, key: str, room_name: str | None, state: str, hub_id: str | None) -> None:
+        _field, name, device_class = STATES[state]
+        self._attr_name = name
+        self._attr_device_class = device_class
+        self._attr_unique_id = f"{prefix}_room_{key}_{state}"
+        name = room_device_name(room_name, index)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{prefix}_room_{key}")},
+            name=name,
+            manufacturer=MANUFACTURER,
+            model="OpenThermostat room",
+            via_device_id=hub_id,
+        )
+        self._attr_available = False
+
+    def set_online(self, online: bool) -> None:
+        self._attr_available = online
+        if self.entity_id is not None:
+            self.async_write_ha_state()
+
+    def update_value(self, value: object, online: bool) -> None:
+        self._attr_is_on = value == "on" if value in ("on", "off") else None
+        self._attr_available = online
+        if self.entity_id is not None:
+            self.async_write_ha_state()
+
+
+class HubConnection(BinarySensorEntity):
+    """Connection status of the main thermostat device."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    _attr_translation_key = "hub_connected"  # "Connected" (EN/NL/PL)
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, prefix: str) -> None:
+        self._attr_unique_id = f"{prefix}_hub_connected"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, prefix)})
+        self._attr_is_on = None
+
+    def update_value(self, online: bool) -> None:
+        self._attr_is_on = online
+        if self.entity_id is not None:
+            self.async_write_ha_state()
+
+
+class BoilerState(BinarySensorEntity):
+    """A boolean state reported directly by the boiler over EMS."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+
+    def __init__(self, prefix: str, state: str, *, tracker: HeatingTracker | None = None) -> None:
+        _field, name, device_class = BOILER_STATES[state]
+        self._tracker = tracker
+        self._observation_field = {
+            "boiler_heating_active":"ch", "boiler_hot_water_active":"dhw",
+            "boiler_burner_active":"flame", "boiler_pump_active":"pump",
+        }.get(state)
+        self._attr_name = name
+        self._attr_device_class = device_class
+        self._attr_unique_id = f"{prefix}_hub_{state}"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, prefix)})
+        self._attr_available = False
+
+    def set_online(self, online: bool) -> None:
+        if self._tracker is not None and self._observation_field:
+            self.update_from_tracker()
+            return
+        self._attr_available = online
+        if self.entity_id is not None:
+            self.async_write_ha_state()
+
+    def update_from_tracker(self) -> None:
+        if self._tracker is None or not self._observation_field:
+            return
+        previous = (self.available, self.is_on)
+        self._attr_is_on = self._tracker.boiler_reading(self._observation_field)
+        self._attr_available = self._tracker.ems_available()
+        self._attr_extra_state_attributes = {
+            "quality":"reported_plus_not_delivery_proof", "source_ttl_seconds":30,
+            "physical_validation":False, "historic_freshness":"not_rewritten_or_certified",
+        }
+        if self.entity_id is not None and previous != (self.available, self.is_on):
+            self.async_write_ha_state()
+
+    def update_value(self, value: object, online: bool) -> None:
+        if self._tracker is not None and self._observation_field:
+            self.update_from_tracker()
+            return
+        self._attr_is_on = boolean_state(value)
+        self._attr_available = online
+        if self.entity_id is not None:
+            self.async_write_ha_state()
+
+
+class RadiatorHeating(BinarySensorEntity):
+    """Qualified room request coincident with reported CH; not heat/flow proof."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    _attr_translation_key = "radiators_heating"
+    _attr_device_class = BinarySensorDeviceClass.HEAT
+
+    def __init__(
+        self,
+        prefix: str,
+        index: int,
+        key: str,
+        room_name: str | None,
+        hub_id: str | None,
+        tracker: HeatingTracker,
+    ) -> None:
+        self._key = key
+        self._tracker = tracker
+        self._attr_unique_id = f"{prefix}_room_{key}_radiator_heating_v2"
+        self._attr_name = "Qualified request / reported CH (not delivery proof)"
+        self._attr_extra_state_attributes = {"not_delivery_or_flow_proof": True, "definition": "bounded-room-model-v2"}
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{prefix}_room_{key}")},
+            name=room_device_name(room_name, index),
+            manufacturer=MANUFACTURER,
+            model="OpenThermostat room",
+            via_device_id=hub_id,
+        )
+        self._attr_available = tracker.online
+
+    def update_from_tracker(self) -> None:
+        previous = (self.available, self.is_on)
+        self._attr_available = self._tracker.estimate_available(self._key)
+        self._attr_is_on = self._tracker.is_heating(self._key) if self._attr_available else None
+        if self.entity_id is not None and previous != (self.available, self.is_on):
+            self.async_write_ha_state()
