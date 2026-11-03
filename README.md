@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/brand/dark_logo.svg">
-    <img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/brand/logo.svg" alt="OpenThermostat" width="420">
-  </picture>
+  <img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/brand/logo.svg" alt="OpenThermostat" width="420">
 </p>
 
 # OpenThermostat for Home Assistant
