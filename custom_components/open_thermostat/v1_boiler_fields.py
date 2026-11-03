@@ -286,13 +286,23 @@ def ours(record):
 
 
 def renamed_id(record):
-    """The user changed this record's entity_id: it no longer ends in the object ID Home
-    Assistant generated from the entity's name (object_id_base). A device or area prefix
-    may differ (a renamed device); a numbered or otherwise different ending counts as the
-    user's own ID. Without a stored base nothing can be told: not renamed."""
+    """The user changed this record's entity_id: it ends neither in the object ID Home
+    Assistant generates from the entity's name (object_id_base) nor in the field's own key.
+
+    Home Assistant overwrites object_id_base with the current name, so a record made by
+    an older release (named after the field key, "Boiler <key>") or renamed in 1.0
+    (Selected flow -> Water temperature target) still ends in the key of its unique ID or
+    of a field of the same value. A device or area prefix may differ (a renamed device); a
+    numbered or otherwise different ending counts as the user's own ID. Without any base
+    nothing can be told: not renamed."""
     from homeassistant.util import slugify
-    base = slugify(record.object_id_base or record.original_name or "")
-    return bool(base) and not record.entity_id.split(".", 1)[1].endswith(base)
+    names = {record.object_id_base, record.original_name}
+    index = INDEX_BY_NAME.get(record.unique_id.partition("_boiler_fields_v1_")[2])
+    if index is not None:
+        names.update(spec(member)[0] for member in concept(index))
+    bases = {slugify(name) for name in names if name} - {""}
+    object_id = record.entity_id.split(".", 1)[1]
+    return bool(bases) and not any(object_id.endswith(base) for base in bases)
 
 
 def profile_hides(cache, members):
@@ -581,6 +591,18 @@ def shown_value(kind, raw):
     return kind.get(raw, f"Code {raw}")
 
 
+# Service details that stay with the status group on the Boiler view, but are no everyday value.
+SERVICE_FIELDS = frozenset({"service_number", "ionisation_current", "plus_flame_current"})
+
+
+def secondary_field(name):
+    """A boiler value for the Diagnostic part of the device page: a boiler setting, a counter, the
+    thermostat on the bus, a fault history or a service detail (the Boiler view's groups, dashboard.py)."""
+    from .dashboard import boiler_group
+    return (boiler_group(name) in ("settings", "counters", "thermostat") or name in SERVICE_FIELDS
+            or name.startswith("last_"))
+
+
 class BoilerFieldEntity(SensorEntity):
     _attr_should_poll = False
     _attr_has_entity_name = True
@@ -614,6 +636,10 @@ class BoilerFieldEntity(SensorEntity):
                                else shown.replace("_", " ").capitalize())
         if quality(index) == 1:
             self._attr_entity_registry_enabled_default = False
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        elif secondary_field(shown):
+            # On the device page under Diagnostic, so the everyday values (temperatures, burner power,
+            # pressure, display code) stay on top. Same unique ID: the registry entry follows on the next start.
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
         if placeholder:
             self._attr_entity_registry_enabled_default = False

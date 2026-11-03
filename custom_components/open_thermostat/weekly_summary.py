@@ -2,8 +2,8 @@
 
 ADVICE ONLY: a text for a notification, nothing is changed. The "Heating
 advice" sensor carries it as the attribute ``weekly_summary`` (title,
-message and the figures), in the Home Assistant language (English or
-Dutch); the blueprint ``blueprints/weekly_summary.yaml`` sends it once a
+message and the figures), in the Home Assistant language (English, Dutch
+or Polish); the blueprint ``blueprints/weekly_summary.yaml`` sends it once a
 week when the owner creates that automation. Figures come from the day
 records of ``energy_use`` (gas meter or estimate) and the current advice.
 """
@@ -30,7 +30,7 @@ TEXT = {
         "less": "That is {change} % less than the week before.",
         "more": "That is {change} % more than the week before.",
         "same": "That is about the same as the week before.",
-        "no_gas": "No gas use counted yet: the E32 has not reported the boiler's burner modulation.",
+        "no_gas": "No gas use counted yet: the E32 has not reported the boiler's burner power yet.",
         "night_saving": "Night setback: a different night temperature could have saved about {m3} m³ of gas "
                         "this week.",
         "night_money": " That is about {money} {currency}.",
@@ -40,7 +40,7 @@ TEXT = {
         "no_advice": "No advice right now: the heating looks fine.",
         "gas_meter": "Measured with your gas meter; the split between heating and hot water follows what the "
                      "boiler did.",
-        "estimate": "Estimated from the burner modulation and the boiler's power. Add your gas meter in the "
+        "estimate": "Estimated from the burner power and the boiler's heating power. Add your gas meter in the "
                     "integration options for real values.",
         "rough": " The boiler's power is not set, so the estimate is rough.",
         "mixed": "Partly measured with your gas meter, partly estimated.",
@@ -60,7 +60,7 @@ TEXT = {
         "less": "Dat is {change} % minder dan de week ervoor.",
         "more": "Dat is {change} % meer dan de week ervoor.",
         "same": "Dat is ongeveer evenveel als de week ervoor.",
-        "no_gas": "Nog geen gasverbruik geteld: de E32 heeft de brandermodulatie van de ketel nog niet gemeld.",
+        "no_gas": "Nog geen gasverbruik geteld: de E32 heeft het brandervermogen van de ketel nog niet gemeld.",
         "night_saving": "Nachtverlaging: een andere nachttemperatuur had deze week ongeveer {m3} m³ gas "
                         "kunnen besparen.",
         "night_money": " Dat is ongeveer {money} {currency}.",
@@ -69,12 +69,42 @@ TEXT = {
         "no_advice": "Op dit moment geen advies: de verwarming ziet er goed uit.",
         "gas_meter": "Gemeten met je gasmeter; de verdeling tussen verwarmen en warm water volgt wat de ketel "
                      "deed.",
-        "estimate": "Geschat uit de brandermodulatie en het vermogen van de ketel. Voeg je gasmeter toe in de "
+        "estimate": "Geschat uit het brandervermogen en het vermogen van de ketel. Voeg je gasmeter toe in de "
                     "opties van de integratie voor echte waarden.",
         "rough": " Het vermogen van de ketel is niet ingesteld, dus de schatting is grof.",
         "mixed": "Deels gemeten met je gasmeter, deels geschat.",
         "partial": "Tot nu toe over {days} dagen geteld.",
         "advice_only": "Alleen advies: er wordt niets automatisch veranderd.",
+    },
+    "pl": {
+        "title": "OpenThermostat: Twój tydzień",
+        "period": "Ostatnie 7 dni (od {start} do {end}):",
+        "heating_m3": "Ogrzewanie: {m3} m³ gazu ({kwh} kWh), palnik {hours} godz.",
+        "heating_kwh": "Ogrzewanie: {kwh} kWh gazu, palnik {hours} godz.",
+        "hot_water_m3": "Ciepła woda: {m3} m³ gazu ({kwh} kWh), palnik {hours} godz.",
+        "hot_water_kwh": "Ciepła woda: {kwh} kWh gazu, palnik {hours} godz.",
+        "taps": " Pobory: {taps}.",
+        "keep_warm": " W tym podtrzymanie ciepłej wody: {m3} m³ (cykle: {rounds}).",
+        "share": "Ogrzewanie stanowiło {share} % gazu zużytego przez kocioł.",
+        "less": "To o {change} % mniej niż w poprzednim tygodniu.",
+        "more": "To o {change} % więcej niż w poprzednim tygodniu.",
+        "same": "To mniej więcej tyle samo co w poprzednim tygodniu.",
+        "no_gas": "Nie policzono jeszcze zużycia gazu: E32 nie zgłosił jeszcze mocy palnika kotła.",
+        "night_saving": "Nocne obniżenie: inna temperatura nocna mogła w tym tygodniu zaoszczędzić około {m3} m³ "
+                        "gazu.",
+        "night_money": " To około {money} {currency}.",
+        "night_best": "Nocne obniżenie: temperatura nocna z Twojego programu tygodniowego jest już najbardziej "
+                      "oszczędnym wyborem.",
+        "advice": "Porady:",
+        "no_advice": "Na razie brak porad: ogrzewanie wygląda dobrze.",
+        "gas_meter": "Zmierzone licznikiem gazu; podział na ogrzewanie i ciepłą wodę wynika z tego, co robił "
+                     "kocioł.",
+        "estimate": "Oszacowane z mocy palnika i mocy grzewczej kotła. Dodaj licznik gazu w opcjach integracji, "
+                    "aby mieć rzeczywiste wartości.",
+        "rough": " Moc kotła nie jest ustawiona, więc szacunek jest zgrubny.",
+        "mixed": "Częściowo zmierzone licznikiem gazu, częściowo oszacowane.",
+        "partial": "Dotąd policzono {days} dni.",
+        "advice_only": "Tylko porada: nic nie jest zmieniane automatycznie.",
     },
 }
 
@@ -131,7 +161,7 @@ def figures(records, today, *, unit="m³", rough=False, price=None, currency="EU
 
 
 def message(result, advice_titles, lang):
-    """The notification text of figures() and the current advice titles, in English or Dutch."""
+    """The notification text of figures() and the current advice titles, in English, Dutch or Polish."""
     t = TEXT[lang]
 
     def n(value):

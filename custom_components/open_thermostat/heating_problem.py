@@ -15,7 +15,10 @@ each held long enough that a short hiccup never raises it:
 * active control is chosen but the E32 waits for the owner to confirm that
   the old thermostat is disconnected (for example after a firmware update
   cleared the confirmation), for 10 minutes or more: it gives no heat until
-  then (``active.awaiting_confirmation`` of the heating status);
+  then (``active.awaiting_confirmation`` of the heating status). Not on a new
+  installation that never let the E32 control its boiler (E32 rc.2:
+  ``active.taken_over_before`` false): a new plan starts active, and the
+  confirmation is its next step (the boiler test on the Rooms page), not a problem;
 * a room that asks for heat stays more than WARN_ROOM_SLOW_MARGIN_C below its
   target for WARN_ROOM_SLOW_HOURS (with a working measurement; a gap in the
   E32's data starts the wait again, so nothing fires on a day with gaps);
@@ -27,7 +30,7 @@ problem starts and removed when it clears; the water pressure keeps its own
 issue (heating_advice.py).
 
 Attributes: ``problems`` (stable ids, for automations) and ``reasons`` (the
-same in plain English or Dutch, following the Home Assistant language), so a
+same in plain English, Dutch or Polish, following the Home Assistant language), so a
 user's own notification automation can say what is wrong.
 """
 from __future__ import annotations
@@ -75,8 +78,8 @@ TEXT = {
         "active_boiler_no_response": "The boiler does not respond to the E32's heat request.",
         "active_transmit_failed": "The E32 cannot send its heat request to the boiler.",
         "room_slow": "{room} asks for heat but has stayed more than {margin} °C below its target for "
-                     "{hours} hours. Check that the radiators or floor heating get warm and that the boiler's "
-                     "maximum flow temperature is high enough.",
+                     "{hours} hours. Check that the radiators or floor heating get warm and that the highest water "
+                     "temperature (on the boiler and on the E32 Home page) is high enough.",
         "session_lost": "The E32 is online, but Home Assistant has had no working connection with it for more "
                         "than {minutes} minutes, so rooms get no new targets from Home Assistant. Open the "
                         "integration and choose Connect E32 again if it does not recover.",
@@ -95,11 +98,31 @@ TEXT = {
         "active_boiler_no_response": "De ketel reageert niet op de warmtevraag van de E32.",
         "active_transmit_failed": "De E32 kan zijn warmtevraag niet naar de ketel sturen.",
         "room_slow": "{room} vraagt warmte, maar blijft al {hours} uur meer dan {margin} °C onder de gewenste "
-                     "temperatuur. Kijk of de radiatoren of de vloerverwarming warm worden en of de maximale "
-                     "aanvoertemperatuur van de ketel hoog genoeg is.",
+                     "temperatuur. Kijk of de radiatoren of de vloerverwarming warm worden en of de hoogste "
+                     "watertemperatuur (op de ketel en op de E32-pagina Huis) hoog genoeg is.",
         "session_lost": "De E32 is online, maar Home Assistant heeft al meer dan {minutes} minuten geen werkende "
                         "verbinding met hem, dus de ruimtes krijgen geen nieuwe doelen uit Home Assistant. Open de "
                         "integratie en kies opnieuw Connect E32 als het niet vanzelf herstelt.",
+    },
+    "pl": {
+        "room_without_measurement": "{room}: brak pomiaru temperatury od ponad 30 minut, więc to pomieszczenie "
+                                    "nie żąda ciepła. Sprawdź baterię i odległość czujnika.",
+        "e32_offline": "E32 nie odzywa się od ponad 10 minut. Sprawdź jego zasilanie i Wi-Fi.",
+        "awaiting_confirmation": "E32 czeka, aż potwierdzisz, że stary termostat jest odłączony; do tego czasu "
+                                 "nie grzeje. Otwórz na E32 stronę Rooms → Active control.",
+        "pressure_low": "Ciśnienie wody jest niskie ({pressure} bar). Uzupełnij wodę w instalacji grzewczej.",
+        "pressure_high": "Ciśnienie wody jest wysokie ({pressure} bar). Zleć sprawdzenie naczynia wzbiorczego.",
+        "short_cycling": "Kocioł od ponad 2 godzin zbyt często się włącza i wyłącza.",
+        "active_foreign_controller": "Inny termostat nadal wysyła do kotła żądania ciepła.",
+        "active_measurement_lost": "E32 stracił pomiary z pomieszczeń i przestał żądać ciepła.",
+        "active_boiler_no_response": "Kocioł nie reaguje na żądanie ciepła z E32.",
+        "active_transmit_failed": "E32 nie może wysłać żądania ciepła do kotła.",
+        "room_slow": "{room}: pomieszczenie żąda ciepła, ale od {hours} godz. pozostaje ponad {margin} °C poniżej "
+                     "temperatury docelowej. Sprawdź, czy grzejniki lub ogrzewanie podłogowe się nagrzewają i czy "
+                     "najwyższa temperatura wody (na kotle i na stronie E32 Home) jest wystarczająco wysoka.",
+        "session_lost": "E32 jest online, ale Home Assistant od ponad {minutes} minut nie ma z nim działającego "
+                        "połączenia, więc pomieszczenia nie dostają nowych temperatur docelowych z Home Assistant. "
+                        "Otwórz integrację i ponownie wybierz Połącz E32, jeśli połączenie samo nie wróci.",
     },
 }
 
@@ -120,6 +143,18 @@ def awaiting_confirmation(hub):
     active = active if type(active) is dict else _active(hub.status)
     return bool(active) and (active.get("awaiting_confirmation") is True
                              or active.get("state") == "awaiting_confirmation")
+
+
+def first_takeover(hub):
+    """A new installation waiting for its first takeover: the E32 never controlled this boiler.
+
+    E32 rc.2 reports ``active.taken_over_before``; older firmware does not, and then
+    waiting counts as before. A firmware update after a takeover (``reconfirm_required``)
+    is never a first one.
+    """
+    active = getattr(hub, "active", None)
+    active = active if type(active) is dict else _active(hub.status)
+    return bool(active) and active.get("taken_over_before") is False and active.get("reconfirm_required") is not True
 
 
 class ProblemTracker:
@@ -178,7 +213,7 @@ class ProblemTracker:
         warnings = active.get("warnings") if active and status.get("mode") == "active" else None
         current = [w for w in warnings if w in ACTIVE_WARNINGS] if type(warnings) is list else []
         self.active = {w: self.active.get(w, now) for w in current}
-        if not awaiting_confirmation(hub):
+        if not awaiting_confirmation(hub) or first_takeover(hub):
             self.awaiting = None
         elif self.awaiting is None:
             self.awaiting = now
@@ -223,9 +258,9 @@ def _number(value):
 
 
 def render(problems, lang):
-    """The plain-language reasons in a language (English for anything but Dutch)."""
+    """The plain-language reasons in a language (English, Dutch or Polish; English otherwise)."""
     from .heating_advice import fmt
-    texts = TEXT["nl" if lang == "nl" else "en"]
+    texts = TEXT.get(lang, TEXT["en"])
     return [texts[key].format(**{name: fmt(value, lang) if name in ("pressure", "margin") else value
                                  for name, value in values.items()}) for key, values in problems]
 

@@ -1,6 +1,6 @@
 """Optional, integration-managed Lovelace dashboard for thermostat rooms.
 
-Three views, built from the entity registry (renamed entity IDs are followed,
+The views, built from the entity registry (renamed entity IDs are followed,
 disabled and absent entities are left out) with built-in cards only:
 
 * Heating, ordered for a quick look on a phone: the status ("Heating: OK" or
@@ -12,7 +12,10 @@ disabled and absent entities are left out) with built-in cards only:
   gas for heating and for hot water per day (once the E32 counts it), the
   E32 next to the current thermostat (only in a home with one) and the
   Bluetooth sensors. Room settings that are easy to change by accident (mode,
-  temperature without Home Assistant) stay on the room's device page;
+  temperature without Home Assistant) stay on the room's device page. A short
+  "what the thermostat learned" follows the rooms; the whole overview is the
+  Learned subview, the comparison with the thermostat the Comparison subview;
+* Week program (with an E32 room plan): the visual week planner card;
 * Boiler: the reported boiler fields in groups (heating, hot water, status,
   counters, settings, the thermostat on the bus) and their last 24 hours;
 * Diagnostics: the E32 itself, today's hot water, the energy and hot water
@@ -22,7 +25,7 @@ Rows, tiles and graphs without a value stay hidden until they have one, so a
 boiler that never reports a value shows no "Unknown" for it.
 
 A stored Lovelace config has no per-viewer language, so the few fixed
-headings follow the Home Assistant language (English or Dutch) and the
+headings follow the Home Assistant language (English, Dutch or Polish) and the
 dashboard is rebuilt when that changes. Entity names come from Home
 Assistant's own translations.
 """
@@ -127,12 +130,12 @@ TEXT = {
         "heating": "Heating", "boiler_view": "Boiler", "diagnostics": "Diagnostics",
         "room_settings": "Room settings", "now": "Now", "rooms": "Rooms", "set_up_rooms": "Set up rooms", "week_program": "Week program",
         "settings": "{room} settings",
-        "boiler_request": "Boiler request (E32)", "flow": "Flow temperature", "return": "Return temperature",
-        "modulation": "Modulation", "pressure": "Pressure", "dhw": "Hot water", "code": "Display code",
+        "boiler_request": "Boiler request", "flow": "Water to heating (flow)", "return": "Water back (return)",
+        "modulation": "Burner power", "pressure": "Pressure", "dhw": "Hot water", "code": "Display code",
         "max_ch": "Boiler maximum", "status": "Status", "problem": "Heating",
-        "starts_hour": "Starts per hour", "short_cycling": "Short cycling",
+        "starts_hour": "Starts per hour", "short_cycling": "Switching on and off too often",
         "agreement": "Agreement with thermostat", "measured": "Measured by E32", "target": "Target temperature",
-        "valve_position": "Radiator valves open",
+        "valve_position": "Valves open",
         "mode": "Mode", "off_until": "Off until", "without_ha": "Temperature without Home Assistant",
         "compare": "E32 and thermostat", "e32_request": "Boiler request E32",
         "thermostat_request": "Thermostat request", "heating_time_e32": "Heating time E32",
@@ -140,51 +143,56 @@ TEXT = {
         "starts_thermostat": "Starts thermostat", "heating_per_day": "Heating time per day",
         "boiler": "Boiler", "bluetooth": "Bluetooth sensors", "temperature": "Temperature",
         "humidity": "Humidity", "battery": "Battery",
-        "shadow": "Shadow mode: the E32 calculates along but does not control the boiler yet; your current "
+        "shadow": "Trial run: the E32 calculates along but does not control the boiler yet; your current "
                   "thermostat or the boiler's own control stays in charge.",
         "active": "The E32 controls the boiler.",
+        "next": "Next step: run the boiler test and confirm the takeover on the E32 Rooms page. Until then the E32 "
+                "sends nothing to the boiler.",
         "how": "The E32 keeps your rooms running, also without Home Assistant.",
         "group_heating": "Heating", "group_dhw": "Hot water", "group_status": "Status and faults",
         "group_counters": "Counters", "group_settings": "Boiler settings",
         "group_thermostat": "Thermostat on the bus", "history_24h": "Last 24 hours",
         "boiler_note": "Values as the boiler reports them; a value the boiler does not send is left out. "
-                       "Modulation is a percentage, not kW; \"active\" is read from the boiler's state, "
-                       "not a verified operation.",
+                       "Burner power is a percentage of the boiler's maximum, not kW; \"active\" is what the boiler "
+                       "reports, not a separate check.",
         "raw": "Raw boiler data",
         "raw_note": "For troubleshooting: values exactly as the boiler sends them, not checked by the E32.",
         "e32_device": "E32",
         "estimates": "Energy and hot water counters",
         "estimates_empty": "This boiler reports no energy or hot water counters yet; boilers that do (EMS+) fill "
-                           "them in here. The Heating page estimates the gas per day from the burner modulation "
+                           "them in here. The Heating page estimates the gas per day from the burner power "
                            "and the boiler's power.",
         "older_rooms": "Rooms (older setup)",
-        "legacy_boiler_note": "Reported by the boiler over EMS, not a proven E32 command. Unknown or stale is not zero.",
-        "flow_graph": "Flow selection, flow and return", "flow_selection": "Reported selected flow",
-        "measured_flow": "Measured flow", "measured_return": "Measured return",
-        "current_flow": "Reported current flow",
-        "modulation_graph": "Burner modulation (%) — not kW", "modulation_series": "Reported modulation (%)",
+        "legacy_boiler_note": "What the boiler reports over its bus (EMS), not proof of an E32 command. Unknown or old values are not zero.",
+        "flow_graph": "Water temperatures: target, to heating and back", "flow_selection": "Target (boiler)",
+        "measured_flow": "To heating (flow)", "measured_return": "Back (return)",
+        "current_flow": "To heating, as the boiler reports it",
+        "modulation_graph": "Burner power (%) — not kW", "modulation_series": "Burner power (%)",
         "dhw_graph": "Hot water temperatures", "dhw_selected": "Reported selected hot water",
         "dhw_measured": "Measured hot water", "dhw_target": "Reported hot water target",
         "states_graph": "Reported heating / hot water / flame / pump", "state_heating": "Reported heating",
         "state_dhw": "Reported hot water", "state_flame": "Reported flame bit", "state_pump": "Reported pump bit",
         "dhw_card": "Hot water capability and quality",
-        "dhw_note": "Domestic hot water, read-only: last reported values with unverified source age; "
-                    "nothing is written to the boiler.",
+        "dhw_note": "Hot water, view only: the last values the boiler reported (their age is not checked); "
+                    "nothing is sent to the boiler.",
         "dhw_profile": "Profile", "dhw_status": "status", "unknown": "Unknown",
         "estimates_note": "Energy and volume are estimates from reported values, not gas or heat meters.",
         "energy_chart": "Estimated energy per day (not a meter)", "volume_chart": "Hot water volume per day",
         "flame_chart": "Observed flame time per day",
         "models_note": "Room heat models are estimates, not measured heat; unknown or stale inputs leave gaps.",
         "room_history": "{room}: target and measured", "room_measured": "Measured", "room_target": "Target",
-        "learning": "Learning", "flow_advice": "Flow advice", "heating_start": "Heating starts",
-        "learning_note": "The E32 also learns how fast each room warms up and works out the lowest flow "
-                         "temperature that still makes up a 1 °C shortfall in time (the recommended flow).",
-        "advice_only": "For now this is advice only; the E32 keeps its own rule.",
+        "learning": "Learning", "flow_advice": "Recommended water temperature", "heating_start": "Heating starts",
+        "learning_note": "The E32 also learns how fast each room warms up and works out the coolest water "
+                         "that still warms the room 1 °C in time (the recommended water temperature).",
+        "advice_only": "For now this is advice only; the E32 keeps using its room control.",
         "dhw_taps": "Taps today", "dhw_today": "Hot water today",
         "advice": "Advice", "advice_where": "Where", "advice_confidence": "Confidence",
         "advice_note": "Advice only: nothing is changed automatically.",
+        "learned": "What the thermostat has learned", "learned_house": "House and boiler",
+        "learned_changes": "What it changed by itself",
+        "learned_note": "The thermostat adjusts these settings itself; change them on the E32 page under Home, Comfort and boiler care.",
         "confidence_low": "low", "confidence_medium": "medium", "confidence_high": "high",
-        "gas_heating": "Heating", "gas_hot_water": "Hot water", "gas_keep_warm": "Of which keeping warm",
+        "gas_heating": "Heating", "gas_hot_water": "Hot water", "gas_keep_warm": "Of which keeping hot water warm",
         "gas_tapping": "Tapping", "gas_keeping_warm": "Keeping warm",
         "activity_timeline": "What the boiler does (24 hours)", "activity": "Boiler",
         "gas_per_post": "Gas per day: heating, tapping, keeping warm",
@@ -193,7 +201,7 @@ TEXT = {
                         "with the most direct signal your boiler reports.",
         "gas_per_day": "Gas per day",
         "gas_measured": "Measured with your gas meter, split by what the boiler did.",
-        "gas_estimate": "Estimated from the burner modulation and the boiler's power (no gas meter).",
+        "gas_estimate": "Estimated from the burner power and the boiler's heating power (no gas meter).",
         "gas_note": "Add heating and hot water to the Energy dashboard under Gas consumption; keeping warm is a part of hot water, so leave it out there.",
         "yesterday": "Yesterday", "burner_per_day": "Burner hours per day",
         "missed_per_day": "Missed comfort per day (minutes)",
@@ -206,13 +214,15 @@ TEXT = {
         "day_none": "The first full day appears here tomorrow.",
         "outdoor": "Outdoor",
         "flow_settings": "Heating curve and learning",
-        "flow_source": "Flow source",
-        "weather_curve": "Heating curve",
-        "design_flow": "At −10 °C",
-        "apply_learned": "Use learning",
+        "flow_source": "Water temperature set by",
+        "weather_curve": "Follow outdoor temperature (heating curve)",
+        "design_flow": "Water temperature at −10 °C outside",
+        "apply_learned": "Warm on time with the coolest water",
+        "house_mode": "House mode", "boiler_now": "Boiler",
+        "learned_link": "Everything it learned", "learned_latest": "Latest change", "learning_how": "How it learns",
         "compare_link": "E32 compared with your thermostat",
         "no_request": "No boiler request",
-        "flow_short": "Flow", "return_short": "Return",
+        "flow_short": "Water to heating", "return_short": "Water back",
         "e32": "E32", "thermostat": "Thermostat",
         "comparison_view": "Comparison",
         "room_off": "This room is off and never asks for heat.",
@@ -222,7 +232,7 @@ TEXT = {
         "remove_room": "Remove room",
         "readiness": "Ready to take over?",
         "ready_ready": "Ready: follow the switch-over steps.",
-        "ready_waiting": "Not yet: the E32 is still collecting shadow data.",
+        "ready_waiting": "Not yet: the E32 is still collecting data in the trial run.",
         "ready_not_ready": "Not ready: fix the red items first.",
         "ready_no_comparison": "No thermostat on the boiler bus to compare with, so only the E32 and the boiler "
             "are checked.",
@@ -230,15 +240,15 @@ TEXT = {
         "ready_periods": "Heating periods compared: {periods_compared} of {periods_needed}, with a night setback, "
             "a morning warm-up and a period without demand",
         "ready_timing": "Heat at the same moments: {timing_events} of {timing_events_needed} starts and stops",
-        "ready_flow_limit": "Flow request never above the limit: highest {flow_max_c} °C, limit {flow_limit_c} °C",
+        "ready_flow_limit": "Water temperature request never above the limit: highest {flow_max_c} °C, limit {flow_limit_c} °C",
         "ready_cycling": "Not more heating periods than the thermostat: E32 {heating_periods_e32}, "
             "thermostat {heating_periods_thermostat}",
-        "ready_sources": "Room sources work, and a fallback source has taken over",
+        "ready_sources": "Room sources work, and a backup sensor has taken over",
         "ready_boiler": "Boiler heard on the bus",
         "ready_boiler_limit": "Boiler maximum known: {boiler_limit_c} °C",
         "fix_timing": "The E32 heats at other moments than your thermostat: check the room targets and week program.",
-        "fix_flow_limit": "A request went above the hard limit: check the flow limits.",
-        "fix_cycling": "The E32 would start the burner more often: check the flow limits.",
+        "fix_flow_limit": "A request went above the hard limit: check the water temperature limits.",
+        "fix_cycling": "The E32 would start the burner more often: check the water temperature limits.",
         "fix_sources": "Check the room sensors (battery, range) and give a room a second source.",
         "fix_boiler": "The E32 hears nothing from the boiler: check the bus cable.",
         "fix_boiler_limit": "The boiler has not reported its maximum: check the bus connection.",
@@ -247,12 +257,12 @@ TEXT = {
         "heating": "Verwarming", "boiler_view": "Ketel", "diagnostics": "Diagnose",
         "room_settings": "Ruimte-instellingen", "now": "Nu", "rooms": "Ruimtes", "set_up_rooms": "Ruimtes instellen", "week_program": "Weekprogramma",
         "settings": "Instellingen {room}",
-        "boiler_request": "Ketelvraag (E32)", "flow": "Aanvoertemperatuur", "return": "Retourtemperatuur",
-        "modulation": "Modulatie", "pressure": "Waterdruk", "dhw": "Warm water", "code": "Displaycode",
+        "boiler_request": "Ketelvraag", "flow": "Water naar verwarming (aanvoer)", "return": "Water terug (retour)",
+        "modulation": "Brandervermogen", "pressure": "Waterdruk", "dhw": "Warm water", "code": "Displaycode",
         "max_ch": "Ketelmaximum", "status": "Status", "problem": "Verwarming",
-        "starts_hour": "Starts per uur", "short_cycling": "Pendelen",
+        "starts_hour": "Starts per uur", "short_cycling": "Te vaak aan en uit",
         "agreement": "Overeenstemming met thermostaat", "measured": "Gemeten door E32",
-        "valve_position": "Radiatorkranen open",
+        "valve_position": "Kranen open",
         "target": "Gewenste temperatuur", "mode": "Stand", "off_until": "Uit tot",
         "without_ha": "Temperatuur zonder Home Assistant",
         "compare": "E32 en thermostaat vergeleken", "e32_request": "Ketelvraag E32",
@@ -261,38 +271,40 @@ TEXT = {
         "starts_thermostat": "Starts thermostaat", "heating_per_day": "Stooktijd per dag",
         "boiler": "Ketel", "bluetooth": "Bluetooth-sensoren", "temperature": "Temperatuur",
         "humidity": "Luchtvochtigheid", "battery": "Batterij",
-        "shadow": "Schaduwmodus: de E32 rekent mee maar stuurt de ketel nog niet; je huidige thermostaat of de "
+        "shadow": "Proefperiode: de E32 rekent mee maar stuurt de ketel nog niet; je huidige thermostaat of de "
                   "eigen regeling van de ketel blijft de baas.",
         "active": "De E32 regelt de ketel.",
+        "next": "Volgende stap: doe de keteltest en bevestig de overname op de E32-pagina Ruimtes. Tot dan stuurt "
+                "de E32 niets naar de ketel.",
         "how": "De E32 houdt je ruimtes op temperatuur, ook zonder Home Assistant.",
         "group_heating": "Verwarming", "group_dhw": "Warm water", "group_status": "Status en storingen",
         "group_counters": "Tellers", "group_settings": "Ketelinstellingen",
         "group_thermostat": "Thermostaat op de bus", "history_24h": "Afgelopen 24 uur",
         "boiler_note": "Waarden zoals de ketel ze meldt; een waarde die de ketel niet stuurt, staat er niet. "
-                       "Modulatie is een percentage, geen kW; \"actief\" komt uit de toestand van de ketel, "
-                       "geen geverifieerde werking.",
+                       "Brandervermogen is een percentage van het maximum van de ketel, geen kW; \"actief\" is wat de ketel "
+                       "meldt, geen aparte controle.",
         "raw": "Ruwe keteldata",
         "raw_note": "Voor het zoeken naar fouten: waarden precies zoals de ketel ze stuurt, niet gecontroleerd "
                     "door de E32.",
         "e32_device": "E32",
         "estimates": "Tellers voor energie en warm water",
         "estimates_empty": "Deze ketel meldt nog geen tellers voor energie of warm water; ketels die dat wel doen "
-                           "(EMS+) vullen ze hier in. De pagina Verwarming schat het gas per dag uit de "
-                           "brandermodulatie en het vermogen van de ketel.",
+                           "(EMS+) vullen ze hier in. De pagina Verwarming schat het gas per dag uit het "
+                           "brandervermogen en het vermogen van de ketel.",
         "older_rooms": "Ruimtes (oudere opzet)",
-        "legacy_boiler_note": "Gemeld door de ketel via EMS, geen bewezen E32-opdracht. Onbekend of verouderd is "
-                              "geen nul.",
-        "flow_graph": "Aanvoerkeuze, aanvoer en retour", "flow_selection": "Gemelde gekozen aanvoer",
-        "measured_flow": "Gemeten aanvoer", "measured_return": "Gemeten retour",
-        "current_flow": "Gemelde huidige aanvoer",
-        "modulation_graph": "Brandermodulatie (%) — geen kW", "modulation_series": "Gemelde modulatie (%)",
+        "legacy_boiler_note": "Wat de ketel via zijn bus (EMS) meldt, geen bewijs van een E32-opdracht. Onbekende of "
+                              "oude waarden zijn geen nul.",
+        "flow_graph": "Watertemperaturen: doel, naar verwarming en terug", "flow_selection": "Doel (ketel)",
+        "measured_flow": "Naar verwarming (aanvoer)", "measured_return": "Terug (retour)",
+        "current_flow": "Naar verwarming, zoals de ketel meldt",
+        "modulation_graph": "Brandervermogen (%) — geen kW", "modulation_series": "Brandervermogen (%)",
         "dhw_graph": "Warmwatertemperaturen", "dhw_selected": "Gemeld gekozen warm water",
         "dhw_measured": "Gemeten warm water", "dhw_target": "Gemeld warmwaterdoel",
         "states_graph": "Gemeld verwarmen / warm water / vlam / pomp", "state_heating": "Gemeld verwarmen",
         "state_dhw": "Gemeld warm water", "state_flame": "Gemelde vlambit", "state_pump": "Gemelde pompbit",
         "dhw_card": "Warmwatermogelijkheden en kwaliteit",
-        "dhw_note": "Warm tapwater, alleen lezen: laatst gemelde waarden met onbevestigde bronleeftijd; "
-                    "er wordt niets naar de ketel geschreven.",
+        "dhw_note": "Warm water, alleen bekijken: de laatste waarden die de ketel meldde (hun leeftijd wordt niet gecontroleerd); "
+                    "er gaat niets naar de ketel.",
         "dhw_profile": "Profiel", "dhw_status": "status", "unknown": "Onbekend",
         "estimates_note": "Energie en volume zijn schattingen uit gemelde waarden, geen gas- of warmtemeter.",
         "energy_chart": "Geschatte energie per dag (geen meter)", "volume_chart": "Warmwatervolume per dag",
@@ -300,15 +312,18 @@ TEXT = {
         "models_note": "Warmtemodellen per ruimte zijn schattingen, geen gemeten warmte; onbekende of verouderde "
                        "invoer laat gaten.",
         "room_history": "{room}: gewenst en gemeten", "room_measured": "Gemeten", "room_target": "Gewenst",
-        "learning": "Leren", "flow_advice": "Aanvoeradvies", "heating_start": "Start verwarmen",
+        "learning": "Leren", "flow_advice": "Geadviseerde watertemperatuur", "heating_start": "Start verwarmen",
         "learning_note": "De E32 leert ook hoe snel elke ruimte opwarmt en berekent de laagste "
-                         "aanvoertemperatuur die een tekort van 1 °C nog op tijd inhaalt (de geadviseerde aanvoer).",
-        "advice_only": "Voorlopig is dat alleen advies; de E32 houdt zijn eigen regel aan.",
+                         "watertemperatuur die de ruimte nog op tijd 1 °C opwarmt (de geadviseerde watertemperatuur).",
+        "advice_only": "Voorlopig is dat alleen advies; de E32 blijft zijn ruimteregeling gebruiken.",
         "dhw_taps": "Tappen vandaag", "dhw_today": "Warm water vandaag",
         "advice": "Advies", "advice_where": "Waar", "advice_confidence": "Zekerheid",
         "advice_note": "Alleen advies: er wordt niets automatisch veranderd.",
+        "learned": "Wat de thermostaat heeft geleerd", "learned_house": "Huis en ketel",
+        "learned_changes": "Wat hij zelf heeft aangepast",
+        "learned_note": "De thermostaat past deze instellingen zelf aan; wijzigen kan op de E32-pagina onder Thuis, Comfort en zorg voor de ketel.",
         "confidence_low": "laag", "confidence_medium": "middel", "confidence_high": "hoog",
-        "gas_heating": "Verwarmen", "gas_hot_water": "Warm water", "gas_keep_warm": "Waarvan warmhouden",
+        "gas_heating": "Verwarmen", "gas_hot_water": "Warm water", "gas_keep_warm": "Waarvan warm water warmhouden",
         "gas_tapping": "Tappen", "gas_keeping_warm": "Warmhouden",
         "activity_timeline": "Wat de ketel doet (24 uur)", "activity": "Ketel",
         "gas_per_post": "Gas per dag: verwarmen, tappen, warmhouden",
@@ -317,7 +332,7 @@ TEXT = {
                         "houdt ze uit elkaar met het meest directe signaal dat je ketel geeft.",
         "gas_per_day": "Gas per dag",
         "gas_measured": "Gemeten met je gasmeter, verdeeld naar wat de ketel deed.",
-        "gas_estimate": "Geschat uit de brandermodulatie en het vermogen van de ketel (geen gasmeter).",
+        "gas_estimate": "Geschat uit het brandervermogen en het vermogen van de ketel (geen gasmeter).",
         "gas_note": "Voeg verwarmen en warm water toe aan het energiedashboard onder Gasverbruik; warmhouden is een deel van warm water, laat dat daar weg.",
         "yesterday": "Gisteren", "burner_per_day": "Branderuren per dag",
         "missed_per_day": "Gemiste comfort per dag (minuten)",
@@ -330,13 +345,15 @@ TEXT = {
         "day_none": "Morgen staat hier de eerste volledige dag.",
         "outdoor": "Buiten",
         "flow_settings": "Stooklijn en leren",
-        "flow_source": "Aanvoerbron",
-        "weather_curve": "Stooklijn",
-        "design_flow": "Bij −10 °C",
-        "apply_learned": "Leren toepassen",
+        "flow_source": "Watertemperatuur bepaald door",
+        "weather_curve": "Buitentemperatuur volgen (stooklijn)",
+        "design_flow": "Watertemperatuur bij −10 °C buiten",
+        "apply_learned": "Op tijd warm met het koelste water",
+        "house_mode": "Huismodus", "boiler_now": "Ketel",
+        "learned_link": "Alles wat hij heeft geleerd", "learned_latest": "Laatste aanpassing", "learning_how": "Hoe hij leert",
         "compare_link": "E32 vergeleken met je thermostaat",
         "no_request": "Geen ketelvraag",
-        "flow_short": "Aanvoer", "return_short": "Retour",
+        "flow_short": "Aanvoerwater", "return_short": "Retourwater",
         "e32": "E32", "thermostat": "Thermostaat",
         "comparison_view": "Vergelijking",
         "room_off": "Deze ruimte staat uit en vraagt nooit warmte.",
@@ -346,7 +363,7 @@ TEXT = {
         "remove_room": "Ruimte verwijderen",
         "readiness": "Klaar om over te nemen?",
         "ready_ready": "Klaar: volg de stappen voor de overschakeling.",
-        "ready_waiting": "Nog niet: de E32 verzamelt nog schaduwgegevens.",
+        "ready_waiting": "Nog niet: de E32 verzamelt nog gegevens in de proefperiode.",
         "ready_not_ready": "Niet klaar: los eerst de rode punten op.",
         "ready_no_comparison": "Geen thermostaat op de ketelbus om mee te vergelijken, dus alleen de E32 en de "
             "ketel worden gecontroleerd.",
@@ -354,27 +371,162 @@ TEXT = {
         "ready_periods": "Verwarmingsperiodes vergeleken: {periods_compared} van {periods_needed}, met een "
             "nachtverlaging, een ochtendopwarming en een periode zonder vraag",
         "ready_timing": "Warmte op dezelfde momenten: {timing_events} van {timing_events_needed} starts en stops",
-        "ready_flow_limit": "Aanvoervraag nooit boven de grens: hoogste {flow_max_c} °C, grens {flow_limit_c} °C",
+        "ready_flow_limit": "Gevraagde watertemperatuur nooit boven de grens: hoogste {flow_max_c} °C, grens {flow_limit_c} °C",
         "ready_cycling": "Niet meer verwarmingsperiodes dan de thermostaat: E32 {heating_periods_e32}, "
             "thermostaat {heating_periods_thermostat}",
-        "ready_sources": "Ruimtebronnen werken, en een terugvalbron heeft het overgenomen",
+        "ready_sources": "Ruimtebronnen werken, en een reservesensor heeft het overgenomen",
         "ready_boiler": "Ketel gehoord op de bus",
         "ready_boiler_limit": "Ketelmaximum bekend: {boiler_limit_c} °C",
         "fix_timing": "De E32 stookt op andere momenten dan je thermostaat: controleer de doeltemperaturen en "
             "het weekprogramma.",
-        "fix_flow_limit": "Een vraag kwam boven de harde grens: controleer de aanvoergrenzen.",
-        "fix_cycling": "De E32 zou de brander vaker starten: controleer de aanvoergrenzen.",
+        "fix_flow_limit": "Een vraag kwam boven de harde grens: controleer de grenzen van de watertemperatuur.",
+        "fix_cycling": "De E32 zou de brander vaker starten: controleer de grenzen van de watertemperatuur.",
         "fix_sources": "Controleer de ruimtesensoren (batterij, bereik) en geef een ruimte een tweede bron.",
         "fix_boiler": "De E32 hoort niets van de ketel: controleer de buskabel.",
         "fix_boiler_limit": "De ketel heeft zijn maximum niet gemeld: controleer de busverbinding.",
+    },
+    # Polish: the terms of translations/pl.json and docs/UX-GLOSSARY.md; E32 page names stay English.
+    "pl": {
+        "heating": "Ogrzewanie", "boiler_view": "Kocioł", "diagnostics": "Diagnostyka",
+        "room_settings": "Ustawienia pomieszczeń", "now": "Teraz", "rooms": "Pomieszczenia",
+        "set_up_rooms": "Skonfiguruj pomieszczenia", "week_program": "Program tygodniowy",
+        "settings": "Ustawienia: {room}",
+        "boiler_request": "Żądanie do kotła", "flow": "Woda do ogrzewania (zasilanie)", "return": "Woda powrotna (powrót)",
+        "modulation": "Moc palnika", "pressure": "Ciśnienie", "dhw": "Ciepła woda", "code": "Kod wyświetlacza",
+        "max_ch": "Maksimum kotła", "status": "Stan", "problem": "Ogrzewanie",
+        "starts_hour": "Starty na godzinę", "short_cycling": "Palnik zbyt często się włącza",
+        "agreement": "Zgodność z termostatem", "measured": "Zmierzona przez E32", "target": "Temperatura docelowa",
+        "valve_position": "Otwarcie zaworów",
+        "mode": "Tryb", "off_until": "Wyłączone do", "without_ha": "Temperatura bez Home Assistant",
+        "compare": "E32 i termostat", "e32_request": "Żądanie do kotła E32",
+        "thermostat_request": "Żądanie termostatu", "heating_time_e32": "Czas grzania E32",
+        "heating_time_thermostat": "Czas grzania termostatu", "starts_e32": "Starty E32",
+        "starts_thermostat": "Starty termostatu", "heating_per_day": "Czas grzania na dzień",
+        "boiler": "Kocioł", "bluetooth": "Czujniki Bluetooth", "temperature": "Temperatura",
+        "humidity": "Wilgotność", "battery": "Bateria",
+        "shadow": "Okres próbny: E32 liczy równolegle, ale jeszcze nie steruje kotłem; decyduje nadal Twój "
+                  "obecny termostat lub własna regulacja kotła.",
+        "active": "E32 steruje kotłem.",
+        "next": "Następny krok: wykonaj test kotła i potwierdź przejęcie na stronie pomieszczeń E32. Do tego czasu E32 "
+                "niczego nie wysyła do kotła.",
+        "how": "E32 utrzymuje temperaturę w pomieszczeniach, także bez Home Assistant.",
+        "group_heating": "Ogrzewanie", "group_dhw": "Ciepła woda", "group_status": "Stan i usterki",
+        "group_counters": "Liczniki", "group_settings": "Ustawienia kotła",
+        "group_thermostat": "Termostat na magistrali", "history_24h": "Ostatnie 24 godziny",
+        "boiler_note": "Wartości tak, jak zgłasza je kocioł; wartości, której kocioł nie wysyła, tu nie ma. "
+                       "Moc palnika to procent maksimum kotła, a nie kW; \"aktywny\" to to, co zgłasza kocioł, "
+                       "a nie osobne sprawdzenie.",
+        "raw": "Surowe dane kotła",
+        "raw_note": "Do szukania usterek: wartości dokładnie tak, jak wysyła je kocioł, niesprawdzane przez E32.",
+        "e32_device": "E32",
+        "estimates": "Liczniki energii i ciepłej wody",
+        "estimates_empty": "Ten kocioł nie zgłasza jeszcze liczników energii ani ciepłej wody; kotły, które to "
+                           "robią (EMS+), pokazują je tutaj. Strona Ogrzewanie szacuje gaz na dzień z mocy "
+                           "palnika i mocy kotła.",
+        "older_rooms": "Pomieszczenia (starsza konfiguracja)",
+        "legacy_boiler_note": "To, co kocioł zgłasza przez swoją magistralę (EMS), a nie dowód polecenia E32. "
+                              "Nieznane lub stare wartości to nie zero.",
+        "flow_graph": "Temperatury wody: docelowa, do ogrzewania i powrotna", "flow_selection": "Docelowa (kocioł)",
+        "measured_flow": "Do ogrzewania (zasilanie)", "measured_return": "Powrotna (powrót)",
+        "current_flow": "Do ogrzewania, według kotła",
+        "modulation_graph": "Moc palnika (%) — nie kW", "modulation_series": "Moc palnika (%)",
+        "dhw_graph": "Temperatury ciepłej wody", "dhw_selected": "Zgłoszona wybrana ciepła woda",
+        "dhw_measured": "Zmierzona ciepła woda", "dhw_target": "Zgłoszona docelowa ciepła woda",
+        "states_graph": "Zgłoszone ogrzewanie / ciepła woda / płomień / pompa", "state_heating": "Zgłoszone ogrzewanie",
+        "state_dhw": "Zgłoszona ciepła woda", "state_flame": "Zgłoszony bit płomienia", "state_pump": "Zgłoszony bit pompy",
+        "dhw_card": "Możliwości i jakość ciepłej wody",
+        "dhw_note": "Ciepła woda, tylko podgląd: ostatnie wartości zgłoszone przez kocioł (ich wiek nie jest "
+                    "sprawdzany); nic nie jest wysyłane do kotła.",
+        "dhw_profile": "Profil", "dhw_status": "stan", "unknown": "Nieznane",
+        "estimates_note": "Energia i objętość to szacunki ze zgłoszonych wartości, a nie liczniki gazu lub ciepła.",
+        "energy_chart": "Szacowana energia na dzień (nie licznik)", "volume_chart": "Objętość ciepłej wody na dzień",
+        "flame_chart": "Obserwowany czas płomienia na dzień",
+        "models_note": "Modele cieplne pomieszczeń to szacunki, a nie zmierzone ciepło; nieznane lub nieaktualne "
+                       "dane zostawiają luki.",
+        "room_history": "{room}: docelowa i zmierzona", "room_measured": "Zmierzona", "room_target": "Docelowa",
+        "learning": "Nauka", "flow_advice": "Zalecana temperatura wody", "heating_start": "Start grzania",
+        "learning_note": "E32 uczy się też, jak szybko nagrzewa się każde pomieszczenie, i wylicza najchłodniejszą "
+                         "wodę, która wciąż nagrzeje je o 1 °C na czas (zalecana temperatura wody).",
+        "advice_only": "Na razie to tylko porada; E32 nadal używa regulacji pokojowej.",
+        "dhw_taps": "Pobory dziś", "dhw_today": "Ciepła woda dziś",
+        "advice": "Porady", "advice_where": "Gdzie", "advice_confidence": "Pewność",
+        "advice_note": "Tylko porada: nic nie jest zmieniane automatycznie.",
+        "learned": "Czego nauczył się termostat", "learned_house": "Dom i kocioł",
+        "learned_changes": "Co zmienił sam",
+        "learned_note": "Termostat sam dostosowuje te ustawienia; zmienić je można na stronie E32 Home, w sekcji "
+                        "Comfort and boiler care.",
+        "confidence_low": "niska", "confidence_medium": "średnia", "confidence_high": "wysoka",
+        "gas_heating": "Ogrzewanie", "gas_hot_water": "Ciepła woda", "gas_keep_warm": "W tym podtrzymanie ciepłej wody",
+        "gas_tapping": "Pobór", "gas_keeping_warm": "Podtrzymanie",
+        "activity_timeline": "Co robi kocioł (24 godziny)", "activity": "Kocioł",
+        "gas_per_post": "Gaz na dzień: ogrzewanie, pobór, podtrzymanie",
+        "dhw_use_note": "Pobór to ciepła woda z kranu; podtrzymanie to kocioł, który dogrzewa swój zasobnik lub "
+                        "wymiennik bez otwartego kranu, nic więcej; zasobnik c.w.u. jest pokazywany jako ładowanie. "
+                        "E32 rozróżnia je po najbardziej bezpośrednim sygnale, jaki zgłasza Twój kocioł.",
+        "gas_per_day": "Gaz na dzień",
+        "gas_measured": "Zmierzony licznikiem gazu, podzielony według tego, co robił kocioł.",
+        "gas_estimate": "Oszacowany z mocy palnika i mocy grzewczej kotła (bez licznika gazu).",
+        "gas_note": "Dodaj ogrzewanie i ciepłą wodę do panelu Energia w sekcji Zużycie gazu; podtrzymanie jest "
+                    "częścią ciepłej wody, więc tam je pomiń.",
+        "yesterday": "Wczoraj", "burner_per_day": "Godziny pracy palnika na dzień",
+        "missed_per_day": "Utracony komfort na dzień (minuty)",
+        "day_burner": "Palnik: {h} godz., starty: {n} (krótsze niż 10 minut: {short}).",
+        "day_gas": "Gaz: ogrzewanie {heating}, ciepła woda {hot_water}.",
+        "day_room": "{room}: żądanie ciepła przez {h} godz.; ciepło średnio po {ttt} min; utracony komfort {missed} min.",
+        "day_room_no_step": "{room}: żądanie ciepła przez {h} godz.; utracony komfort {missed} min.",
+        "day_outdoor": "Na zewnątrz od {low} do {high} °C.",
+        "day_partial": "Niepełny dzień: E32 nie był słyszalny przez cały dzień, więc dane są niekompletne.",
+        "day_none": "Pierwszy pełny dzień pojawi się tu jutro.",
+        "outdoor": "Na zewnątrz",
+        "flow_settings": "Krzywa grzewcza i nauka",
+        "flow_source": "Temperatura wody ustalana przez",
+        "weather_curve": "Krzywa grzewcza wg temperatury zewnętrznej",
+        "design_flow": "Temperatura wody przy −10 °C na zewnątrz",
+        "apply_learned": "Ciepło na czas przy najchłodniejszej wodzie",
+        "house_mode": "Tryb domu", "boiler_now": "Kocioł",
+        "learned_link": "Wszystko, czego się nauczył", "learned_latest": "Ostatnia zmiana", "learning_how": "Jak się uczy",
+        "compare_link": "E32 w porównaniu z Twoim termostatem",
+        "no_request": "Brak żądania do kotła",
+        "flow_short": "Woda do ogrzewania", "return_short": "Woda powrotna",
+        "e32": "E32", "thermostat": "Termostat",
+        "comparison_view": "Porównanie",
+        "room_off": "To pomieszczenie jest wyłączone i nigdy nie żąda ciepła.",
+        "room_no_source": "Pomieszczenie {room} jest wyłączone i nie ma działającego źródła temperatury. Wybierz "
+            "źródło, aby znów z niego korzystać, albo usuń pomieszczenie, jeśli nie jest już potrzebne.",
+        "choose_source": "Wybierz źródło",
+        "remove_room": "Usuń pomieszczenie",
+        "readiness": "Gotowość do przejęcia?",
+        "ready_ready": "Gotowe: wykonaj kroki przełączenia.",
+        "ready_waiting": "Jeszcze nie: E32 nadal zbiera dane w okresie próbnym.",
+        "ready_not_ready": "Niegotowe: najpierw usuń problemy oznaczone na czerwono.",
+        "ready_no_comparison": "Na magistrali kotła nie ma termostatu do porównania, więc sprawdzane są tylko E32 "
+            "i kocioł.",
+        "ready_stable": "Stabilność: {stable_hours} z {stable_hours_needed} godz. bez zawieszenia i nieoczekiwanego "
+            "restartu",
+        "ready_periods": "Porównane okresy grzania: {periods_compared} z {periods_needed}, w tym nocne obniżenie, "
+            "poranne nagrzewanie i okres bez zapotrzebowania",
+        "ready_timing": "Ciepło w tych samych momentach: {timing_events} z {timing_events_needed} startów i zatrzymań",
+        "ready_flow_limit": "Żądana temperatura wody nigdy powyżej limitu: najwyżej {flow_max_c} °C, limit {flow_limit_c} °C",
+        "ready_cycling": "Nie więcej okresów grzania niż termostat: E32 {heating_periods_e32}, "
+            "termostat {heating_periods_thermostat}",
+        "ready_sources": "Źródła temperatury w pomieszczeniach działają, a czujnik zapasowy przejął pomiar",
+        "ready_boiler": "Kocioł słyszalny na magistrali",
+        "ready_boiler_limit": "Maksimum kotła znane: {boiler_limit_c} °C",
+        "fix_timing": "E32 grzeje w innych momentach niż Twój termostat: sprawdź temperatury docelowe pomieszczeń "
+            "i program tygodniowy.",
+        "fix_flow_limit": "Żądanie przekroczyło twardy limit: sprawdź limity temperatury wody.",
+        "fix_cycling": "E32 uruchamiałby palnik częściej: sprawdź limity temperatury wody.",
+        "fix_sources": "Sprawdź czujniki w pomieszczeniach (bateria, zasięg) i dodaj pomieszczeniu drugie źródło.",
+        "fix_boiler": "E32 nic nie słyszy z kotła: sprawdź kabel magistrali.",
+        "fix_boiler_limit": "Kocioł nie zgłosił swojego maksimum: sprawdź połączenie z magistralą.",
     },
 }
 
 
 def dashboard_language(hass):
-    """Dutch for a Dutch Home Assistant, English otherwise."""
-    language = (hass.config.language or "en").lower().replace("_", "-")
-    return "nl" if language.split("-")[0] == "nl" else "en"
+    """English, Dutch or Polish by the Home Assistant language (English otherwise)."""
+    language = (hass.config.language or "en").lower().replace("_", "-").split("-")[0]
+    return language if language in TEXT else "en"
 
 
 def view_cards(view):
@@ -404,7 +556,13 @@ def _readiness_card(t, entity_id):
                + "{% else %}" + t["ready_waiting"] + "{% endif %}**\n\n"
                "{% if state_attr(" + quoted + ", 'comparison') == false %}" + t["ready_no_comparison"] + "\n\n{% endif %}")
     for item in READINESS_ITEMS:
-        line = re.sub(r"\{(\w+)\}", attribute, t["ready_" + item])
+        text = t["ready_" + item]
+        line = re.sub(r"\{(\w+)\}", attribute, text)
+        names = re.findall(r"\{(\w+)\}", text)
+        if names:
+            # A figure the E32 does not know yet (null) shows the criterion alone, never "None °C".
+            known = " and ".join("state_attr(" + quoted + ", '" + name + "') is not none" for name in names)
+            line = "{% if " + known + " %}" + line + "{% else %}" + text.split(":")[0] + "{% endif %}"
         fix = t.get("fix_" + item)
         content += ("{% set r = state_attr(" + quoted + ", '" + item + "') %}{% if r in mark %}- {{ mark[r] }} " + line
                     + ("{% if r == 'fail' %}. " + fix + "{% endif %}" if fix else "") + "\n{% endif %}")
@@ -481,9 +639,10 @@ def _learning_cards(t, room, active=None):
     return [
         _heading(t["learning"], "mdi:school-outline", [badge], "subtitle", on + _known(learning)),
         # The advice only means something once the room is learned.
-        _tile(advice, t["flow_advice"],
-              visibility=[*on, {"condition": "state", "entity": learning, "state": "ready"}, *_known(advice)]),
-        _tile(start, t["heating_start"], visibility=on + _known(start)),
+        # The whole width: "Recommended water temperature" was cut short in half a section.
+        _wide(_tile(advice, t["flow_advice"],
+                    visibility=[*on, {"condition": "state", "entity": learning, "state": "ready"}, *_known(advice)])),
+        _wide(_tile(start, t["heating_start"], visibility=on + _known(start))),
     ]
 
 
@@ -508,6 +667,57 @@ def _advice_section(t, advice):
     shown = [{"condition": "numeric_state", "entity": advice, "above": 0}]
     section = _section(_heading(t["advice"], "mdi:lightbulb-on-outline", style="title", visibility=shown),
                        {"type": "markdown", "content": content, "visibility": shown})
+    section["visibility"] = shown
+    return section
+
+
+LEARNED_PATH = "learned"
+
+
+def _learned_sections(t, learned):
+    """What the thermostat learned (learned_overview.py), its own subview: per room, house and boiler, its own changes.
+
+    Three sections, so a wide screen shows them side by side; a phone reads them one after another.
+    """
+    if not learned:
+        return []
+    quoted = json.dumps(learned)
+    lines = ("{% for line in items %}- {{ line.text }}{% if line.meaning %}<br>*{{ line.meaning }}*{% endif %}\n"
+             "{% endfor %}")
+    rooms = ("{{ state_attr(" + quoted + ", 'explanation') }}\n\n"
+             "{% for room in state_attr(" + quoted + ", 'rooms') or [] %}**{{ room.name }}** · {{ room.progress }}\n\n"
+             "{% set items = room.lines %}" + lines + "\n{% endfor %}")
+    house = "{% set items = state_attr(" + quoted + ", 'house') or [] %}" + lines
+    changes = ("{% for change in state_attr(" + quoted + ", 'changes') or [] %}- {% if change.time %}"
+               "{{ as_timestamp(change.time) | timestamp_custom('%d-%m') }}: {% endif %}{{ change.text }}\n{% endfor %}\n"
+               "*" + t["learned_note"] + "*")
+    shown = [{"condition": "state", "entity": learned, "state_not": "unavailable"}]
+    sections = []
+    for heading, icon, content in ((t["learned"], "mdi:school-outline", rooms),
+                                   (t["learned_house"], "mdi:home-thermometer-outline", house),
+                                   (t["learned_changes"], "mdi:history", changes)):
+        section = _section(_heading(heading, icon, style="title", visibility=shown),
+                           {"type": "markdown", "content": content, "visibility": shown})
+        section["visibility"] = shown
+        sections.append(section)
+    return sections
+
+
+def _learned_summary(t, learned, path):
+    """On the Heating view: how far each room is and the latest change, with a link to the whole overview.
+
+    The overview itself (a page of text) is on its own subview, so the rooms stay near the top on a phone.
+    """
+    if not learned:
+        return None
+    quoted = json.dumps(learned)
+    content = ("{% for room in state_attr(" + quoted + ", 'rooms') or [] %}- **{{ room.name }}** · {{ room.progress }}\n"
+               "{% endfor %}{% for change in (state_attr(" + quoted + ", 'changes') or [])[:1] %}\n"
+               "*" + t["learned_latest"] + ":* {{ change.text }}{% endfor %}")
+    shown = [{"condition": "state", "entity": learned, "state_not": "unavailable"}]
+    section = _section(_heading(t["learned"], "mdi:school-outline", style="title", visibility=shown),
+                       {"type": "markdown", "content": content, "visibility": shown},
+                       _link(t["learned_link"], "mdi:text-box-search-outline", path, shown))
     section["visibility"] = shown
     return section
 
@@ -579,7 +789,7 @@ def _boiler_status_card(t, entity_id):
         "{% elif severity == 'unknown' %}<ha-icon icon=\"mdi:help-circle-outline\"></ha-icon> "
         "**" + t["code"] + " {{ raw }}** · {{ meaning }}"
         "{% elif meaning %}<ha-icon icon=\"{{ " + json.dumps(STATUS_ICONS) + ".get(severity, 'mdi:water-boiler') }}\">"
-        "</ha-icon> **{{ meaning }}** <small>{{ raw }}</small>"
+        "</ha-icon> " + t["boiler_now"] + ": **{{ meaning }}** <small>{{ raw }}</small>"
         "{% if advice and severity != 'normal' %}\n\n<small>{{ advice }}</small>{% endif %}"
         "{% else %}<ha-icon icon=\"mdi:water-boiler\"></ha-icon> " + t["code"] + " **{{ code }}**{% endif %}")
     return {"type": "markdown", "content": content, "visibility": _known(entity_id)}
@@ -928,8 +1138,8 @@ class RoomDashboard:
                 return None  # not on this boiler: no older hub tile either
             return native_fields.get(field) or (hub_entities.get(metric) if metric else None)
 
-        heating, comparison = self._heating_sections(t, entries, hub_entities, native_fields, essential,
-                                                     registry, e32_rooms, legacy)
+        heating, comparison, learned = self._heating_sections(t, entries, hub_entities, native_fields, essential,
+                                                              registry, e32_rooms, legacy)
         boiler, raw = self._boiler_sections(t, hub_entities, native_fields, graph)
         diagnostics = self._diagnostics_sections(t, registry, hub_entities, raw)
         return {
@@ -961,16 +1171,21 @@ class RoomDashboard:
                 *([{"title": t["comparison_view"], "path": COMPARISON_PATH, "subview": True,
                     "back_path": "/" + self.path + "/heating", "icon": "mdi:compare-horizontal",
                     "type": "sections", "max_columns": 2, "sections": comparison}] if comparison else []),
+                # Reached from "Everything it learned" in the Heating view's learned summary.
+                *([{"title": t["learned"], "path": LEARNED_PATH, "subview": True,
+                    "back_path": "/" + self.path + "/heating", "icon": "mdi:school-outline",
+                    "type": "sections", "max_columns": 3, "sections": learned}] if learned else []),
             ]
         }
 
     def _heating_sections(self, t, entries, hub, fields, essential, registry, e32_rooms, legacy):
-        """The Heating view (sections) and the sections of its Comparison subview.
+        """The Heating view (sections) and the sections of its Comparison and Learned subviews.
 
         Order for a quick look: "Now" (is all well, what does the heating do, the boiler at a
-        glance), the advice, one section per room (thermostat, the day, its sensor), the boiler,
-        the heating curve settings and the gas. The shadow comparison and loose sensors go to
-        the Comparison subview; a tile under "Now" leads there.
+        glance), the advice, one section per room (thermostat, the day, its sensor), a short
+        "what the thermostat learned", the boiler, the heating curve settings and the gas. The
+        shadow comparison and loose sensors go to the Comparison subview (a link under "Now"),
+        the whole learned overview to the Learned subview (a link in its summary).
         """
         request = hub.get("heat_request")
         # The house mode (beta.23, e32_house.py): automatic, at home, away, holiday, switched right here.
@@ -987,7 +1202,9 @@ class RoomDashboard:
             quoted = json.dumps(request)
             explain = {"type": "markdown", "content": (
                 "{% set mode = state_attr(" + quoted + ", 'mode') %}"
-                "{% if mode == 'active' %}" + t["active"] + " "
+                "{% if mode == 'active' and state_attr(" + quoted + ", 'control') == 'awaiting_confirmation' %}"
+                + t["next"] + " "
+                + "{% elif mode == 'active' %}" + t["active"] + " "
                 + "{% elif mode == 'shadow' %}" + t["shadow"] + " {% endif %}" + t["how"])}
         elif e32_room_entities:
             explain = {"type": "markdown", "content": t["how"]}
@@ -1001,9 +1218,15 @@ class RoomDashboard:
             no_request["hide_state"] = True
         now = _section(
             _heading(t["now"], "mdi:home-thermometer"),
-            _tile(house_mode, None, "mdi:home-account", features=[{"type": "select-options"}], color="teal"),
-            _tile(problem, t["problem"]),
-            # The boiler in words ("Hot water", "Waiting: anti-cycle", "No flame after ignition").
+            # Named: without a name the tile showed the device name, cut short on a phone.
+            _wide(_tile(house_mode, t["house_mode"], "mdi:home-account", features=[{"type": "select-options"}],
+                        color="teal")),
+            _wide(_tile(problem, t["problem"])),
+            # Why, right under the problem tile, only while there is a problem.
+            {"type": "markdown", "content": "{% for reason in state_attr(" + json.dumps(problem)
+             + ", 'reasons') or [] %}- {{ reason }}\n{% endfor %}",
+             "visibility": [{"condition": "state", "entity": problem, "state": "on"}]} if problem else None,
+            # The boiler in words ("Boiler: Hot water", "Boiler: Waiting: anti-cycle", "No flame after ignition").
             _boiler_status_card(t, essential("code")),
             _tile(request, t["boiler_request"], "mdi:fire", color="deep-orange",
                   visibility=[{"condition": "numeric_state", "entity": request, "above": 0}]) if request else None,
@@ -1012,15 +1235,14 @@ class RoomDashboard:
             _value_tile(fields.get("outdoor_temperature"), t["outdoor"], "mdi:sun-thermometer-outline",
                         color="blue-grey"),
             _value_tile(essential("dhw"), t["dhw"], ICONS["dhw"], color="light-blue"),
-            {"type": "markdown", "content": "{% for reason in state_attr(" + json.dumps(problem)
-             + ", 'reasons') or [] %}- {{ reason }}\n{% endfor %}",
-             "visibility": [{"condition": "state", "entity": problem, "state": "on"}]} if problem else None,
             explain,
             # A bare percentage meant nothing here: a link to the comparison, which explains it.
             _link(t["compare_link"], "mdi:compare-horizontal", sub_path) if thermostat_on_bus and agreement else None,
             # Ready to take over? Leads to the Comparison subview, which opens with the check.
-            _tile(readiness, t["readiness"], "mdi:clipboard-check-outline", visibility=_known(readiness, ("not_applicable",)),
-                  tap_action={"action": "navigate", "navigation_path": sub_path}),
+            # The whole width: its state ("Waiting for more data") was cut short on a phone.
+            _wide(_tile(readiness, t["readiness"], "mdi:clipboard-check-outline",
+                        visibility=_known(readiness, ("not_applicable",)),
+                        tap_action={"action": "navigate", "navigation_path": sub_path})),
         )
         sections = [now] if len(now["cards"]) > 1 else []
         advice = _advice_section(t, hub.get("heating_advice"))
@@ -1038,6 +1260,11 @@ class RoomDashboard:
                     in_room[source["id"]] = None if source["id"] in in_room else room_id
         for room_id, room in e32_room_entities.items():
             sections.append(self._room_section(t, room_id, room, heating_hub, label, ble, in_room))
+        learned_overview = hub.get("learned_overview")
+        summary = _learned_summary(t, learned_overview, "/" + self.path + "/" + LEARNED_PATH)
+        if summary:
+            sections.append(summary)
+        learned = _learned_sections(t, learned_overview)
 
         # Older HA rooms (one climate per MQTT room) and their settings.
         legacy_cards = []
@@ -1064,7 +1291,7 @@ class RoomDashboard:
               for key in ("return", "modulation", "pressure", "max_ch")),
             _tile(taps, t["dhw_taps"], "mdi:faucet", visibility=_known(taps)) if taps else None,
             _tile(hub.get("burner_starts_last_hour"), t["starts_hour"], "mdi:counter"),
-            _tile(hub.get("burner_short_cycling"), t["short_cycling"], "mdi:sync-alert"),
+            _wide(_tile(hub.get("burner_short_cycling"), t["short_cycling"], "mdi:sync-alert")),
             {"type": "history-graph", "hours_to_show": 24, "entities": day} if day else None,
         )
         if len(boiler["cards"]) > 1:
@@ -1072,11 +1299,12 @@ class RoomDashboard:
         # The heating curve and learning switches (stored on the E32), and the rooms editor.
         settings = _section(
             _heading(t["flow_settings"], "mdi:chart-bell-curve-cumulative"),
-            _tile(flow.get("source"), t["flow_source"], "mdi:source-branch"),
-            _tile(flow.get("weather_curve"), t["weather_curve"], "mdi:sun-snowflake-variant"),
-            # Its choice reads "Automatic (floor 40 °C, radiators 55 °C)": the full section width.
+            # The full section width: the names are the entities' own (as on the E32 device page) and
+            # "Automatic (floor 40 °C, radiators 55 °C)" is a long state; half tiles cut them short.
+            _wide(_tile(flow.get("source"), t["flow_source"], "mdi:thermometer-water")),
+            _wide(_tile(flow.get("weather_curve"), t["weather_curve"], "mdi:sun-thermometer")),
             _wide(_tile(flow.get("curve_design_flow_c"), t["design_flow"], "mdi:thermometer-lines")),
-            _tile(flow.get("apply_learned"), t["apply_learned"], "mdi:school-outline"),
+            _wide(_tile(flow.get("apply_learned"), t["apply_learned"], "mdi:school-outline")),
             _link(t["set_up_rooms"], "mdi:home-edit-outline", "/config/integrations/integration/" + DOMAIN)
             if e32_rooms else None,
             _link(t["week_program"], "mdi:calendar-week", "/" + self.path + "/week-program") if e32_rooms else None,
@@ -1110,7 +1338,8 @@ class RoomDashboard:
                             if key in hub]
             compare = _section(
                 _heading(t["compare"], "mdi:compare-horizontal"),
-                _tile(agreement, t["agreement"], "mdi:compare-horizontal", color="teal"),
+                # The whole width, so the E32 and thermostat tiles below stand side by side in pairs.
+                _wide(_tile(agreement, t["agreement"], "mdi:compare-horizontal", color="teal")),
                 _tile(hub.get("shadow_e32_heating_time_today"), t["heating_time_e32"], "mdi:timer-outline"),
                 _tile(hub.get("shadow_tado_heating_time_today"), t["heating_time_thermostat"], "mdi:timer-outline"),
                 _tile(hub.get("shadow_e32_starts_today"), t["starts_e32"], "mdi:counter"),
@@ -1132,14 +1361,18 @@ class RoomDashboard:
             quoted = json.dumps(learning)
             note = {"type": "markdown", "visibility": _known(learning), "content": (
                 t["learning_note"] + "{% if not state_attr(" + quoted + ", 'applied') %} " + t["advice_only"] + "{% endif %}")}
-            comparison.append(_section(_heading(t["learning"], "mdi:school-outline"), note))
+            # How the learning works: with the learned overview (its own subview), else on the Comparison.
+            if learned:
+                learned.append(_section(_heading(t["learning_how"], "mdi:help-circle-outline"), note))
+            else:
+                comparison.append(_section(_heading(t["learning"], "mdi:school-outline"), note))
         loose = [{"type": "glance", "columns": 3, "state_color": False,
                   "title": self._device_name((DOMAIN, f"{self.prefix}_e32_ble_{sensor_id}"), sensor_id),
                   "entities": [{"entity": metrics[key], "name": t[key]} for key in BLE_KEYS if key in metrics]}
                  for sensor_id, metrics in sorted(ble.items()) if not in_room.get(sensor_id)]
         if loose:
             comparison.append(_section(_heading(t["bluetooth"], "mdi:bluetooth"), *loose))
-        return sections, comparison
+        return sections, comparison, learned
 
     @staticmethod
     def _plan_room(heating_hub, room_id):
@@ -1196,7 +1429,9 @@ class RoomDashboard:
             _tile(room["valve_position"], t["valve_position"], "mdi:valve", visibility=active) if room.get("valve_position") else None,
             {"type": "history-graph", "hours_to_show": 24, "entities": history, **when_active}
             if history else None,
-            _tile(room.get("inactive_until"), t["off_until"], visibility=inactive + _known(room["inactive_until"]))
+            # The whole width: a date and time do not fit half a section on a phone.
+            _wide(_tile(room.get("inactive_until"), t["off_until"],
+                        visibility=inactive + _known(room["inactive_until"])))
             if inactive and room.get("inactive_until") else None,
             *_learning_cards(t, room, active),
         ]
