@@ -55,9 +55,9 @@ These use made-up example data, not a real home.
 
 ![The OpenThermostat dashboard in Home Assistant: the house card, the rooms, today and the house](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-rc5.png)
 
-![The week planner card in Home Assistant](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-week-card-rc2.png)
+![The week planner card in Home Assistant](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-week-card-rc5.png)
 
-![What the thermostat has learned, per room](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-home-learned-rc2.png)
+![What the thermostat has learned, per room](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-home-learned-rc5.png)
 
 <details>
 <summary>More screenshots</summary>
@@ -66,14 +66,14 @@ These use made-up example data, not a real home.
 
 ![The Learning tab: what the E32 knows, the heating curve and yesterday in figures](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-learning-rc5.png)
 
-![The E32 Overview with rooms and the boiler](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-overview-rc2.png)
+![The E32 Overview with rooms and the boiler](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-overview-rc5.png)
 
-![A room with its week program on the E32](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-rooms-rc2.png)
+![A room with its week program on the E32](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-rooms-rc5.png)
 
-![The E32 Boiler page](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-boiler-rc2.png)
+![The E32 Boiler page](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-boiler-rc5.png)
 
 <img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-phone-dark-rc5.png" alt="The dashboard on a phone in the dark theme" width="320">
-<img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-overview-phone-dark-rc2.png" alt="The E32 Overview on a phone in the dark theme" width="320">
+<img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-overview-phone-dark-rc5.png" alt="The E32 Overview on a phone in the dark theme" width="320">
 
 </details>
 
@@ -95,7 +95,7 @@ The E32 then guides you further. If your old thermostat is still connected, it
 first runs beside it for a while without touching the boiler. Otherwise it
 starts with a short boiler test. It only controls your boiler after you confirm.
 
-**Test versions** (such as `1.0.0rc6`) are not shown by default. To install one,
+**Test versions** (such as `1.0.0rc7`) are not shown by default. To install one,
 open OpenThermostat in HACS, choose **Download** and pick the version under
 **Need a different version?**.
 
