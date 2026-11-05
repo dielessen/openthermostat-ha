@@ -53,6 +53,8 @@ program when Home Assistant is offline.
 
 These use made-up example data, not a real home.
 
+![The OpenThermostat dashboard in Home Assistant: the house card, the rooms, today and the house](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-rc5.png)
+
 ![The week planner card in Home Assistant](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-week-card-rc2.png)
 
 ![What the thermostat has learned, per room](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-home-learned-rc2.png)
@@ -60,12 +62,17 @@ These use made-up example data, not a real home.
 <details>
 <summary>More screenshots</summary>
 
+![The Boiler tab: what the boiler does now, then what you need first](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-boiler-rc5.png)
+
+![The Learning tab: what the E32 knows, the heating curve and yesterday in figures](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-learning-rc5.png)
+
 ![The E32 Overview with rooms and the boiler](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-overview-rc2.png)
 
 ![A room with its week program on the E32](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-rooms-rc2.png)
 
 ![The E32 Boiler page](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-boiler-rc2.png)
 
+<img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-phone-dark-rc5.png" alt="The dashboard on a phone in the dark theme" width="320">
 <img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-overview-phone-dark-rc2.png" alt="The E32 Overview on a phone in the dark theme" width="320">
 
 </details>
