@@ -88,7 +88,7 @@ The E32 then guides you further. If your old thermostat is still connected, it
 first runs beside it for a while without touching the boiler. Otherwise it
 starts with a short boiler test. It only controls your boiler after you confirm.
 
-**Test versions** (such as `1.0.0rc5`) are not shown by default. To install one,
+**Test versions** (such as `1.0.0rc6`) are not shown by default. To install one,
 open OpenThermostat in HACS, choose **Download** and pick the version under
 **Need a different version?**.
 
