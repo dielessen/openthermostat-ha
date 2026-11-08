@@ -9,7 +9,9 @@
    mode select); the OpenThermostat dashboard adds both when they exist.
    HA 1.0.0rc7 (the owner's sketch): after the sentence, the week program's step from the Reason sensor's
    ``program`` attribute (room_overview.program_step): "Comfort until 22:30, then Night 18.0 °C"; nothing while the
-   attribute is absent or has no next step (the program does not set the room's target, or nothing changes). */
+   attribute is absent or has no next step (the program does not set the room's target, or nothing changes).
+   HA 1.0.1: an open window or door in the chip's tooltip by its kind when the E32 names it (E32 1.0.1, the Reason
+   sensor's ``opening``: "Door open, pausing soon"); "Window or door open" with E32 1.0.0. */
 const KEY = 'component.open_thermostat.entity.sensor.room_reason.state_attributes.';
 // The tone of each reason: the colour of the disc and of the word chip.
 const TONE = {warm_up: 'heat', heating: 'heat', wants_heat: 'heat', boost: 'heat', away_return: 'heat', window_open: 'warn', window_pending: 'warn',
@@ -20,12 +22,15 @@ const CHIP = {off: 'Off', window_open: 'Paused', window_pending: 'Pausing soon',
  boiler_pause: 'Waiting', warm_up: 'Warming up', away_return: 'Warming up', holiday: 'Holiday', away: 'Away', room_away: 'Away',
  house_away: 'Away', boost: 'Boost', temporary: 'Temporary', heating: 'Heating', wants_heat: 'Wants heat', warm_enough: 'At temperature'};
 // The card's other words (state_attributes.card): the same, for the chips beside the reason's word.
-const WORDS = {smart_on: 'Smart warm-up on', home: 'At home', away: 'Away', holiday: 'Holiday'};
+const WORDS = {smart_on: 'Smart warm-up on', home: 'At home', away: 'Away', holiday: 'Holiday', window_open: 'Window open',
+ door_open: 'Door open', window_pending: 'Window open, pausing soon', door_pending: 'Door open, pausing soon'};
 // The week program's step (state_attributes.program): the English last resort, key for key as strings.json.
 const PROGRAM = {comfort: 'Comfort', eco: 'Eco', night: 'Night', holiday: 'Holiday', step: '{level} until {time}, then {next}'};
 // Who is home for this room (room_overview.room_presence): the house chip's word while the house mode is automatic.
 const PRESENCE = {room_home: 'home', room_away: 'away', house_home: 'home', house_away: 'away'};
 const MODES = new Set(['home', 'away', 'holiday']);  // the house mode select's options that name the house itself
+// E32 1.0.1 names the kind that pauses the room (the Reason sensor's opening attribute); 1.0.0 does not.
+const OPENINGS = new Set(['window', 'door']);
 const FALLBACK = {temperature: 'Now', setpoint: 'Target', valve_position: 'Radiator valves open'};
 const STYLE = `:host{display:block}ha-card{display:block;padding:14px 16px;color:var(--primary-text-color);cursor:pointer;
 --heat:var(--state-climate-heat-color,#ff8100);--warn:var(--warning-color,#ffa600);--error:var(--error-color,#db4437);--ok:var(--success-color,#43a047);
@@ -160,6 +165,15 @@ class OpenThermostatRoomStatus extends HTMLElement {
   const deg = value => value + ' °C';
   return together(word('step', {level: nowLevel || deg(now), time, next: nextLevel ? nextLevel + ' ' + deg(next) : deg(next)}));
  }
+ // An open window or door in words: the kind when the E32 names it (1.0.1: "Door open, pausing soon"), else "Window or
+ // door open" (1.0.0 does not tell them apart).
+ opened(a) {
+  if (OPENINGS.has(a.opening)) {
+   const key = a.opening + '_' + a.window;
+   return this._text('card.state.' + key) || WORDS[key];
+  }
+  return this._text('window.state.' + a.window) || a.window;
+ }
  // The house in one word: the house mode when it names the house (at home, away, holiday), else who is home.
  house(st) {
   const mode = this._hass?.states?.[this._config.mode]?.state, presence = PRESENCE[st.attributes?.presence];
@@ -217,8 +231,8 @@ class OpenThermostatRoomStatus extends HTMLElement {
    return c;
   };
   const opened = a.window === 'open' || a.window === 'pending'
-   ? (typeof a.values?.contact === 'string' && a.values.contact ? a.values.contact + ': ' : '') + (this._text('window.state.' + a.window) || a.window) : '';
-  chip('state', word, opened ? {title: opened, 'data-window': a.window} : {});
+   ? (typeof a.values?.contact === 'string' && a.values.contact ? a.values.contact + ': ' : '') + this.opened(a) : '';
+  chip('state', word, opened ? {title: opened, 'data-window': a.window, ...(OPENINGS.has(a.opening) ? {'data-opening': a.opening} : {})} : {});
   if (st.state !== 'off' && config.smart && hass.states?.[config.smart]?.state === 'on') chip('smart', this._text('card.state.smart_on') || WORDS.smart_on);
   const house = this.house(st);
   if (house && house !== word) {  // never "Away" twice: an away room says it in its own word already

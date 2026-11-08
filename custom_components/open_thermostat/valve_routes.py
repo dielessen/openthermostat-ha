@@ -27,6 +27,11 @@ Home Assistant" that is now a Zigbee2MQTT valve the E32 drives itself moves
 to the E32 at the next save of its room (shown in the form before that),
 unless the installer chose "Through Home Assistant" for it under Advanced:
 that choice is kept in the entry options (``valves_through_ha``).
+
+E32 1.1: a Shelly BLU TRV behind a BLU Gateway that the E32 drives itself
+(model ``shelly_blu_trv``, name ``g<n>:<id>``) is not a climate entity here: the
+room form lists the gateway's valves from the E32 (gateway_route) with their
+role (radiator or floor loop valve) and "keep open".
 """
 from __future__ import annotations
 
@@ -38,7 +43,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
-from .e32_valves import HA_MODEL, ZIGBEE_MODELS, guess_model, valid_entity, valid_name
+from .e32_valves import GATEWAY_MODEL, HA_MODEL, ZIGBEE_MODELS, guess_model, valid_entity, valid_name, valve_record
 
 # The entities the installer explicitly keeps "Through Home Assistant" (Advanced), in the entry options.
 CONF_THROUGH_HA = "valves_through_ha"
@@ -53,13 +58,16 @@ AUTOMATIC_MODELS = tuple(m for m in ZIGBEE_MODELS if m != "generic")
 ROUTE_TEXT = {
     "en": {"direct": "works without Home Assistant", "ha": "through Home Assistant",
            "kept": "not found in Home Assistant, kept as it was", "none": "No radiator valves yet.",
-           "unknown": "model not recognised"},
+           "unknown": "model not recognised", "gateway": "Shelly BLU TRV through the BLU Gateway",
+           "loop": "floor loop valve", "keep_open": "kept open as the water's path"},
     "nl": {"direct": "werkt zonder Home Assistant", "ha": "via Home Assistant",
            "kept": "niet gevonden in Home Assistant, blijft zoals hij was", "none": "Nog geen radiatorkranen.",
-           "unknown": "model niet herkend"},
+           "unknown": "model niet herkend", "gateway": "Shelly BLU TRV via de BLU Gateway",
+           "loop": "kraan van een vloergroep", "keep_open": "blijft open als weg voor het water"},
     "pl": {"direct": "działa bez Home Assistant", "ha": "przez Home Assistant",
            "kept": "nie znaleziono w Home Assistant, pozostaje bez zmian", "none": "Brak zaworów grzejnikowych.",
-           "unknown": "model nierozpoznany"},
+           "unknown": "model nierozpoznany", "gateway": "Shelly BLU TRV przez BLU Gateway",
+           "loop": "zawór pętli podłogowej", "keep_open": "pozostaje otwarty jako droga dla wody"},
 }
 ROUTE_HEADING = {"en": "Radiator valves:", "nl": "Radiatorkranen:", "pl": "Zawory grzejnikowe:"}
 MODEL_NAMES = {"bosch_bth_ra": "Bosch BTH-RA", "sonoff_trvzb": "Sonoff TRVZB", "sonoff_trv_zbt": "Sonoff TRV Gen2",
@@ -75,13 +83,25 @@ class ValveRoute:
     entity_id: str | None = None  # None: a stored valve Home Assistant does not know (kept)
     friendly: str | None = None  # its Zigbee2MQTT friendly name on the E32's base topic, if it has one
     detected: str | None = None  # the model recognised from Home Assistant's device registry
+    role: str | None = None      # a BLU Gateway valve: "loop" on the floor manifold, else a radiator
+    keep_open: bool = False      # a BLU Gateway radiator kept open as the water's path
 
     @property
     def direct(self):
         return self.model != HA_MODEL
 
+    @property
+    def gateway(self):
+        return self.model == GATEWAY_MODEL
+
     def record(self):
-        return {"name": self.name, "model": self.model}
+        return valve_record({"name": self.name, "model": self.model, "role": self.role, "keep_open": self.keep_open})
+
+
+def gateway_route(name, label=None, role=None, keep_open=False):
+    """A BLU Gateway valve (g<n>:<id>) with its label from the E32 (friendly), role and keep_open."""
+    loop = role == "loop"
+    return ValveRoute(name, GATEWAY_MODEL, None, label, None, "loop" if loop else None, bool(keep_open) and not loop)
 
 
 def is_z2m_device(device):
@@ -265,6 +285,12 @@ def route_lines(hass, routes, language="en"):
     text = ROUTE_TEXT.get(language, ROUTE_TEXT["en"])
     lines = []
     for route in routes:
+        if route.gateway:
+            from .e32_valves import shown_name
+            extra = [text["loop"]] if route.role == "loop" else [text["keep_open"]] if route.keep_open else []
+            shown = route.friendly or shown_name(route.name, language)
+            lines.append(f"- {shown}: {text['direct']} ({', '.join([text['gateway'], *extra])})")
+            continue
         state = hass.states.get(route.entity_id) if route.entity_id else None
         shown = state.attributes.get("friendly_name") if state is not None else None
         shown = shown if type(shown) is str and shown.strip() else route.name

@@ -24,7 +24,7 @@
 const PREFIX = 'component.open_thermostat.entity.sensor.';
 const CURVE_TEXT = {title: 'Water temperature by outdoor temperature', standard: 'Standard', learned: 'Learned for your house',
  house: 'Estimated from your house', now: 'Now', frost: 'At −10 °C with {room} °C inside: {flow} °C',
- now_point: '{outdoor} °C outside → {flow} °C', asks: 'E32 asks {flow} °C', at: 'At {outdoor} °C outside',
+ now_point: '{outdoor} °C outside → {flow} °C', asks: 'E32 asks {flow} °C', would_ask: 'E32 would ask {flow} °C', at: 'At {outdoor} °C outside',
  lower: '{n} °C cooler than standard', higher: '{n} °C warmer than standard', outdoor: 'Outdoor temperature (°C)',
  water: 'Water to heating (°C)', caption: 'The colder it is outside, the warmer the water. The E32 learns the line for your house and keeps it as low as it can.',
  values: 'Show the values', outside: 'Outside', off: 'Weather compensation is off; the lines show what it would ask.',
@@ -282,11 +282,17 @@ class OpenThermostatCard extends HTMLElement {
  set hass(hass) {
   this._hass = hass;
   // Only a new state, language or theme redraws; Home Assistant sets hass on every change in the house.
-  const st = hass?.states?.[this._config?.entity], key = [st, locale(hass), hass?.themes?.darkMode];
+  const st = hass?.states?.[this._config?.entity], key = [st, locale(hass), hass?.themes?.darkMode, this.trial()];
   if (this._key && key.every((v, i) => v === this._key[i])) return;
   this._key = key; this.render();
  }
  getGridOptions() { return {columns: 12, min_columns: 6}; }
+ // HA 1.0.1: the trial run, or active control before the takeover is confirmed (the heat request's mode and control,
+ // config ``request``): the E32 asks the boiler nothing, so the curve card says what it would ask (as the house card).
+ trial() {
+  const a = this._config?.request ? this._hass?.states?.[this._config.request]?.attributes : null;
+  return !!a && (a.mode === 'shadow' || a.control === 'awaiting_confirmation');
+ }
  // A text of the integration's translations, its {placeholders} filled; English when Home Assistant has none.
  text(base, fallback, key, values = {}) {
   let text = '';
@@ -318,7 +324,9 @@ class OpenThermostatHeatingCurve extends OpenThermostatCard {
  render() {
   const hass = this._hass, config = this._config;
   if (!hass || !config) return;
-  const t = (key, values) => this.text('flow_curve.state_attributes.chart.state.', CURVE_TEXT, key, values), n = (v, d) => this.number(v, d);
+  const trial = this.trial();
+  const t = (key, values) => this.text('flow_curve.state_attributes.chart.state.', CURVE_TEXT, trial && key === 'asks' ? 'would_ask' : key, values);
+  const n = (v, d) => this.number(v, d);
   const card = this.frame(CURVE_STYLE), st = hass.states?.[config.entity];
   // show_name: false where a heading above the card already says it (the Learning view's own section, rc.5).
   if (config.show_name !== false) card.append(make('h2', {}, config.name || t('title')));
@@ -358,6 +366,14 @@ class OpenThermostatHeatingCurve extends OpenThermostatCard {
 class OpenThermostatKnowledge extends OpenThermostatCard {
  static configError = 'This card needs the Knowledge sensor of OpenThermostat (entity: sensor.…); the OpenThermostat dashboard adds it for you.';
  getCardSize() { return 4; }
+ // One thing still to learn in the viewer's words ({kind, room}: "It still has to see how fast Kitchen warms up."), or ''.
+ item(item) {
+  if (!item || typeof item.kind !== 'string' || !/^[a-z_]+$/.test(item.kind)) return '';
+  try {
+   const text = this._hass?.localize?.(PREFIX + 'knowledge.state_attributes.items.state.' + item.kind, {room: typeof item.room === 'string' ? item.room : ''});
+   return typeof text === 'string' ? text : '';
+  } catch (e) { return ''; }
+ }
  render() {
   const hass = this._hass, config = this._config;
   if (!hass || !config) return;
@@ -365,7 +381,11 @@ class OpenThermostatKnowledge extends OpenThermostatCard {
   const card = this.frame(KNOWLEDGE_STYLE), st = hass.states?.[config.entity];
   if (this.missing(card, config, st)) return;
   const pct = numeric(st.state), a = st.attributes || {};
-  const missing = Array.isArray(a.missing) ? a.missing.filter(s => typeof s === 'string' && s) : [];
+  let missing = Array.isArray(a.missing) ? a.missing.filter(s => typeof s === 'string' && s) : [];
+  // HA 1.0.1: the same items as kinds (insight.missing_items) in the viewer's language; the sensor's sentences are in
+  // Home Assistant's own language, so they are the last resort.
+  const own = Array.isArray(a.items) && a.items.length === missing.length ? a.items.map(item => this.item(item)) : [];
+  if (own.length && own.every(Boolean)) missing = own;
   const more = Number.isInteger(a.more) && a.more > 0 ? a.more : 0, open = missing.length > 0 || more > 0;
   // One story on the card (rc.7): while something is still to learn the figure stays below 100 % (a rounded 99.6 % read
   // as "100 %" over a list of what it still learns), and "learned everything" only at 100 % with nothing left. Then

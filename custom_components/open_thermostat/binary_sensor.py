@@ -53,6 +53,11 @@ async def async_setup_entry(
                 await async_setup_valve_problems(hass, entry, async_add_entities)  # radiator valve problems
             except Exception:  # noqa: BLE001 - optional; the room demand stays
                 _LOGGER.exception("OpenThermostat: setting up the radiator valve problems failed")
+            from .e32_shelly import async_setup_binary_sensors as async_setup_circuit_pumps
+            try:
+                await async_setup_circuit_pumps(hass, entry, async_add_entities)  # E32 1.1: the floor pump runs
+            except Exception:  # noqa: BLE001 - optional; the room demand stays
+                _LOGGER.exception("OpenThermostat: setting up the heating circuit pumps failed")
         from .product_telemetry import async_setup_binary_sensors
         await async_setup_binary_sensors(hass, entry, async_add_entities)
         return

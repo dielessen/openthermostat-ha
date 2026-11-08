@@ -56,6 +56,7 @@ def _error(err):
     return key if key in known else "setup_invalid"
 
 
+
 class ProductRoomFlow(RadiatorRoomSetupFlow):
     """One guided native flow for adding and editing ordinary radiator rooms."""
 
@@ -255,12 +256,15 @@ from .e32_backup_flow import E32RestoreSteps  # noqa: E402
 from .e32_care import CareOptionsSteps  # noqa: E402
 from .e32_system import SystemOptionsSteps  # noqa: E402
 from .e32_boiler_model import BoilerModelSteps  # noqa: E402
+from .e32_boiler_settings_flow import BoilerSettingsSteps  # noqa: E402
 from .e32_bluetooth import BluetoothOptionsSteps  # noqa: E402
 from .options_house_heating import HouseHeatingSteps  # noqa: E402
 from .options_navigation import MenuNavigation  # noqa: E402
+from .e32_shelly import CircuitOptionsSteps  # noqa: E402
+from .e32_tester import TesterSteps  # noqa: E402
 
 
-class ProductOptionsFlow(MenuNavigation, HouseHeatingSteps, E32RestoreSteps, CareOptionsSteps, SystemOptionsSteps, BoilerModelSteps, BluetoothOptionsSteps, ComfortOptionsSteps, E32RoomFlow, LegacyRoomsSteps, ControllerSetupFlow, ShadowOptionsFlow,
+class ProductOptionsFlow(MenuNavigation, HouseHeatingSteps, CircuitOptionsSteps, TesterSteps, E32RestoreSteps, CareOptionsSteps, SystemOptionsSteps, BoilerModelSteps, BoilerSettingsSteps, BluetoothOptionsSteps, ComfortOptionsSteps, E32RoomFlow, LegacyRoomsSteps, ControllerSetupFlow, ShadowOptionsFlow,
                          ProductRoomFlow):
     """One central options entrypoint, using the same room editor and native Store.
 
@@ -283,15 +287,21 @@ class ProductOptionsFlow(MenuNavigation, HouseHeatingSteps, E32RestoreSteps, Car
 
     async def async_step_heating_boiler(self, user_input=None):
         """Configure → Heating and boiler: Smart warm-up, Weather compensation, the water temperature limits,
-        Comfort and boiler care (when the E32 can change them) and the boiler model."""
+        Comfort and boiler care (when the E32 can change them), the heating circuits (when the E32 reports one
+        with a pump, E32 1.1), the boiler model and the boiler's own settings (when the E32 sends them,
+        e32_boiler_settings)."""
+        from .e32_boiler_settings import offered as boiler_settings_offered
         from .e32_care import care_offered
+        from .e32_shelly import circuits_offered
         from .e32_flow import KEY
         link = (self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id) or {}).get(KEY)
         # Offered once the E32 device page has the two controls (the link exists from the platform setup on).
         flow = ["heating_warm_up", "heating_weather"] if link is not None and not link.unsupported else []
         care = ["comfort_care"] if care_offered(self.hass, self.config_entry) else []
+        settings = ["boiler_settings"] if boiler_settings_offered(self.hass, self.config_entry) else []
+        circuits = ["heating_circuits"] if circuits_offered(self.hass, self.config_entry) else []
         return self.async_show_menu(step_id="heating_boiler", menu_options=[
-            *flow, "heating_boiler_limits", *care, "boiler_model"])
+            *flow, "heating_boiler_limits", *circuits, *care, "boiler_model", *settings])
 
     async def async_step_heating_boiler_limits(self, user_input=None):
         """The E32 plan's water temperature limits (e32_room_flow.py)."""
@@ -528,15 +538,13 @@ class ProductOptionsFlow(MenuNavigation, HouseHeatingSteps, E32RestoreSteps, Car
         connection = state.get("v1_connection")
         client = getattr(connection, "client", None)
         verified = bool(getattr(client, "graph_status", {}).get("readback_verified", False))
-        dutch = self.hass.config.language == "nl"
-        connection_text = ("Toepassing bevestigd" if verified else "Toepassing nog niet bevestigd") if dutch else (
-            "Application confirmed" if verified else "Application not yet confirmed")
+        # The texts in the user's language (English, Dutch or Polish: strings.json, R4-24).
+        from .options_navigation import async_flow_texts
+        words = await async_flow_texts(self.hass, "configuration_status_text")
+        connection_text = words["confirmed" if verified else "unconfirmed"]
         enabled = actual_runtime_active(self.hass, entry)
         # Neutral on purpose: in shadow mode the thermostat controls the boiler, after the switch-over the E32 does.
-        runtime_text = (("Berekeningen aan; het E32-overzicht toont wie de ketel regelt" if enabled
-                         else "Berekeningen uit; geen aansturing")
-                        if dutch else ("Calculations on; the E32 Overview shows who controls the boiler" if enabled
-                                       else "Calculations off; no device control"))
+        runtime_text = words["calculations_on" if enabled else "calculations_off"]
         # Inspect saved targets without altering settings or granting physical readiness.
         from .room_editor import read_room
         from .v1_profile_c import MODE_MESSAGES
@@ -553,22 +561,19 @@ class ProductOptionsFlow(MenuNavigation, HouseHeatingSteps, E32RestoreSteps, Car
                 text = actuator["entity_id"] + ": "
                 if cap and actuator["status"] != "unknown":
                     text += f"{cap['minimum']:g}–{cap['maximum']:g} {cap['unit']}; "
-                    text += ("stap " if dutch else "step ") + f"{cap['step']:g} {cap['unit']}"
+                    text += f"{words['step']} {cap['step']:g} {cap['unit']}"
                     if any(reason in actuator["issues"] for reason in (
                             "room_limits_exceed_actuator", "saved_targets_need_review")):
-                        text += (". Controleer kamergrenzen en programmadoelen." if dutch
-                                 else ". Review room limits and program targets.")
+                        text += ". " + words["review_limits"]
                 else:
-                    text += ("Eigenschappen niet beschikbaar; controleer de kraanverbinding." if dutch
-                             else "Capabilities unavailable; check the valve connection.")
+                    text += words["capabilities_unavailable"]
                 for reason in actuator.get("operating_mode", {}).get("issues", []):
-                    if reason in MODE_MESSAGES:
-                        text += " " + MODE_MESSAGES[reason][0 if dutch else 1]
+                    if reason in MODE_MESSAGES and reason in words:
+                        text += " " + words[reason]
                 if review["external_program_present"]:
-                    text += (" Het bestaande externe programma is niet gecontroleerd." if dutch
-                             else " The existing external program has not been checked.")
+                    text += " " + words["external_program"]
                 checks.append(text)
-        actuator_text = "\n\n".join(checks) or ("Nog geen radiatorkranen gekoppeld." if dutch else "No radiator valves linked yet.")
+        actuator_text = "\n\n".join(checks) or words["no_valves"]
         return self.async_show_form(step_id="configuration_status", data_schema=vol.Schema({}),
             description_placeholders={"rooms": str(sum(s.subentry_type == "zone" for s in entry.subentries.values())),
                 "connection": connection_text, "runtime": runtime_text, "actuator_checks": actuator_text})
@@ -598,6 +603,8 @@ class ProductOptionsFlow(MenuNavigation, HouseHeatingSteps, E32RestoreSteps, Car
         if link_for(self.hass, entry) is not None:
             # The E32's system log and time zone (e32_system), as on its System pages.
             options += ["ble_sensors", "e32_logging", "e32_time_zone"]
+            # The tester programme (e32_tester, E5): off by default; share what the E32 heard from the boiler.
+            options.append("tester")
         from .entity_id_tidy import async_undo_available
         options.append("entity_ids")
         if await async_undo_available(self.hass, entry):
@@ -654,6 +661,10 @@ class ProductOptionsFlow(MenuNavigation, HouseHeatingSteps, E32RestoreSteps, Car
         return self.async_show_form(step_id="entity_ids_undo", errors=errors,
             data_schema=vol.Schema({vol.Required("confirm", default=False): selector.BooleanSelector()}),
             description_placeholders={"count": str(len(available))})
+
+
+# Configure -> Advanced -> "Is everything connected?" (older Home Assistant rooms only): the lines filled into its
+# translated description, in plain words. "Configuration confirmed" is what that description explains.
 
 
 def main_menu(entry):

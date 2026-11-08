@@ -13,7 +13,7 @@ from homeassistant.core import SupportsResponse, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er, issue_registry as ir
 from homeassistant.helpers.service import async_register_admin_service
-from .const import DOMAIN
+from .const import DOMAIN, SHARED
 
 KEY = DOMAIN + "_metrics_reports"
 SERVICE = "export_metrics_csv"
@@ -53,7 +53,7 @@ _FALLBACK = {
 
 def info_note_shown(hass, entry_id, key=None):
     """True when this run showed (or found already shown) the note: for diagnostics."""
-    shown = hass.data.get(DOMAIN, {}).get(_SHOWN, set())
+    shown = hass.data.get(SHARED, {}).get(_SHOWN, set())
     return any((entry_id, k) in shown for k in ([key] if key else INFO_NOTES))
 
 
@@ -64,12 +64,29 @@ def remove_info_issues(hass, entry_id):
         ir.async_delete_issue(hass, DOMAIN, f"{key}_{entry_id}")
 
 
+def _notes_lock(hass):
+    return hass.data.setdefault(SHARED, {}).setdefault(_NOTES_STORE + ".lock", asyncio.Lock())
+
+
+async def async_forget_entry(hass, entry_id):
+    """A removed installation: its notes are no longer remembered, in this run or on disk (R4-31)."""
+    from homeassistant.helpers.storage import Store
+    shown = hass.data.get(SHARED, {}).get(_SHOWN, set())
+    for item in [i for i in shown if i[0] == entry_id]:
+        shown.discard(item)
+    store = Store(hass, 1, _NOTES_STORE)
+    async with _notes_lock(hass):
+        data = await store.async_load() or {}
+        if data.pop(entry_id, None) is not None:
+            await store.async_save(data)
+
+
 async def _async_note_once(hass, entry_id, key):
     from homeassistant.components import persistent_notification
     from homeassistant.helpers.storage import Store
     from homeassistant.helpers.translation import async_get_translations
     store = Store(hass, 1, _NOTES_STORE)
-    lock = hass.data.setdefault(DOMAIN, {}).setdefault(_NOTES_STORE + ".lock", asyncio.Lock())
+    lock = _notes_lock(hass)
     async with lock:
         data = await store.async_load() or {}
         done = data.setdefault(entry_id, [])
@@ -92,7 +109,7 @@ async def _async_note_once(hass, entry_id, key):
 def _note(hass, entry_id, key):
     """Show the information once per installation: a notification, never a Repairs item."""
     ir.async_delete_issue(hass, DOMAIN, f"{key}_{entry_id}")
-    shown = hass.data.setdefault(DOMAIN, {}).setdefault(_SHOWN, set())
+    shown = hass.data.setdefault(SHARED, {}).setdefault(_SHOWN, set())
     if (entry_id, key) in shown:
         return
     shown.add((entry_id, key))

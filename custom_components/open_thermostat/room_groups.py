@@ -43,6 +43,7 @@ from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.typing import UNDEFINED
 from homeassistant.util import dt as dt_util
 
 from .const import CONF_TOPIC_PREFIX, DOMAIN
@@ -56,6 +57,41 @@ STATE_KEY = "room_groups"
 RESTORED_ISSUE = "room_group_restored"
 # The "group restored" note stays this long after its group is back, then goes by itself.
 RESTORED_NOTICE = timedelta(hours=24)
+# A room or sensor device Home Assistant moved without us (RoomGroups._silent_move): one reload per entry this often.
+SILENT_MOVE_REPAIR_INTERVAL = timedelta(hours=1)
+REPAIRS_KEY = f"{DOMAIN}_room_group_repairs"  # hass.data: {entry id: its last repair reload}; outlives a reload
+
+
+def _info_field(info, key):
+    """One field of a device info in any form, None when unset: a dict (DeviceInfo up to Home Assistant
+    2026.10 is a TypedDict), the DeviceInfo dataclass of 2026.11 (not a dict), or another mapping."""
+    if info is None:
+        return None
+    try:
+        getter = getattr(info, "get", None)
+        value = getter(key) if callable(getter) else getattr(info, key, None)
+    except Exception:  # an odd device info: unknown
+        return None
+    return None if value is UNDEFINED else value
+
+
+def _device_identity(entity):
+    """(identifiers, name) of the device Home Assistant will add the entity on; (None, None) without one.
+
+    The entity's own device info first (no side effects), then its device_info property, then the
+    device entry it was given.
+    """
+    for read in (lambda: getattr(entity, "_attr_device_info", None), lambda: entity.device_info):
+        try:
+            info = read()
+        except Exception:  # a device_info property that needs Home Assistant: the next form
+            continue
+        if identifiers := _info_field(info, "identifiers"):
+            return identifiers, _info_field(info, "name")
+    device = getattr(entity, "device_entry", None)
+    if identifiers := getattr(device, "identifiers", None):
+        return identifiers, getattr(device, "name", None)
+    return None, None
 
 
 def group_unique_id(room_id):
@@ -254,14 +290,30 @@ class RoomGroups:
 
     @callback
     def subentry_for(self, entity, default):
-        """The group an entity is added to: its room's, its sensor's room's, else the default."""
-        info = getattr(entity, "_attr_device_info", None) or {}
-        identifiers = info.get("identifiers") if isinstance(info, dict) else None
+        """The group an entity is added to: its room's, its sensor's room's, its device's, else the default.
+
+        Home Assistant moves an existing device to the subentry its entity is added with, and then
+        removes the device's entities that belong to the old subentry (it warns that this "silently
+        moves the device"). So an entity of a room or sensor device always goes to that device's
+        group, and an entity of any other device of ours that already sits in a group goes there.
+        """
+        identifiers, name = _device_identity(entity)
         if room_id := self._own(identifiers, self._room_head()):
-            return self.ensure_room(room_id, info.get("name"))
+            return self.ensure_room(room_id, name)
         if sensor_id := self._own(identifiers, self._ble_head()):
             return self._ble_group(sensor_id)
+        device = self._existing_device(identifiers)
+        if device is not None and device.config_subentry_id in self.entry.subentries:
+            return device.config_subentry_id  # adding one entity never moves its device
         return default
+
+    def _existing_device(self, identifiers):
+        registry = dr.async_get(self.hass)
+        for identifier in identifiers or ():
+            device = registry.async_get_device_by_identifier(identifier, self.entry.entry_id)
+            if device is not None and device.config_entry_id == self.entry.entry_id:
+                return device
+        return None
 
     @callback
     def _move(self, device, group_id):
@@ -323,11 +375,61 @@ class RoomGroups:
 
     @callback
     def _device_event(self, event):
-        if event.data.get("action") != "create":
+        action, changes = event.data.get("action"), event.data.get("changes") or {}
+        if action == "update" and "config_subentry_id" in changes:
+            self._silent_move(event.data["device_id"], changes["config_subentry_id"])
+            return
+        if action != "create":
             return
         device = dr.async_get(self.hass).async_get(event.data["device_id"])
         if device is not None and device.config_entry_id == self.entry.entry_id:
             self.suggest_area(device)
+
+    def _wanted_group(self, device):
+        """The group this setup keeps a room or sensor device in (no change made), None when it has no say."""
+        if room_id := self._own(device.identifiers, self._room_head()):
+            return room_group_ids(self.entry).get(room_id)
+        if sensor_id := self._own(device.identifiers, self._ble_head()):
+            known, owner = self._ble_owner(sensor_id)
+            if not known:
+                return None  # where it is until the plan says otherwise
+            return room_group_ids(self.entry).get(owner) if owner is not None else self.installation_id
+        return None
+
+    @callback
+    def _silent_move(self, device_id, old_group_id):
+        """A room or sensor device moved to another group without us: bring its entities back.
+
+        Home Assistant moves a device when an entity of it is added with another subentry. Its
+        entity registry hears that move before any integration does (the bus calls the listeners in
+        order, and the registry listens from its start) and has then already removed the device's
+        entities of the old group, so they cannot be kept from here. They wait in the registry's
+        deleted entities with their IDs, names and history, and a reload adds them back. subentry_for
+        prevents the move for every entity added through add_grouped; this catches any other path.
+        At most one reload per hour per entry, so a cause that keeps coming back cannot reload in a
+        loop; the log names the device.
+        """
+        if self._restoring:
+            return
+        device = dr.async_get(self.hass).async_get(device_id)
+        if (device is None or device.config_entry_id != self.entry.entry_id
+                or old_group_id not in self.entry.subentries):
+            return
+        wanted = self._wanted_group(device)
+        if wanted is None or device.config_subentry_id == wanted:
+            return  # one of our own moves (Core may report it later, when the event was queued), or not ours
+        name = device.name_by_user or device.name or device_id
+        repairs = self.hass.data.setdefault(REPAIRS_KEY, {})
+        now, last = dt_util.utcnow(), repairs.get(self.entry.entry_id)
+        if last is not None and now - last < SILENT_MOVE_REPAIR_INTERVAL:
+            _LOGGER.error("Home Assistant moved the OpenThermostat device %s to another group again and removed "
+                          "its entities there; reload the integration to bring them back", name)
+            return
+        _LOGGER.warning("Home Assistant moved the OpenThermostat device %s to another group and removed its "
+                        "entities there; reloading to bring them back", name)
+        repairs[self.entry.entry_id] = now
+        self._restoring = True
+        self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
 
     @callback
     def reconcile(self, force=False):

@@ -144,12 +144,14 @@
           "comfort_temperature": "Komfort bez programu tygodniowego",
           "eco_temperature": "Noc bez programu tygodniowego",
           "contact_delay": "Przerwa po otwarciu okna",
+          "door_delay": "Przerwa po otwarciu drzwi",
           "override_minutes": "Czas trwania ręcznej zmiany"
         },
         "data_description": {
           "comfort_temperature": "Ustawienie Komfort pomieszczenia bez programu tygodniowego. Z programem tygodniowym Komfort to jego najcieplejsza temperatura.",
           "eco_temperature": "Ustawienie Noc pomieszczenia bez programu tygodniowego. Z programem tygodniowym Noc to jego najchłodniejsza temperatura.",
-          "contact_delay": "Liczba minut, przez które okno lub drzwi muszą pozostać otwarte, zanim pomieszczenie wstrzyma ogrzewanie, aby krótkie wietrzenie lub przejście przez drzwi nie zatrzymywało ogrzewania. Własne ustawienie „Pauza po” pomieszczenia (Konfiguruj → Pomieszczenia) ma pierwszeństwo. Wstrzymane pomieszczenie nadal jest chronione przed mrozem.",
+          "contact_delay": "Liczba minut, przez które okno musi pozostać otwarte, zanim pomieszczenie wstrzyma ogrzewanie, aby krótkie wietrzenie nie zatrzymywało ogrzewania. Własne ustawienie „Pauza po (okna)” pomieszczenia (Konfiguruj → Pomieszczenia) ma pierwszeństwo. Wstrzymane pomieszczenie nadal jest chronione przed mrozem.",
+          "door_delay": "To samo dla drzwi, zwykle dłużej, aby wypuszczenie psa lub przejście przez drzwi wejściowe nie zatrzymywało ogrzewania. Domyślnie 5 minut. Własne ustawienie „Pauza po (drzwi)” pomieszczenia ma pierwszeństwo.",
           "override_minutes": "Nowa temperatura na termostacie obowiązuje do następnego punktu przełączenia programu tygodniowego pomieszczenia. Pomieszczenie bez programu tygodniowego utrzymuje ją przez tyle minut, a potem znowu stosuje swój plan."
         }
       },
@@ -165,12 +167,14 @@
       },
       "comfort_contacts_room": {
         "title": "Czujniki okien i drzwi",
-        "description": "Pomieszczenie: {room}. Gdy jeden z tych czujników jest otwarty przez {delay}, pomieszczenie wstrzymuje ogrzewanie: spada do ochrony przed mrozem (8 °C) i nie żąda ciepła. Gdy wszystkie są znów zamknięte, wraca do swojego programu. Usuń wszystkie czujniki, aby wyłączyć to dla pomieszczenia.",
+        "description": "Pomieszczenie: {room}. Gdy okno jest otwarte przez {delay} lub drzwi przez {door_delay}, pomieszczenie wstrzymuje ogrzewanie: spada do ochrony przed mrozem (8 °C) i nie żąda ciepła. Gdy wszystkie są znów zamknięte, wraca do swojego programu. Usuń wszystkie czujniki, aby wyłączyć to dla pomieszczenia.",
         "data": {
-          "contacts": "Czujniki okien i drzwi"
+          "contacts": "Czujniki okien",
+          "door_contacts": "Czujniki drzwi"
         },
         "data_description": {
-          "contacts": "Czujniki binarne klasy okno, drzwi, otwarcie lub brama garażowa, dowolnej marki (Zigbee, Z-Wave, Shelly, Bluetooth …). Home Assistant wysyła ich stan do E32 przy każdej zmianie. Możesz wybrać kilka, do 8: po wybraniu jednego poniżej pojawia się puste pole na kolejny."
+          "contacts": "Czujniki binarne klasy okno, drzwi, otwarcie lub brama garażowa, dowolnej marki (Zigbee, Z-Wave, Shelly, Bluetooth …). Home Assistant wysyła ich stan do E32 przy każdej zmianie. Możesz wybrać kilka, łącznie do 8 okien i drzwi: po wybraniu jednego poniżej pojawia się puste pole na kolejny.",
+          "door_contacts": "Drzwi, które często otwierasz na chwilę (drzwi wejściowe, tylne, do ogrodu). Wstrzymują pomieszczenie dopiero po dłuższym opóźnieniu dla drzwi. Czujnik jest oknem albo drzwiami, nie jednym i drugim."
         }
       },
       "init": {
@@ -308,14 +312,14 @@
       },
       "room": {
         "title": "Twoje pomieszczenie · 1 z 3",
-        "description": "Wybierz nazwę i rodzaj ogrzewania. Ta ścieżka konfiguracji obsługuje grzejniki. Profile podłogowe i mieszane nie są tu jeszcze dostępne; ich wybór nigdy po cichu nie tworzy konfiguracji grzejnikowej.",
+        "description": "Wybierz nazwę i rodzaj ogrzewania. Ta starsza konfiguracja tworzy tylko pomieszczenia z grzejnikami. Ogrzewanie podłogowe ustawia się w pomieszczeniach E32: połącz E32 w Konfiguruj → Połączenie z E32, a potem dodaj pomieszczenie w Konfiguruj → Pomieszczenia.",
         "data": {
           "name": "Nazwa pomieszczenia",
           "emitter": "Ogrzewanie w tym pomieszczeniu"
         },
         "data_description": {
           "name": "Wyświetlana przy sterowaniu pomieszczeniem. Zmiana nazwy zachowuje jego tożsamość i zapisany program.",
-          "emitter": "Określa, które zawory i limity temperatury obowiązują. Ogrzewanie podłogowe wymaga własnego zgodnego profilu."
+          "emitter": "Określa, które zawory i limity temperatury obowiązują. Ta konfiguracja tworzy tylko pomieszczenia z grzejnikami."
         },
         "submit": "Dalej"
       },
@@ -418,7 +422,7 @@
       },
       "block": {
         "title": "Blok czasowy",
-        "description": "Lokalny przedział czasu zegarowego [początek, koniec). Bloki nocne podziel o północy. Powtórzone jesienne godziny obowiązują dwa razy; nieistniejące wiosenne godziny są pomijane.",
+        "description": "Ustaw dni, początek, koniec i temperaturę. Na noc użyj dwóch bloków. Blok, który kończy się o północy, trwa do początku następnego dnia.",
         "data": {
           "days": "Dni",
           "start_time": "Godzina rozpoczęcia",
@@ -485,7 +489,8 @@
           "e32_time_zone": "Strefa czasowa E32",
           "back": "← Wstecz",
           "done": "Gotowe",
-          "general": "Panel i nazwa"
+          "general": "Panel i nazwa",
+          "tester": "Program testerów"
         }
       },
       "edit_room": {
@@ -607,14 +612,18 @@
         "sections": {
           "window": {
             "name": "Okna i drzwi",
-            "description": "Opcjonalnie. Wybierz czujniki okien i drzwi tego pomieszczenia z Home Assistant, dowolnej marki: Zigbee, Z-Wave, Shelly, Bluetooth i inne.",
+            "description": "Opcjonalnie. Wybierz czujniki okien i drzwi tego pomieszczenia z Home Assistant, dowolnej marki: Zigbee, Z-Wave, Shelly, Bluetooth i inne. Drzwi mogą czekać dłużej niż okno, zanim pomieszczenie wstrzyma ogrzewanie.",
             "data": {
-              "contacts": "Czujniki okien i drzwi",
-              "contact_delay": "Pauza po"
+              "contacts": "Czujniki okien",
+              "contact_delay": "Pauza po (okna)",
+              "door_contacts": "Czujniki drzwi",
+              "door_delay": "Pauza po (drzwi)"
             },
             "data_description": {
-              "contacts": "Gdy jeden z nich jest otwarty przez {delay}, pomieszczenie wstrzymuje ogrzewanie: spada do ochrony przed mrozem (8 °C) i nie żąda ciepła. Gdy wszystkie są znowu zamknięte, wraca do programu. Opóźnienie ustawisz poniżej. Możesz wybrać kilka, do 8: po wybraniu jednego poniżej pojawia się puste pole na kolejny.",
-              "contact_delay": "Gdy jeden z nich jest otwarty tak długo, pomieszczenie wstrzymuje ogrzewanie: spada do ochrony przed mrozem (8 °C) i nie żąda ciepła. Gdy wszystkie są znowu zamknięte, wraca do programu. Domyślnie 2 minuty, więc krótkie wietrzenie nie wstrzymuje pomieszczenia."
+              "contacts": "Gdy jeden z nich jest otwarty przez {delay}, pomieszczenie wstrzymuje ogrzewanie: spada do ochrony przed mrozem (8 °C) i nie żąda ciepła. Gdy wszystkie okna i drzwi są znowu zamknięte, wraca do programu. Wcześniej wybrane czujniki są tutaj. Możesz wybrać kilka, łącznie do 8 okien i drzwi: po wybraniu jednego poniżej pojawia się puste pole na kolejny.",
+              "contact_delay": "Gdy okno jest otwarte tak długo, pomieszczenie wstrzymuje ogrzewanie. Domyślnie 2 minuty, więc krótkie wietrzenie nie wstrzymuje pomieszczenia.",
+              "door_contacts": "Drzwi, które często otwierasz na chwilę, na przykład drzwi wejściowe lub do ogrodu. Gdy jedne z nich są otwarte przez {door_delay}, pomieszczenie wstrzymuje ogrzewanie. Czujnik jest oknem albo drzwiami, nie jednym i drugim: przenieś drzwi tutaj z czujników okien.",
+              "door_delay": "Gdy drzwi są otwarte tak długo, pomieszczenie wstrzymuje ogrzewanie. Domyślnie 5 minut, więc wypuszczenie psa lub przejście nie wstrzymuje pomieszczenia."
             }
           },
           "limits": {
@@ -643,16 +652,22 @@
           },
           "valves": {
             "name": "Zawory grzejnikowe",
-            "description": "Opcjonalnie. Wybierz zawory grzejnikowe pomieszczenia; OpenThermostat sam ustala, jak sterować każdym z nich. Zawory Zigbee2MQTT znane E32 (Bosch BTH-RA, Sonoff TRVZB, Sonoff TRV Gen2, Tuya TV02) steruje sam E32 i działają także bez Home Assistant. Każdy inny zawór działa przez Home Assistant i zachowuje ostatni cel, gdy Home Assistant nie działa.",
+            "description": "Opcjonalnie. Wybierz zawory grzejnikowe pomieszczenia; OpenThermostat sam ustala, jak sterować każdym z nich. Zawory Zigbee2MQTT znane E32 (Bosch BTH-RA, Sonoff TRVZB, Sonoff TRV Gen2, Tuya TV02) oraz Shelly BLU TRV za bramką BLU Gateway E32 steruje sam E32 i działają także bez Home Assistant. Każdy inny zawór działa przez Home Assistant i zachowuje ostatni cel, gdy Home Assistant nie działa.",
             "data": {
               "valves": "Zawory grzejnikowe",
               "kept": "Zachowane zawory",
+              "gateway_valves": "Zawory przy BLU Gateway",
+              "loop_valves": "Zawory pętli podłogowych",
+              "keep_open": "Zostaw ten grzejnik otwarty",
               "control": "Sterowanie zaworami",
               "choose_models": "Sam wybiorę modele (zaawansowane)"
             },
             "data_description": {
-              "valves": "Ich encje termostatu (climate), najwyżej 4 na pomieszczenie i 16 łącznie. Sterowanie jest wyłączone, dopóki nie włączysz go poniżej.\n\n{valve_routes}",
+              "valves": "Ich encje termostatu (climate), najwyżej 4 na pomieszczenie. Sterowanie jest wyłączone, dopóki nie włączysz go poniżej.\n\n{valve_routes}",
               "kept": "Zawory Zigbee2MQTT zapisane na E32, których Home Assistant nie zna (już). Działają dalej bez zmian; odznacz zawór, aby go usunąć.",
+              "gateway_valves": "Shelly BLU TRV bramki BLU Gateway E32 w tym pomieszczeniu (zawór dodaje się do jego bramki na stronie Shelly w E32). Razem z nimi do 8 zaworów na pomieszczenie.",
+              "loop_valves": "Które z wybranych zaworów są na rozdzielaczu podłogowym (zawór pętli podłogowej): E32 sam je otwiera i zamyka. Pozostałe to zawory grzejnikowe.",
+              "keep_open": "Zostaw ten grzejnik otwarty jako drogę dla wody: E32 trzyma ten zawór otwarty, dopóki żadna inna droga dla wody nie jest otwarta (dopóki nie wiesz, że kocioł ma obejście). Nie dla zaworu pętli podłogowej.",
               "control": "Wł.: te zawory podążają za pomieszczeniem (tylko gdy E32 sam steruje kotłem). Wył.: zawory zachowują własne ustawienia i nic do nich nie jest wysyłane.",
               "choose_models": "Potrzebne tylko dla zaworu Zigbee2MQTT, którego model nie został rozpoznany (działa wtedy przez Home Assistant). Po zapisaniu wybierasz model każdego zaworu Zigbee2MQTT albo Przez Home Assistant."
             }
@@ -931,20 +946,22 @@
       },
       "heating_boiler": {
         "title": "Ogrzewanie i kocioł",
-        "description": "{saved}Nagrzewanie, pogoda i temperatura wody, komfort i dbałość o kocioł oraz model kotła.",
+        "description": "{saved}Nagrzewanie, pogoda i temperatura wody, obiegi grzewcze, komfort i dbałość o kocioł oraz model kotła.",
         "menu_options": {
           "heating_boiler_limits": "Limity temperatury wody",
+          "heating_circuits": "Obiegi grzewcze (pompa)",
           "boiler_model": "Model kotła",
           "back": "← Wstecz",
           "done": "Gotowe",
           "heating_warm_up": "Inteligentne nagrzewanie",
           "heating_weather": "Kompensacja pogodowa",
-          "comfort_care": "Komfort i dbałość o kocioł"
+          "comfort_care": "Komfort i dbałość o kocioł",
+          "boiler_settings": "Ustawienia kotła"
         }
       },
       "boiler_model": {
         "title": "Model kotła",
-        "description": "Wybierz swój kocioł, tak jak na stronie Kocioł w E32. Nadaje on kotłowi nazwę w Home Assistant i w E32 oraz wybiera objaśnienia kodów wyświetlacza; nie zmienia sposobu sterowania kotłem.\n\nTeraz: {current}.",
+        "description": "Wybierz swój kocioł, tak jak na stronie Kocioł w E32. Nadaje on kotłowi nazwę w Home Assistant i w E32 oraz wybiera objaśnienia kodów wyświetlacza; nie zmienia sposobu sterowania kotłem.\n\nTeraz: {current}.{recognised}",
         "data": {
           "model": "Model kotła"
         },
@@ -1107,6 +1124,125 @@
         "data_description": {
           "holiday_temperature": "To samo ustawienie co \"Temperatura podczas urlopu\" na urządzeniu E32 i na stronie Dom w E32."
         }
+      },
+      "boiler_settings": {
+        "title": "Ustawienia kotła",
+        "description": "{saved}Własne ustawienia kotła, np. temperatura ciepłej wody. Kocioł przechowuje je we własnej pamięci. E32 zmienia ustawienie tylko wtedy, gdy na to pozwolisz, jedno naraz, i odczytuje je z kotła. Ustawienie jeszcze niepotwierdzone na Twoim kotle jest próbowane, gdy obserwujesz kocioł, i samo wraca, chyba że je zachowasz.\n\nZmiana ustawień kotła: {state}\n\n{settings}",
+        "menu_options": {
+          "boiler_settings_allow": "Pozwól E32 zmieniać ustawienia kotła",
+          "boiler_settings_stop": "Zabroń E32 zmieniać ustawienia kotła",
+          "boiler_settings_pick": "Zmień ustawienie",
+          "boiler_settings_advanced": "Zaawansowane (ustawienia instalatora)",
+          "boiler_settings_watch": "Zmiana, którą teraz obserwujesz",
+          "back": "← Wstecz",
+          "done": "Gotowe"
+        }
+      },
+      "boiler_settings_allow": {
+        "title": "Pozwól E32 zmieniać ustawienia kotła",
+        "description": "Ustawienia kotła pozostają w kotle, także po ponownym uruchomieniu kotła lub E32. Złe ustawienie może wychłodzić dom, przegrzać ciepłą wodę albo sprawić, że palnik będzie zbyt często się włączał.\n\nE32 zmienia ustawienie tylko na Twoją prośbę, jedno naraz i najwyżej {cap} dziennie. Każdą zmianę odczytuje z kotła i przywraca ją, gdy kocioł jej nie przyjmie. W każdej chwili możesz to tu wyłączyć.",
+        "data": {
+          "confirm": "Rozumiem: po zmianie obserwuję kocioł"
+        },
+        "data_description": {
+          "confirm": "Potrzebne, aby to włączyć. Do tego czasu jest wyłączone."
+        }
+      },
+      "boiler_settings_stop": {
+        "title": "Zabroń E32 zmieniać ustawienia kotła",
+        "description": "Od teraz E32 nie zmienia żadnego ustawienia kotła. Obserwowana zmiana zostanie najpierw przywrócona. Ustawienia zachowane wcześniej pozostają w kotle bez zmian.\n\nZatwierdź, aby to wyłączyć."
+      },
+      "boiler_settings_pick": {
+        "title": "Zmień ustawienie kotła",
+        "description": "Wybierz ustawienie. Potwierdzone na Twoim kotle zmienia się od razu. Każde inne jest próbowane, gdy obserwujesz kocioł: potem je zachowujesz albo przywracasz.",
+        "data": {
+          "setting": "Ustawienie"
+        },
+        "data_description": {
+          "setting": "Z obecną wartością i informacją, czy jest potwierdzone na Twoim kotle."
+        }
+      },
+      "boiler_settings_advanced": {
+        "title": "Zaawansowane (ustawienia instalatora)",
+        "description": "**Na własne ryzyko.** To ustawienia, które ustawia instalator: moc palnika, marginesy przełączania, pompa i szczegóły ciepłej wody. Zła wartość może marnować gaz, zużywać kocioł albo wyłączyć ogrzewanie lub ciepłą wodę. Zmieniaj ustawienie tylko wtedy, gdy wiesz, co robi w Twoim kotle, np. z jego instrukcji.\n\nTutaj także zwykłe ustawienia mają cały zakres kotła.",
+        "data": {
+          "setting": "Ustawienie",
+          "own_risk": "Zmieniam to na własne ryzyko"
+        },
+        "data_description": {
+          "setting": "Z obecną wartością i informacją, czy jest potwierdzone na Twoim kotle.",
+          "own_risk": "Potrzebne, aby kontynuować."
+        }
+      },
+      "boiler_settings_value": {
+        "title": "Zmień: {setting}",
+        "description": "Teraz: {current}. Możesz wybrać {range}.\n\n{verification}",
+        "data": {
+          "value": "Nowa wartość"
+        },
+        "data_description": {
+          "value": "Kocioł przechowuje ją we własnej pamięci."
+        }
+      },
+      "boiler_settings_off": {
+        "title": "Naprawdę wyłączyć?",
+        "description": "To naprawdę wyłącza w kotle {what}. Podczas obserwacji pozostaje wyłączone do 15 minut; jeśli zachowasz zmianę, pozostanie wyłączone, dopóki znów tego nie włączysz.\n\nZatwierdź, aby wyłączyć, albo zamknij to okno, aby zostawić włączone."
+      },
+      "boiler_settings_watch": {
+        "title": "Obserwuj kocioł",
+        "description": "{saved}Obserwuj kocioł do 15 minut. {setting}: teraz {value} (było {before}); kocioł to odczytał.\n\nZachować nową wartość czy ją przywrócić? Jeśli wybierzesz Gotowe, E32 sam ją przywróci o {until}, 15 minut po zmianie.",
+        "menu_options": {
+          "boiler_settings_keep": "Zachowaj nową wartość",
+          "boiler_settings_put_back": "Przywróć",
+          "boiler_settings_leave": "Gotowe (E32 przywróci po 15 minutach)",
+          "back": "← Wstecz"
+        }
+      },
+      "heating_circuits": {
+        "title": "Obiegi grzewcze",
+        "description": "E32 ma więcej niż jeden obieg grzewczy z pompą. Który?",
+        "data": {
+          "circuit": "Obieg"
+        },
+        "data_description": {
+          "circuit": "Obiegi ustawia się na stronie Shelly w E32."
+        }
+      },
+      "heating_circuit": {
+        "title": "{circuit}: pompa",
+        "description": "Dopóki Sterowanie pompą przez E32 jest wyłączone, E32 tylko pokazuje, co zrobiłby z pompą, i zostawia pompę bez zmian. Włącz to, gdy wygląda to dobrze.",
+        "data": {
+          "pump_control": "Sterowanie pompą przez E32",
+          "max_supply_c": "Najwyższa temperatura wody do podłogi",
+          "run_on_max_minutes": "Wybieg najwyżej (minuty)"
+        },
+        "data_description": {
+          "pump_control": "Włączone: E32 sam włącza i wyłącza pompę, ale tylko wtedy, gdy steruje kotłem. Wyłączone: tylko pokazuje, co by zrobił. Ten sam przełącznik co na stronie Shelly w E32.",
+          "max_supply_c": "Gdy woda do podłogi przez 2 minuty jest o 5 °C cieplejsza od tej wartości, E32 wyłącza pompę: zawór mieszający przepuszcza za gorącą wodę. Dla podłogi zwykle 50 °C. To samo ustawienie co na stronie Home w E32, Obiegi grzewcze.",
+          "run_on_max_minutes": "Po grzaniu pompa pracuje dalej, dopóki woda do podłogi jest co najmniej o 2 °C cieplejsza od wody powrotnej, aby podłoga przejęła resztę ciepła. Zatrzymuje się wcześniej, gdy ta różnica zniknie lub pomieszczenie jest wystarczająco ciepłe; to najdłuższy czas wybiegu. Zwykle 30 minut. Wymaga obu sond wody."
+        }
+      },
+      "tester": {
+        "title": "Program testerów",
+        "description": "Pomóż przetestować OpenThermostat ze swoim kotłem. Gdy to jest włączone, możesz przez 30 minut nagrywać komunikaty na przewodzie kotła i udostępnić wynik projektowi OpenThermostat na GitHubie, aby Twój model kotła mógł zostać przetestowany i zweryfikowany.\n\nHome Assistant nigdy sam niczego nie wysyła: zapisuje pliki i pokazuje link do formularza GitHub. Widzisz wszystko, zanim to opublikujesz. Wyłączone: nic nie jest nagrywane ani w tym celu odczytywane.",
+        "data": {
+          "tester_enabled": "Biorę udział w programie testerów"
+        },
+        "data_description": {
+          "tester_enabled": "W każdej chwili możesz to tutaj wyłączyć."
+        }
+      },
+      "tester_menu": {
+        "title": "Program testerów",
+        "description": "{saved}{recording}\n\nUruchom nagrywanie, a potem pozwól kotłu odpocząć, grzać (ustaw termostat wyżej) i przygotować ciepłą wodę (odkręć ciepły kran na kilka minut). Po 30 minutach wybierz Udostępnij wynik. Nie odłączaj termostatu.",
+        "menu_options": {
+          "tester_start": "Uruchom nagrywanie magistrali (30 minut)",
+          "tester_stop": "Zatrzymaj nagrywanie magistrali",
+          "tester_share": "Udostępnij wynik",
+          "tester_off": "Wyłącz program testerów",
+          "back": "← Wstecz",
+          "done": "Gotowe"
+        }
       }
     },
     "error": {
@@ -1115,6 +1251,7 @@
       "whole_number_invalid": "Podaj liczbę całkowitą w dozwolonym zakresie.",
       "contacts_invalid": "Wybierz najwyżej osiem różnych czujników.",
       "not_contact_sensor": "Wybierz tylko czujniki okien, drzwi lub otwarcia.",
+      "contact_window_and_door": "Czujnik jest oknem albo drzwiami, nie jednym i drugim: wybierz go w jednym z dwóch pól.",
       "room_invalid": "Wybierz jedno z pomieszczeń E32.",
       "invalid_adapter_id": "Użyj tego samego jawnego identyfikatora właściciela, który ustawiono na E32 (1–32 litery, cyfry, _ lub -).",
       "graph_room_contract_unavailable": "Te pomieszczenia nie pasują do zapisanych ustawień E32. Zapis ani zaznaczenie tego pola nie włącza ogrzewania.",
@@ -1146,7 +1283,7 @@
       "output_has_multiple_owners": "To wyjście jest już używane przez inne pomieszczenie lub urządzenie.",
       "input_output_loop": "Wyjście nie może być jednocześnie skonfigurowanym wejściem ani encją pochodzącą z OpenThermostat.",
       "setup_invalid": "Nie udało się przygotować pomieszczenia. Sprawdź wybrane urządzenia i ich istniejące przypisania; nic nie zostało zapisane.",
-      "emitter_not_available": "Ten rodzaj ogrzewania nie jest jeszcze dostępny w tej wersji. Nic nie zostało zapisane. Wybierz grzejniki lub poczekaj na zgodny profil.",
+      "emitter_not_available": "Ta starsza konfiguracja tworzy tylko pomieszczenia z grzejnikami. Nic nie zostało zapisane. Wybierz grzejniki albo ustaw ogrzewanie podłogowe w pomieszczeniach E32 (Konfiguruj → Pomieszczenia, po Konfiguruj → Połączenie z E32).",
       "weather_requires_outdoor_source": "Wybierz źródło zewnętrzne, gdy wybrano sterowanie pogodowe.",
       "curve_must_not_fall_towards_cold_outdoors": "Cele zasilania nie mogą maleć wraz z zimniejszą pogodą.",
       "unused_fallback_must_be_null": "Wyczyść stały cel przy zasadzie blokowania zapotrzebowania.",
@@ -1159,7 +1296,7 @@
       "pump_times_without_pump": "Wyczyść oba czasy pompy, gdy nie wybrano pompy grupy.",
       "invalid_position_range": "Pozycja minimalna musi być niższa od pozycji maksymalnej.",
       "group_count": "Najwyżej 8 żądanych grup. Nie jest to dowód pojemności oprogramowania.",
-      "actuator_count": "Łącznie najwyżej 64 żądane siłowniki. Pojemność zasobów oprogramowania nie została jeszcze potwierdzona.",
+      "actuator_count": "Łącznie najwyżej 64 zawory i inne sterowane urządzenia. Usuń kilka i zapisz ponownie.",
       "room_actuator_limit": "Najwyżej 8 żądanych deklaracji siłowników na pomieszczenie.",
       "duplicate_actuator_or_missing_reference": "Użyj unikalnych identyfikatorów siłowników i istniejących odwołań do pomieszczeń/grup.",
       "confirm_group_cascade": "Potwierdź usunięcie deklaracji siłowników tej grupy albo anuluj.",
@@ -1233,7 +1370,7 @@
       "e32_rejected_flow_limits": "E32 nie zaakceptował tych limitów temperatury wody. Starsze oprogramowanie E32 akceptuje najwyżej 60 °C; zaktualizuj E32, aby użyć wyższego maksimum.",
       "e32_flow_limits_floor_warning": "W jednym pomieszczeniu jest ogrzewanie podłogowe. Powyżej {floor_maximum} ogrzewanie podłogowe bez zaworu mieszającego może się zbytnio nagrzać. Zapisz ponownie, aby zachować to maksimum.",
       "e32_flow_limits_above_boiler": "To maksimum jest wyższe niż maksimum samego kotła; kocioł i tak nie pójdzie wyżej. Zapisz ponownie, aby je zachować, albo je obniż.",
-      "controller_ha_version_unsupported": "Ta integracja wymaga Home Assistant 2026.10.0 lub nowszego (testowano z 2026.10.2 do 2026.10.4). Zaktualizuj Home Assistant; jeśli Twoja wersja jest nowsza, sprawdź, czy jest aktualizacja integracji. Nic nie zostało zmienione.",
+      "controller_ha_version_unsupported": "Ta integracja wymaga Home Assistant 2026.10.0 lub nowszego (testowano z 2026.10.2 do 2026.11.0). Zaktualizuj Home Assistant; jeśli Twoja wersja jest nowsza, sprawdź, czy jest aktualizacja integracji. Nic nie zostało zmienione.",
       "controller_mqtt_unconfirmed": "E32 zrestartował się z ustawieniami Home Assistant, ale Home Assistant nie otrzymał od niego nic przez MQTT w ciągu 90 sekund. Na E32 sprawdź System → Network and Home Assistant → MQTT: ten sam broker co integracja MQTT w Home Assistant oraz nazwa użytkownika i hasło akceptowane przez broker.",
       "legacy_rooms_plan_changed": "Plan pomieszczeń E32 zmienił się od czasu utworzenia tej listy (na stronie E32 lub gdzie indziej). Nic nie zostało usunięte. Sprawdź zaktualizowaną listę i zatwierdź ponownie.",
       "legacy_rooms_plan_failed": "E32 nie zapisał zaktualizowanego planu pomieszczeń, więc nic nie zostało usunięte. Sprawdź, czy E32 jest gotowy, i spróbuj ponownie.",
@@ -1246,9 +1383,9 @@
       "e32_valve_name_invalid": "Użyj nazwy zaworu z Zigbee2MQTT: do 64 znaków, bez # + \" \\ i bez / lub spacji na początku lub końcu.",
       "e32_valve_duplicate": "Ten zawór jest już używany (tutaj lub w innym pomieszczeniu).",
       "e32_valve_model_missing": "Wybierz model zaworu.",
-      "e32_valve_limit": "E32 steruje najwyżej 16 zaworami grzejnikowymi.",
+      "e32_valve_limit": "E32 steruje najwyżej 16 zaworami grzejnikowymi, 24 z BLU Gateway (E32 1.1).",
       "e32_valve_entity_invalid": "Wybierz encję climate zaworu grzejnikowego (nie termostat OpenThermostat ani źródło temperatury tego pomieszczenia), z identyfikatorem encji do 64 znaków.",
-      "e32_valve_room_limit": "Pomieszczenie ma najwyżej 4 zawory grzejnikowe.",
+      "e32_valve_room_limit": "Pomieszczenie ma najwyżej 8 zaworów grzejnikowych, w tym najwyżej 4 spoza BLU Gateway.",
       "e32_valves_rejected": "E32 odrzucił zawory grzejnikowe ({error}).",
       "entity_ids_confirm": "Zaznacz pole, aby potwierdzić.",
       "water_meter_unit": "Wybierz czujnik przepływu wody (L/min, L/h, m³/h) lub stan wodomierza (m³, L).",
@@ -1309,27 +1446,45 @@
       "house_holiday_changed": "Ten urlop został zmieniony gdzie indziej. Otwórz go ponownie.",
       "house_holiday_no_clock": "Zegar E32 nie jest jeszcze ustawiony, więc data urlopu nie może być użyta. Spróbuj ponownie za minutę.",
       "house_holiday_not_saved": "E32 nie przyjął tej zmiany ({error}). Spróbuj ponownie.",
-      "house_holiday_temperature_invalid": "Wybierz temperaturę od 5 do 25 °C."
+      "house_holiday_temperature_invalid": "Wybierz temperaturę od 5 do 25 °C.",
+      "boiler_settings_confirm": "Zaznacz pole, aby na to pozwolić.",
+      "boiler_settings_own_risk": "Zaznacz pole, aby kontynuować na własne ryzyko.",
+      "boiler_setting_unknown": "Wybierz ustawienie z listy.",
+      "boiler_setting_out_of_range": "Kocioł nie przyjmuje tej wartości: wybierz wartość z podanego zakresu.",
+      "boiler_setting_above_maximum": "To więcej niż najwyższa temperatura wody w planie pomieszczeń: najpierw ją podnieś (Limity temperatury wody).",
+      "boiler_setting_advanced": "Ta wartość jest poza zwykłym zakresem: użyj Zaawansowane (ustawienia instalatora).",
+      "boiler_setting_writes_off": "Zmiana ustawień kotła jest wyłączona: najpierw wybierz „Pozwól E32 zmieniać ustawienia kotła”.",
+      "boiler_setting_unavailable": "Ten E32 nie może zmieniać ustawień kotła.",
+      "boiler_setting_not_now": "E32 nie może teraz zmieniać ustawień kotła: trwa test kotła, aktualizacja lub aktywne ogrzewanie albo kocioł jeszcze nie odpowiedział. Spróbuj później.",
+      "boiler_setting_unsupported": "Twój kocioł nie obsługuje tego ustawienia.",
+      "boiler_setting_check_boiler": "Nie udało się przywrócić ustawienia: sprawdź kocioł i najpierw potwierdź to w Ustawienia → Naprawy.",
+      "boiler_setting_too_soon": "Odczekaj pół minuty przed ponowną zmianą tego ustawienia.",
+      "boiler_setting_daily_limit": "E32 zmienia najwyżej 12 ustawień kotła dziennie. Spróbuj jutro.",
+      "boiler_setting_busy": "E32 jest zajęty inną zmianą ustawienia kotła. Spróbuj za kilka minut.",
+      "boiler_setting_store_failed": "E32 nie mógł tego zapisać. Spróbuj ponownie.",
+      "boiler_setting_refused": "E32 odrzucił zmianę ({error}).",
+      "heating_circuit_failed": "E32 nie zapisał zmiany ({error}). Spróbuj ponownie za minutę.",
+      "e32_valve_keep_open_loop": "Zaworu pętli podłogowej nie można zostawić otwartego jako drogi dla wody: wybierz go tylko na jednej z dwóch list."
     },
     "abort": {
       "comfort_saved": "Ustawienia komfortu zostały zapisane i obowiązują od razu.",
       "presence_saved": "Zapisano obecność.",
       "comfort_no_rooms": "E32 nie zgłosił jeszcze żadnych pomieszczeń. Dodaj pomieszczenia w Konfiguruj → Pomieszczenia, odczekaj chwilę i spróbuj ponownie.",
-      "graph_review_unavailable": "Brak istniejącego połączenia grafu wybranego przez źródło. Nie włączono żadnego profilu.",
-      "graph_review_cancelled": "Nic nie zastosowano.",
-      "graph_review_changed": "Przegląd, sesja lub kandydat zmieniły się albo wygasła możliwość. Nic nowego nie zatwierdzono; otwórz przegląd ponownie.",
-      "graph_review_complete": "Przegląd grafu DATA zamknięty. Ustawienia integracji nie zmieniły się.",
-      "graph_prepare_unavailable": "Nie wybrano przejrzanego szkicu powiązań/kwalifikacji należącego do źródła. Nie włączono żadnego profilu grafu.",
-      "graph_prepare_failed": "Nie udało się zweryfikować przygotowanych danych ogrzewania DATA. Nie wykonano automatycznego zastosowania; sprawdź stan grafu i przejrzyj ponownie.",
+      "graph_review_unavailable": "Nie ma planu pomieszczeń ze starszej konfiguracji do przejrzenia. Nic nie zmieniono.",
+      "graph_review_cancelled": "Nic nie zmieniono.",
+      "graph_review_changed": "Coś się zmieniło podczas przeglądu. Nic nie zatwierdzono; otwórz przegląd ponownie.",
+      "graph_review_complete": "Przegląd zamknięty. Ustawienia się nie zmieniły.",
+      "graph_prepare_unavailable": "Nie ma planu pomieszczeń do naprawy. Nic nie zmieniono.",
+      "graph_prepare_failed": "Nie udało się sprawdzić naprawionego planu pomieszczeń. Nic nie zastosowano; sprawdź stan planu pomieszczeń i spróbuj ponownie.",
       "native_plan_schedule_limit": "Zapisane programy przekraczają obecny limit ośmiu przejść UTC dla obu pomieszczeń w 15-dniowym oknie planowania. Jeden blok tygodniowy może dać kilka przejść. Ogranicz programy i spróbuj ponownie. Zapisane ustawienia pomieszczeń i istniejące plany zostały zachowane; nic nie wysłano. Obsługa pełnego tygodnia jest jeszcze w przygotowaniu.",
       "native_plan_config_limit": "Cały zapisany plan pomieszczeń przekracza obecny limit konfiguracji urządzenia wynoszący 4096 bajtów. Uprość programy i spróbuj ponownie. Zapisane ustawienia pomieszczeń i istniejące plany zostały zachowane; nic nie wysłano.",
       "native_plan_prepare_failed": "Nie udało się zweryfikować zapisanego planu pomieszczeń. Sprawdź połączenie, wybrany profil i stan konfiguracji, a potem przygotuj go ponownie. Nie wykonano automatycznego zastosowania.",
       "hot_water_information_complete": "Informacje o ciepłej wodzie (tylko odczyt) zamknięte; ustawienia nie zmieniły się.",
       "native_source_runtime_off_required": "Najpierw wyłącz próbę, potem sprawdź ustawienia pomieszczeń.",
-      "native_source_review_changed": "Konfiguracja, właściciel lub rejestr zmieniły się. Nie zapisano nowego profilu.",
-      "native_source_review_cancelled": "Przegląd profilu anulowany; istniejąca konfiguracja jest bez zmian.",
-      "native_source_owner_conflict": "Wybrano już innego niezależnego właściciela źródła. Nie zapisano żadnego profilu.",
-      "native_source_replacement_unsupported": "Zmiana istniejącego profilu źródła wymaga obsługiwanej migracji trwałego planu. Istniejący profil i dane zostały zachowane.",
+      "native_source_review_changed": "Ustawienia zmieniły się w międzyczasie. Nie zapisano niczego nowego.",
+      "native_source_review_cancelled": "Anulowano; ustawienia są bez zmian.",
+      "native_source_owner_conflict": "Dla tej instalacji używane jest już inne źródło planu pomieszczeń. Nic nie zapisano.",
+      "native_source_replacement_unsupported": "Taka zmiana źródła planu pomieszczeń nie jest jeszcze możliwa. Obecne ustawienia i dane zostają.",
       "native_source_plan_apply_required": "Wcześniejsza zmiana planu pomieszczeń nie jest zakończona lub nie można jej odczytać. Najpierw sprawdź w E32, co zostało zapisane. Nic nie zostało utracone.",
       "room_limit": "Najwyżej 8 pomieszczeń",
       "shadow_mode_required": "Najpierw wybierz tryb próby.",
@@ -1401,7 +1556,29 @@
       "e32_flow_options_saved": "Ustawienia temperatury wody zostały zapisane w E32.",
       "house_mode_unavailable": "E32 nie podaje teraz trybu domu. Sprawdź, czy jest włączony, i spróbuj ponownie.",
       "house_mode_saved": "Zapisano.",
-      "house_holidays_none": "Nie zaplanowano żadnych urlopów."
+      "house_holidays_none": "Nie zaplanowano żadnych urlopów.",
+      "boiler_settings_allowed": "E32 może teraz zmieniać ustawienia kotła.",
+      "boiler_settings_stopped": "E32 nie zmienia już ustawień kotła.",
+      "boiler_setting_saved": "Zapisano: {setting} wynosi teraz {value}; kocioł to odczytał.",
+      "boiler_setting_kept": "Zachowano: {setting} pozostaje {value}.",
+      "boiler_setting_put_back": "Przywrócono: {setting} znów wynosi {before}.",
+      "boiler_setting_not_taken": "Zapisano, ale kocioł tego nie przyjął: {setting} pozostaje {before}.",
+      "boiler_setting_rejected": "Kocioł odmówił: {setting} pozostaje {before}.",
+      "boiler_setting_restored": "Kocioł sam wrócił do {before}: {setting} nie zostało zachowane.",
+      "boiler_setting_not_started": "Nie rozpoczęto: w kotle nic nie zmieniono.",
+      "boiler_setting_reverted": "Przywrócono: kocioł nie potwierdził {value}, więc E32 przywrócił {setting} na {before}.",
+      "boiler_setting_pending": "E32 nadal pracuje nad: {setting}. Zajrzyj do Ustawień kotła za minutę.",
+      "boiler_setting_unchanged": "Nic się nie zmieniło: {setting} już wynosi {value}.",
+      "boiler_setting_failed": "Nie udało się przywrócić: sprawdź kocioł. {setting} powinno znów wynosić {before}, ale kocioł tego nie potwierdził. Sprawdź to na kotle; Ustawienia → Naprawy podpowiedzą, co dalej.",
+      "heating_circuits_none": "E32 nie zgłasza obiegu grzewczego z pompą. Najpierw ustaw go na stronie Shelly w E32.",
+      "heating_circuit_saved": "Zapisano w E32.",
+      "tester_unchanged": "Nic się nie zmieniło.",
+      "tester_recording_started": "Nagrywanie trwa: E32 zachowuje najnowsze {minutes} minut komunikatów Twojego kotła, dopóki go nie zatrzymasz lub nie wybierzesz Udostępnij wynik.",
+      "tester_recording_stopped": "Nagrywanie magistrali jest zatrzymane. Wybierz Udostępnij wynik, aby zapisać pliki.",
+      "tester_shared": "Gotowe: otwórz powiadomienie. Jest w nim opis zawartości plików, linki do ich pobrania i formularz GitHub. Nic nie zostało wysłane.",
+      "tester_switched_off": "Program testerów jest wyłączony. Zapisane już pliki zostają w www/open_thermostat, dopóki ich nie usuniesz.",
+      "tester_recording_unavailable": "Ten E32 nie ma w pamięci miejsca na nagranie magistrali. Uruchom ponownie E32 i spróbuj jeszcze raz. Wynik możesz też udostępnić bez nagrania.",
+      "tester_share_not_written": "Home Assistant nie mógł zapisać plików w swoim folderze www/open_thermostat. Sprawdź, czy w folderze konfiguracji jest wolne miejsce, i spróbuj ponownie."
     },
     "progress": {
       "controller_connect": "Łączenie z E32…",
@@ -1447,6 +1624,12 @@
       },
       "room_valve_problem": {
         "name": "Problem z zaworem"
+      },
+      "circuit_floor_pump": {
+        "name": "Pompa podłogowa"
+      },
+      "circuit_radiators_pump": {
+        "name": "Pompa grzejnikowa"
       }
     },
     "number": {
@@ -1461,6 +1644,9 @@
       },
       "holiday_temperature": {
         "name": "Temperatura podczas urlopu"
+      },
+      "boiler_setting": {
+        "name": "{setting} (ustawienie kotła)"
       }
     },
     "sensor": {
@@ -1522,8 +1708,12 @@
               "off": "Tylko ochrona przed mrozem (pomieszczenie wyłączone)",
               "window_open": "Wstrzymane: otwarte jest okno lub drzwi",
               "window_open_contact": "Wstrzymane: {contact} otwarte od {since}",
+              "window_open_window": "Wstrzymane: otwarte jest okno",
+              "window_open_door": "Wstrzymane: otwarte są drzwi",
               "window_pending": "Otwarte jest okno lub drzwi: pomieszczenie wkrótce wstrzyma grzanie",
               "window_pending_contact": "{contact} otwarte: pomieszczenie wkrótce wstrzyma grzanie",
+              "window_pending_window": "Otwarte jest okno: pomieszczenie wkrótce wstrzyma grzanie",
+              "window_pending_door": "Otwarte są drzwi: pomieszczenie wkrótce wstrzyma grzanie",
               "no_measurement": "Brak pomiaru: to pomieszczenie nie prosi o ciepło",
               "hot_water": "Czeka: kocioł przygotowuje ciepłą wodę",
               "boiler_pause": "Czeka: minimalna przerwa kotła",
@@ -1596,7 +1786,11 @@
               "smart_on": "Inteligentne nagrzewanie włączone",
               "home": "W domu",
               "away": "Nieobecność",
-              "holiday": "Urlop"
+              "holiday": "Urlop",
+              "window_open": "Otwarte okno",
+              "door_open": "Otwarte drzwi",
+              "window_pending": "Otwarte okno, wkrótce wstrzymanie",
+              "door_pending": "Otwarte drzwi, wkrótce wstrzymanie"
             }
           },
           "program": {
@@ -1607,6 +1801,13 @@
               "night": "Noc",
               "holiday": "Urlop",
               "step": "{level} do {time}, potem {next}"
+            }
+          },
+          "opening": {
+            "name": "Co jest otwarte",
+            "state": {
+              "window": "Okno",
+              "door": "Drzwi"
             }
           }
         }
@@ -1702,7 +1903,9 @@
               "not_warm": "nie ciepło w ciągu 3 godz.",
               "yesterday_starts": "Starty palnika na godzinę grzania",
               "yesterday_heating": "Energia na ogrzewanie (szacunek)",
-              "warm_on_time": "{room}: ciepło na czas"
+              "warm_on_time": "{room}: ciepło na czas",
+              "late_h": "{h} godz. za późno",
+              "early_h": "{h} godz. za wcześnie"
             }
           }
         }
@@ -1816,22 +2019,52 @@
         }
       },
       "field_reported_burner_starts": {
-        "name": "Starty palnika"
+        "name": "Starty palnika",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "field_reported_burner_runtime": {
-        "name": "Czas pracy palnika"
+        "name": "Czas pracy palnika",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "field_reported_heating_runtime": {
-        "name": "Czas pracy ogrzewania"
+        "name": "Czas pracy ogrzewania",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "field_reported_heating_starts": {
-        "name": "Starty ogrzewania"
+        "name": "Starty ogrzewania",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "field_reported_dhw_runtime": {
-        "name": "Czas pracy ciepłej wody"
+        "name": "Czas pracy ciepłej wody",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "field_reported_dhw_starts": {
-        "name": "Starty ciepłej wody"
+        "name": "Starty ciepłej wody",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "field_display_code": {
         "name": "Kod wyświetlacza",
@@ -1937,7 +2170,12 @@
         "name": "Prędkość pompy obiegu grzewczego"
       },
       "field_reported_second_burner_runtime": {
-        "name": "Czas pracy drugiego palnika"
+        "name": "Czas pracy drugiego palnika",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "field_heating_hysteresis_off": {
         "name": "Margines wyłączenia ogrzewania (histereza)"
@@ -2155,13 +2393,28 @@
         }
       },
       "field_plus_burner_starts": {
-        "name": "Starty palnika (EMS+)"
+        "name": "Starty palnika (EMS+)",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "field_plus_burner_runtime": {
-        "name": "Czas pracy palnika (EMS+)"
+        "name": "Czas pracy palnika (EMS+)",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "field_plus_heating_runtime": {
-        "name": "Czas pracy ogrzewania (EMS+)"
+        "name": "Czas pracy ogrzewania (EMS+)",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "field_plus_heating_pump_modulation": {
         "name": "Prędkość pompy obiegu grzewczego (EMS+)"
@@ -2176,10 +2429,20 @@
         "name": "Przepływ ciepłej wody (EMS+)"
       },
       "field_plus_dhw_runtime": {
-        "name": "Czas pracy ciepłej wody (EMS+)"
+        "name": "Czas pracy ciepłej wody (EMS+)",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "field_plus_dhw_starts": {
-        "name": "Starty ciepłej wody (EMS+)"
+        "name": "Starty ciepłej wody (EMS+)",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "field_plus_dhw_selected_temperature": {
         "name": "Wybrana temperatura ciepłej wody (EMS+)"
@@ -2261,7 +2524,12 @@
         "name": "Numer ostatniej usterki blokującej"
       },
       "field_boiler_uptime": {
-        "name": "Czas pracy kotła od włączenia"
+        "name": "Czas pracy kotła od włączenia",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
       },
       "heating_advice": {
         "name": "Porada grzewcza"
@@ -2288,6 +2556,18 @@
               "more": "I jeszcze {n}.",
               "done": "Nauczył się wszystkiego, czego potrzebuje; sprawdza to dalej wraz ze zmianą pór roku.",
               "waiting": "E32 jeszcze nie przekazał, co wie."
+            }
+          },
+          "items": {
+            "name": "Czego jeszcze się uczy",
+            "state": {
+              "warmup": "Musi jeszcze zobaczyć, jak szybko nagrzewa się pomieszczenie {room}.",
+              "cooling": "Musi jeszcze zobaczyć, jak szybko stygnie pomieszczenie {room}.",
+              "arrival": "Musi jeszcze sprawdzić, czy pomieszczenie {room} jest ciepłe na czas.",
+              "curve": "Wciąż się uczy, o ile cieplejsza musi być woda, gdy na zewnątrz robi się zimniej.",
+              "boiler_minimum": "Wciąż sprawdza, od jakiej temperatury wody Twój kocioł zaczyna grzać.",
+              "boiler_response": "Wciąż wsłuchuje się, jak Twój kocioł utrzymuje swoją temperaturę.",
+              "house": "Wciąż oblicza, jak szybko Twój dom traci ciepło."
             }
           }
         }
@@ -2368,7 +2648,8 @@
               "off": "Kompensacja pogodowa jest wyłączona; linie pokazują, czego by żądała.",
               "waiting": "E32 jeszcze nie przekazał danych kompensacji pogodowej.",
               "house": "Oszacowana na podstawie Twojego domu",
-              "asks": "E32 żąda {flow} °C"
+              "asks": "E32 żąda {flow} °C",
+              "would_ask": "E32 zażądałby {flow} °C"
             }
           },
           "design_flow_c": {
@@ -2607,6 +2888,255 @@
       },
       "gas_per_degree_day": {
         "name": "Energia grzewcza na stopniodzień (wczoraj)"
+      },
+      "boiler_settings_writes": {
+        "name": "Zapis ustawień kotła",
+        "state": {
+          "off": "Wyłączony",
+          "ready": "Gotowy",
+          "watching": "Obserwacja zmiany",
+          "failed": "Sprawdź kocioł"
+        },
+        "state_attributes": {
+          "last_setting": {
+            "name": "Ostatnie ustawienie"
+          },
+          "last_result": {
+            "name": "Ostatni wynik"
+          },
+          "when": {
+            "name": "Kiedy"
+          }
+        }
+      },
+      "circuit_floor_pump_reason": {
+        "name": "Powód pracy pompy podłogowej",
+        "state": {
+          "idle": "Niepotrzebna",
+          "demand": "Zapotrzebowanie na ciepło",
+          "run_on": "Wybieg (ciepło resztkowe)",
+          "frost": "Ochrona przed mrozem",
+          "exercise": "Krótki rozruch przeciw zablokowaniu",
+          "manual_on": "Włączona ręcznie",
+          "manual_off": "Wyłączona ręcznie",
+          "too_hot": "Wyłączona: woda za gorąca"
+        }
+      },
+      "circuit_floor_pump_power": {
+        "name": "Moc pompy podłogowej"
+      },
+      "circuit_floor_supply": {
+        "name": "Zasilanie podłogi"
+      },
+      "circuit_floor_return": {
+        "name": "Powrót podłogi"
+      },
+      "circuit_floor_delta": {
+        "name": "Różnica temperatur podłogi"
+      },
+      "circuit_floor_problem": {
+        "name": "Problem obiegu podłogowego",
+        "state": {
+          "none": "Brak problemu",
+          "unreachable": "Wtyczka Plug pompy nie odpowiada",
+          "wrong_device": "Inne urządzenie pod adresem wtyczki Plug",
+          "auth_failed": "Wtyczka Plug odrzuca hasło",
+          "device_error": "Wtyczka Plug zgłasza błąd",
+          "no_power": "Pompa nie pobiera prądu",
+          "probe_missing": "Sonda zasilania nie podaje pomiaru",
+          "too_hot": "Woda w podłodze za gorąca"
+        }
+      },
+      "circuit_radiators_pump_reason": {
+        "name": "Powód pracy pompy grzejnikowej",
+        "state": {
+          "idle": "Niepotrzebna",
+          "demand": "Zapotrzebowanie na ciepło",
+          "run_on": "Wybieg (ciepło resztkowe)",
+          "frost": "Ochrona przed mrozem",
+          "exercise": "Krótki rozruch przeciw zablokowaniu",
+          "manual_on": "Włączona ręcznie",
+          "manual_off": "Wyłączona ręcznie",
+          "too_hot": "Wyłączona: woda za gorąca"
+        }
+      },
+      "circuit_radiators_pump_power": {
+        "name": "Moc pompy grzejnikowej"
+      },
+      "circuit_radiators_supply": {
+        "name": "Zasilanie grzejników"
+      },
+      "circuit_radiators_return": {
+        "name": "Powrót grzejników"
+      },
+      "circuit_radiators_delta": {
+        "name": "Różnica temperatur grzejników"
+      },
+      "circuit_radiators_problem": {
+        "name": "Problem obiegu grzejnikowego",
+        "state": {
+          "none": "Brak problemu",
+          "unreachable": "Wtyczka Plug pompy nie odpowiada",
+          "wrong_device": "Inne urządzenie pod adresem wtyczki Plug",
+          "auth_failed": "Wtyczka Plug odrzuca hasło",
+          "device_error": "Wtyczka Plug zgłasza błąd",
+          "no_power": "Pompa nie pobiera prądu",
+          "probe_missing": "Sonda zasilania nie podaje pomiaru",
+          "too_hot": "Woda za gorąca"
+        }
+      },
+      "heat_goes_to": {
+        "name": "Ciepło idzie do",
+        "state": {
+          "floor_only": "Tylko podłoga",
+          "radiators": "Grzejniki",
+          "mixed": "Podłoga i grzejniki",
+          "none": "Nikt nie potrzebuje ciepła"
+        }
+      },
+      "probe_floor_supply": {
+        "name": "Zasilanie podłogi"
+      },
+      "probe_floor_return": {
+        "name": "Powrót podłogi"
+      },
+      "probe_loop_return_1": {
+        "name": "Powrót pętli podłogowej 1"
+      },
+      "probe_loop_return_2": {
+        "name": "Powrót pętli podłogowej 2"
+      },
+      "probe_loop_return_3": {
+        "name": "Powrót pętli podłogowej 3"
+      },
+      "probe_loop_return_4": {
+        "name": "Powrót pętli podłogowej 4"
+      },
+      "probe_loop_return_5": {
+        "name": "Powrót pętli podłogowej 5"
+      },
+      "probe_loop_return_6": {
+        "name": "Powrót pętli podłogowej 6"
+      },
+      "probe_loop_return_7": {
+        "name": "Powrót pętli podłogowej 7"
+      },
+      "probe_loop_return_8": {
+        "name": "Powrót pętli podłogowej 8"
+      },
+      "probe_other_1": {
+        "name": "Dodatkowa sonda 1"
+      },
+      "probe_other_2": {
+        "name": "Dodatkowa sonda 2"
+      },
+      "probe_other_3": {
+        "name": "Dodatkowa sonda 3"
+      },
+      "probe_other_4": {
+        "name": "Dodatkowa sonda 4"
+      },
+      "boiler_recognition": {
+        "name": "Rozpoznanie kotła",
+        "state": {
+          "not_recognised": "Jeszcze nie rozpoznany",
+          "read_only": "Tylko odczyt",
+          "probe_passed": "Przetestowany przez Ciebie",
+          "verified": "Zweryfikowany",
+          "other_boiler": "Inny kocioł"
+        },
+        "state_attributes": {
+          "product": {
+            "name": "Numer produktu"
+          },
+          "version": {
+            "name": "Wersja oprogramowania kotła"
+          },
+          "family": {
+            "name": "Protokół EMS"
+          },
+          "model": {
+            "name": "Model kotła"
+          },
+          "profile": {
+            "name": "Profil kotła"
+          },
+          "route": {
+            "name": "Sposób sterowania"
+          },
+          "reason": {
+            "name": "Powód (kod)"
+          },
+          "reason_text": {
+            "name": "Powód"
+          },
+          "sentence": {
+            "name": "Słownie"
+          },
+          "confirmed": {
+            "name": "Potwierdzony od uruchomienia"
+          },
+          "capabilities": {
+            "name": "Potwierdzone możliwości"
+          },
+          "settings_verified": {
+            "name": "Zweryfikowane ustawienia kotła"
+          },
+          "settings_tested": {
+            "name": "Ustawienia kotła przetestowane przez Ciebie"
+          },
+          "table_current": {
+            "name": "Ta sama lista kotłów co w E32"
+          }
+        }
+      },
+      "field_plus_status_info": {
+        "name": "Informacja wyświetlacza stanu"
+      },
+      "field_plus_display_code": {
+        "name": "Kod na wyświetlaczu (EMS+)"
+      },
+      "field_plus_cause_code": {
+        "name": "Numer przyczyny (EMS+)"
+      },
+      "field_plus_heating_active": {
+        "name": "Ogrzewanie aktywne (EMS+)",
+        "state": {
+          "on": "Włączone",
+          "off": "Wyłączone"
+        }
+      },
+      "field_plus_anti_cycle_time": {
+        "name": "Pozostały odpoczynek palnika"
+      },
+      "field_plus_dhw_three_way_valve": {
+        "name": "Zawór 3-drogowy c.w.u.",
+        "state": {
+          "on": "Włączone",
+          "off": "Wyłączone"
+        }
+      },
+      "field_plus_heating_starts": {
+        "name": "Starty ogrzewania (EMS+)",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Nie zgłaszane przez ten kocioł ani adapter"
+          }
+        }
+      },
+      "field_plus_heating_enabled": {
+        "name": "Ogrzewanie włączone (EMS+)",
+        "state": {
+          "on": "Włączone",
+          "off": "Wyłączone"
+        }
+      },
+      "field_plus_dhw_enabled": {
+        "name": "Ciepła woda włączona (EMS+)",
+        "state": {
+          "on": "Włączone",
+          "off": "Wyłączone"
+        }
       }
     },
     "select": {
@@ -2687,6 +3217,25 @@
           "away": "Nieobecność",
           "holiday": "Urlop"
         }
+      },
+      "boiler_setting": {
+        "name": "{setting} (ustawienie kotła)"
+      },
+      "circuit_floor_pump_mode": {
+        "name": "Tryb pompy podłogowej",
+        "state": {
+          "automatic": "Automatycznie",
+          "on": "Włączona na 1 godzinę",
+          "off": "Wyłączona na 1 godzinę"
+        }
+      },
+      "circuit_radiators_pump_mode": {
+        "name": "Tryb pompy grzejnikowej",
+        "state": {
+          "automatic": "Automatycznie",
+          "on": "Włączona na 1 godzinę",
+          "off": "Wyłączona na 1 godzinę"
+        }
       }
     },
     "datetime": {
@@ -2706,6 +3255,9 @@
       },
       "room_valve_control": {
         "name": "Sterowanie zaworami"
+      },
+      "boiler_setting": {
+        "name": "{setting} (ustawienie kotła)"
       }
     },
     "update": {
@@ -2814,7 +3366,7 @@
         },
         "block": {
           "title": "Blok czasowy",
-          "description": "Lokalny przedział czasu zegarowego [początek, koniec). Bloki nocne podziel o północy. Powtórzone jesienne godziny obowiązują dwa razy; nieistniejące wiosenne godziny są pomijane.",
+          "description": "Ustaw dni, początek, koniec i temperaturę. Na noc użyj dwóch bloków. Blok, który kończy się o północy, trwa do początku następnego dnia.",
           "data": {
             "days": "Dni",
             "start_time": "Godzina rozpoczęcia",
@@ -3021,7 +3573,7 @@
         },
         "block": {
           "title": "Blok czasowy",
-          "description": "Lokalny przedział czasu zegarowego [początek, koniec). Bloki nocne podziel o północy. Powtórzone jesienne godziny obowiązują dwa razy; nieistniejące wiosenne godziny są pomijane.",
+          "description": "Ustaw dni, początek, koniec i temperaturę. Na noc użyj dwóch bloków. Blok, który kończy się o północy, trwa do początku następnego dnia.",
           "data": {
             "days": "Dni",
             "start_time": "Godzina rozpoczęcia",
@@ -3107,14 +3659,14 @@
         },
         "room": {
           "title": "Twoje pomieszczenie · 1 z 3",
-          "description": "Wybierz nazwę i rodzaj ogrzewania. Ta ścieżka konfiguracji obsługuje grzejniki. Profile podłogowe i mieszane nie są tu jeszcze dostępne; ich wybór nigdy po cichu nie tworzy konfiguracji grzejnikowej.",
+          "description": "Wybierz nazwę i rodzaj ogrzewania. Ta starsza konfiguracja tworzy tylko pomieszczenia z grzejnikami. Ogrzewanie podłogowe ustawia się w pomieszczeniach E32: połącz E32 w Konfiguruj → Połączenie z E32, a potem dodaj pomieszczenie w Konfiguruj → Pomieszczenia.",
           "data": {
             "name": "Nazwa pomieszczenia",
             "emitter": "Ogrzewanie w tym pomieszczeniu"
           },
           "data_description": {
             "name": "Wyświetlana przy sterowaniu pomieszczeniem. Zmiana nazwy zachowuje jego tożsamość i zapisany program.",
-            "emitter": "Określa, które zawory i limity temperatury obowiązują. Ogrzewanie podłogowe wymaga własnego zgodnego profilu."
+            "emitter": "Określa, które zawory i limity temperatury obowiązują. Ta konfiguracja tworzy tylko pomieszczenia z grzejnikami."
           },
           "submit": "Dalej"
         },
@@ -3216,7 +3768,7 @@
         "output_has_multiple_owners": "Wybrany zawór jest już używany przez inne pomieszczenie lub urządzenie. Wybierz inny zawór lub popraw przypisanie w ustawieniach zaawansowanych.",
         "input_output_loop": "Zawór nie może być jednocześnie wejściem do ustawiania temperatury. Sprawdź wybrane urządzenia.",
         "setup_invalid": "Nie udało się przygotować pomieszczenia. Sprawdź wybrane urządzenia i ich istniejące przypisania; nic nie zostało zapisane.",
-        "emitter_not_available": "Ten rodzaj ogrzewania nie jest jeszcze dostępny w tej wersji. Nic nie zostało zapisane. Wybierz grzejniki lub poczekaj na zgodny profil.",
+        "emitter_not_available": "Ta starsza konfiguracja tworzy tylko pomieszczenia z grzejnikami. Nic nie zostało zapisane. Wybierz grzejniki albo ustaw ogrzewanie podłogowe w pomieszczeniach E32 (Konfiguruj → Pomieszczenia, po Konfiguruj → Połączenie z E32).",
         "runtime_active": "Obliczenia są w toku. Nic nie zostało zmienione.",
         "advanced_room_required": "Profilu tego pomieszczenia nie można jeszcze tu zmienić. Wszystkie jego dane zostają zachowane.",
         "confirm_program_source_change": "Potwierdź zmianę źródła programu."
@@ -3492,7 +4044,7 @@
         "pump_times_without_pump": "Wyczyść oba czasy pompy, gdy nie wybrano pompy grupy.",
         "invalid_position_range": "Pozycja minimalna musi być niższa od pozycji maksymalnej.",
         "group_count": "Najwyżej 8 żądanych grup. Nie jest to dowód pojemności oprogramowania.",
-        "actuator_count": "Łącznie najwyżej 64 żądane siłowniki. Pojemność zasobów oprogramowania nie została jeszcze potwierdzona.",
+        "actuator_count": "Łącznie najwyżej 64 zawory i inne sterowane urządzenia. Usuń kilka i zapisz ponownie.",
         "room_actuator_limit": "Najwyżej 8 żądanych deklaracji siłowników na pomieszczenie.",
         "duplicate_actuator_or_missing_reference": "Użyj unikalnych identyfikatorów siłowników i istniejących odwołań do pomieszczeń/grup.",
         "confirm_group_cascade": "Potwierdź usunięcie deklaracji siłowników tej grupy albo anuluj.",
@@ -3621,8 +4173,8 @@
     "product_emitter": {
       "options": {
         "radiator": "Grzejniki",
-        "floor": "Ogrzewanie podłogowe — jeszcze niedostępne",
-        "combined": "Grzejniki i podłoga — jeszcze niedostępne"
+        "floor": "Ogrzewanie podłogowe (tylko w pomieszczeniach E32)",
+        "combined": "Grzejniki i podłoga (tu nieobsługiwane)"
       }
     },
     "product_room_action": {
@@ -3756,6 +4308,126 @@
         "78": "78 °C",
         "79": "79 °C",
         "80": "80 °C"
+      }
+    },
+    "e32_room_list_text": {
+      "options": {
+        "inactive": "nieaktywne",
+        "contacts": "czujniki okien/drzwi: {count}",
+        "none": "Nie ma jeszcze pomieszczeń."
+      }
+    },
+    "configuration_status_text": {
+      "options": {
+        "confirmed": "Konfiguracja potwierdzona",
+        "unconfirmed": "Konfiguracja jeszcze niepotwierdzona",
+        "calculations_on": "Obliczenia włączone; przegląd E32 pokazuje, kto steruje kotłem",
+        "calculations_off": "Obliczenia wyłączone; brak sterowania urządzeniami",
+        "step": "krok",
+        "review_limits": "Sprawdź limity pomieszczenia i temperatury w programie.",
+        "capabilities_unavailable": "Właściwości niedostępne; sprawdź połączenie z zaworem.",
+        "external_program": "Istniejący zewnętrzny program nie został sprawdzony.",
+        "no_valves": "Nie połączono jeszcze zaworów grzejnikowych.",
+        "local_schedule_active": "TV02 zgłasza własny program tygodniowy, który może zastąpić temperaturę docelową pomieszczenia.",
+        "holiday_mode_active": "TV02 zgłasza program urlopowy, który może zastąpić temperaturę docelową pomieszczenia.",
+        "heating_disabled": "TV02 zgłasza wyłączone ogrzewanie; oprogramowanie nie włączy zaworu samo.",
+        "operating_mode_unknown": "Tryb pracy TV02 nie jest potwierdzony. Sprawdź zawór, a potem załaduj ponownie."
+      }
+    },
+    "boiler_settings_text": {
+      "options": {
+        "name_heatingactivated": "Ogrzewanie w kotle",
+        "name_heatingtemp": "Maksymalna temperatura c.o.",
+        "name_burnmaxpower": "Maksymalna moc palnika",
+        "name_boilhystoff": "Margines wyłączenia (histereza)",
+        "name_boilhyston": "Margines włączenia (histereza)",
+        "name_burnminperiod": "Przerwa palnika między startami",
+        "name_pumpdelay": "Wybieg pompy",
+        "name_pumpmodmax": "Najwyższa prędkość pompy",
+        "name_pumpmodmin": "Najniższa prędkość pompy",
+        "name_pumpmode": "Tryb pompy",
+        "name_dhw_activated": "Ciepła woda w kotle",
+        "name_dhw_seltemp": "Temperatura ciepłej wody",
+        "name_dhw_hyston": "Margines przełączania c.w.u. (histereza)",
+        "name_dhw_chargeoptimization": "Optymalizacja ładowania c.w.u.",
+        "name_dhw_flowtempoffset": "Dodatkowa temperatura wody dla c.w.u.",
+        "name_dhw_circpump": "Pompa cyrkulacyjna c.w.u.",
+        "name_dhw_circmode": "Czasy cyrkulacji c.w.u.",
+        "name_dhw_disinfectiontemp": "Temperatura dezynfekcji c.w.u.",
+        "name_dhw_comfort": "Komfort ciepłej wody",
+        "value_on": "Włączone",
+        "value_off": "Wyłączone",
+        "value_unknown": "jeszcze nie odczytano",
+        "choice_hot": "Gorąca: zawsze gotowa",
+        "choice_eco": "Eko: oszczędza gaz",
+        "choice_intelligent": "Inteligentna: uczy się, kiedy jej używasz",
+        "pump_0": "Według zapotrzebowania na ciepło",
+        "pump_fixed": "Stałe ciśnienie, poziom {n}",
+        "circ_n": "{n} × 3 minuty na godzinę",
+        "circ_7": "Zawsze włączona",
+        "range": "od {low} do {high}",
+        "range_choices": "jedną z opcji poniżej",
+        "verification_verified": "Potwierdzone na tym kotle",
+        "verification_unverified": "Jeszcze niepotwierdzone: wypróbuj, obserwując kocioł",
+        "verification_unsupported": "Nieobsługiwane przez ten kocioł",
+        "how_verified": "Potwierdzone na Twoim kotle: E32 zapisuje je od razu i odczytuje z powrotem.",
+        "how_watched": "Jeszcze niepotwierdzone na Twoim kotle. Po zmianie obserwuj kocioł do 15 minut, a potem zachowaj nową wartość albo ją przywróć. Jeśli nie zrobisz żadnej z tych rzeczy, E32 sam ją przywróci.",
+        "state_off": "**wyłączone**: E32 niczego nie zapisuje w kotle.",
+        "state_on": "**włączone**: dziś wykorzystano {used} z {cap} zmian.",
+        "state_busy": "trwa zmiana: {setting}.",
+        "state_blocked": "**zablokowane**: nie udało się przywrócić ustawienia. Sprawdź kocioł (Ustawienia → Naprawy).",
+        "state_not_now": "włączone, ale teraz niemożliwe (trwa test kotła, aktualizacja lub aktywne ogrzewanie).",
+        "state_unavailable": "niemożliwe w tym E32.",
+        "off_heating": "ogrzewanie: grzejniki i podłoga nie dostają ciepła",
+        "off_dhw": "ciepłą wodę: z kranów leci zimna woda",
+        "result_written": "Zapisane i odczytane",
+        "result_kept": "Zachowane",
+        "result_unchanged": "Już ustawione",
+        "result_not_taken": "Zapisane, kocioł nie przyjął",
+        "result_rejected": "Kocioł odmówił",
+        "result_reverted": "Przywrócone",
+        "result_boiler_restored": "Kocioł sam wrócił",
+        "result_not_started": "Nie rozpoczęto",
+        "result_attendance_expired": "Nie rozpoczęto: brak potwierdzenia",
+        "result_restored_after_restart": "Przywrócone po ponownym uruchomieniu",
+        "result_failed": "Nie udało się przywrócić: sprawdź kocioł",
+        "why_reverted_window_end": "nikt nie zachował nowej wartości w ciągu 15 minut",
+        "why_reverted_cancelled": "zmiana została przerwana (wyłączono zmianę ustawień kotła albo ogrzewanie potrzebowało kotła)",
+        "why_reverted_unconfirmed": "kocioł nie potwierdził nowej wartości",
+        "why_reverted_mismatch": "kocioł zgłosił inną wartość",
+        "why_restored_after_restart": "E32 uruchomił się ponownie w trakcie zmiany",
+        "notify_title": "Przywrócono ustawienie kotła",
+        "notify_message": "E32 przywrócił ustawienie {setting} na {before}: {why}.",
+        "cause_readback": "Ustawienie {setting} powinno znów wynosić {before}, ale kocioł zgłasza {readback}.",
+        "cause_no_answer": "Kocioł nie odpowiedział, gdy E32 odczytywał ustawienie {setting}.",
+        "a_setting": "ustawienie kotła",
+        "reason_busy": "trwa już inna zmiana",
+        "reason_unreachable": "nie udało się połączyć z E32 ({error})",
+        "reason_not_verified": "nie jest już potwierdzone na tym kotle; zmień je w Konfiguruj, obserwując kocioł",
+        "reason_pending": "E32 nadal nad tym pracuje",
+        "refusal_persistent_writes_off": "zmiana ustawień kotła jest wyłączona (Konfiguruj → Ogrzewanie i kocioł → Ustawienia kotła)",
+        "refusal_too_soon_for_this_setting": "odczekaj pół minuty przed kolejną zmianą",
+        "refusal_daily_limit_reached": "E32 zmienia najwyżej 12 ustawień kotła dziennie",
+        "refusal_check_boiler_first": "nie udało się przywrócić ustawienia: najpierw sprawdź kocioł (Ustawienia → Naprawy)",
+        "refusal_settings_busy": "trwa już inna zmiana",
+        "refusal_boiler_not_available": "teraz niemożliwe (trwa test kotła, aktualizacja lub aktywne ogrzewanie)",
+        "refusal_value_out_of_range": "kocioł nie przyjmuje tej wartości",
+        "refusal_other": "E32 odmówił ({error})",
+        "cause_not_sent": "E32 przez 10 minut nie mógł połączyć się z kotłem, aby przywrócić ustawienie {setting}.",
+        "cause_restart_no_answer": "Po ponownym uruchomieniu E32 kocioł nie odpowiedział, gdy E32 odczytywał ustawienie {setting}.",
+        "cause_restart_value": "Po ponownym uruchomieniu E32 kocioł zgłosił {readback} dla ustawienia {setting}: ani starą, ani nową wartość.",
+        "cause_detail": "(powód podany przez E32: {detail})"
+      }
+    },
+    "tester_text": {
+      "options": {
+        "switched_on": "Program testerów jest włączony.",
+        "idle": "Brak jeszcze nagrania magistrali.",
+        "recording": "Nagrywanie: {minutes} z 30 minut, {frames} komunikatów.",
+        "ready": "Nagranie magistrali jest gotowe: {minutes} minut, {frames} komunikatów.",
+        "unavailable": "Ten E32 nie może nagrywać magistrali (brak miejsca w pamięci). Wynik możesz jednak udostępnić.",
+        "not_supported": "To oprogramowanie E32 jeszcze nie nagrywa magistrali. Najpierw zaktualizuj E32 albo udostępnij wynik bez nagrania.",
+        "unreachable": "E32 był przed chwilą nieosiągalny."
       }
     }
   },
@@ -3910,7 +4582,7 @@
           "broker_login": "E32 potrzebuje najpierw własnego logowania MQTT. Na E32 otwórz System → Network and Home Assistant → MQTT, zaznacz Enabled, podaj adres i port brokera oraz nazwę użytkownika i hasło brokera, zapisz i pozwól E32 się zrestartować. E32 nie łączy się z Home Assistant przez broker bez logowania.",
           "mqtt_unconfirmed": "E32 zrestartował się z ustawieniami Home Assistant, ale Home Assistant nie otrzymał od niego nic przez MQTT w ciągu 90 sekund. Na E32 sprawdź System → Network and Home Assistant → MQTT: ten sam broker co integracja MQTT w Home Assistant oraz nazwa użytkownika i hasło akceptowane przez broker.",
           "e32_busy": "E32 aktualizuje się lub restartuje. Poczekaj, aż będzie gotowy, i spróbuj ponownie.",
-          "ha_version_unsupported": "Ta integracja wymaga Home Assistant 2026.10.0 lub nowszego (testowano z 2026.10.2 do 2026.10.4). Zaktualizuj Home Assistant; jeśli Twoja wersja jest nowsza, sprawdź, czy jest aktualizacja integracji. Nic nie zostało zmienione.",
+          "ha_version_unsupported": "Ta integracja wymaga Home Assistant 2026.10.0 lub nowszego (testowano z 2026.10.2 do 2026.11.0). Zaktualizuj Home Assistant; jeśli Twoja wersja jest nowsza, sprawdź, czy jest aktualizacja integracji. Nic nie zostało zmienione.",
           "connection_failed": "Nie udało się potwierdzić połączenia z E32. Otwórz Konfiguruj → Połączenie z E32, aby zobaczyć szczegóły, a potem spróbuj tu ponownie.",
           "legacy_rooms_plan_changed": "Plan pomieszczeń E32 zmienił się od czasu utworzenia tej listy (na stronie E32 lub gdzie indziej). Nic nie zostało usunięte. Sprawdź zaktualizowaną listę i zatwierdź ponownie.",
           "legacy_rooms_plan_failed": "E32 nie zapisał zaktualizowanego planu pomieszczeń, więc nic nie zostało usunięte. Sprawdź, czy E32 jest gotowy, i spróbuj ponownie.",
@@ -3953,7 +4625,7 @@
           "broker_login": "E32 potrzebuje najpierw własnego logowania MQTT. Na E32 otwórz System → Network and Home Assistant → MQTT, zaznacz Enabled, podaj adres i port brokera oraz nazwę użytkownika i hasło brokera, zapisz i pozwól E32 się zrestartować. E32 nie łączy się z Home Assistant przez broker bez logowania.",
           "mqtt_unconfirmed": "E32 zrestartował się z ustawieniami Home Assistant, ale Home Assistant nie otrzymał od niego nic przez MQTT w ciągu 90 sekund. Na E32 sprawdź System → Network and Home Assistant → MQTT: ten sam broker co integracja MQTT w Home Assistant oraz nazwa użytkownika i hasło akceptowane przez broker.",
           "e32_busy": "E32 aktualizuje się lub restartuje. Poczekaj, aż będzie gotowy, i spróbuj ponownie.",
-          "ha_version_unsupported": "Ta integracja wymaga Home Assistant 2026.10.0 lub nowszego (testowano z 2026.10.2 do 2026.10.4). Zaktualizuj Home Assistant; jeśli Twoja wersja jest nowsza, sprawdź, czy jest aktualizacja integracji. Nic nie zostało zmienione.",
+          "ha_version_unsupported": "Ta integracja wymaga Home Assistant 2026.10.0 lub nowszego (testowano z 2026.10.2 do 2026.11.0). Zaktualizuj Home Assistant; jeśli Twoja wersja jest nowsza, sprawdź, czy jest aktualizacja integracji. Nic nie zostało zmienione.",
           "connection_failed": "Nie udało się potwierdzić połączenia z E32. Otwórz Konfiguruj → Połączenie z E32, aby zobaczyć szczegóły, a potem spróbuj tu ponownie.",
           "legacy_rooms_plan_changed": "Plan pomieszczeń E32 zmienił się od czasu utworzenia tej listy (na stronie E32 lub gdzie indziej). Nic nie zostało usunięte. Sprawdź zaktualizowaną listę i zatwierdź ponownie.",
           "legacy_rooms_plan_failed": "E32 nie zapisał zaktualizowanego planu pomieszczeń, więc nic nie zostało usunięte. Sprawdź, czy E32 jest gotowy, i spróbuj ponownie.",
@@ -4011,7 +4683,7 @@
     },
     "valve_offline": {
       "title": "Zawór grzejnikowy nie odpowiada w pomieszczeniu {room}",
-      "description": "Brak zgłoszeń do Zigbee2MQTT od ponad dwóch godzin w pomieszczeniu {room}: {valves}. Sprawdź baterię i połączenie Zigbee. Pomieszczenie dalej grzeje według innych źródeł temperatury; zawór sam reguluje według ostatniej nastawy."
+      "description": "Brak zgłoszeń od ponad dwóch godzin w pomieszczeniu {room}: {valves}. Sprawdź baterię i połączenie zaworu (Zigbee lub BLU Gateway). Pomieszczenie dalej grzeje według innych źródeł temperatury; zawór sam reguluje według ostatniej nastawy."
     },
     "valve_single_source": {
       "title": "{room} ma tylko jedno źródło temperatury",
@@ -4086,6 +4758,106 @@
           "room_missing": "Tego pomieszczenia nie ma już w planie pomieszczeń E32."
         }
       }
+    },
+    "e32_boiler_setting_failed": {
+      "title": "Sprawdź kocioł: nie udało się przywrócić ustawienia",
+      "description": "E32 zmienił {setting} i próbował przywrócić {before}, ale nie mógł tego potwierdzić. {cause} Dopóki tego nie potwierdzisz, E32 nie zmienia żadnego ustawienia kotła. Wybierz Napraw, gdy sprawdzisz kocioł.",
+      "fix_flow": {
+        "step": {
+          "boiler_setting_checked": {
+            "title": "Sprawdź kocioł",
+            "description": "{cause}\n\nSprawdź {setting} na kotle (na jego wyświetlaczu lub w instrukcji) i w razie potrzeby sam ustaw {before}. Potem zatwierdź: E32 znów będzie mógł zmieniać ustawienia kotła."
+          }
+        },
+        "error": {
+          "e32_settings_no_free_session": "E32 nie ma wolnej sesji WWW: zamknij nieużywane strony E32 lub odczekaj dwie minuty, a potem spróbuj ponownie.",
+          "e32_settings_unreachable": "Nie udało się połączyć z E32 ({error}). Nic nie zostało zapisane.",
+          "e32_settings_busy": "E32 jest aktualizowany lub uruchamia się ponownie. Spróbuj ponownie, gdy jego strona otworzy się normalnie.",
+          "e32_settings_changed": "Ustawienia E32 zostały w międzyczasie zmienione (na jego stronie?). Nic nie zostało zapisane; spróbuj ponownie.",
+          "e32_settings_invalid": "E32 odrzucił te ustawienia. Nic nie zostało zapisane.",
+          "e32_settings_unconfirmed": "E32 nie mógł potwierdzić zapisania ustawień. Sprawdź je w E32, zanim spróbujesz ponownie.",
+          "boiler_setting_refused": "E32 odrzucił zmianę ({error}).",
+          "e32_password_changed": "E32 nie akceptuje już zapisanego hasła. Home Assistant prosi o nowe: Ustawienia → Urządzenia i usługi → OpenThermostat → Uwierzytelnij ponownie.",
+          "e32_settings_password_default": "E32 nadal używa domyślnego hasła i nie przyjmuje zmian, dopóki nie wybierzesz nowego: Ustawienia → Naprawy → „E32 nadal używa domyślnego hasła”.",
+          "e32_settings_update_required": "To oprogramowanie E32 nie ma tego ustawienia. Najpierw zaktualizuj E32 (Aktualizacja oprogramowania)."
+        },
+        "abort": {
+          "e32_rooms_unavailable": "Najpierw połącz E32 (Połączenie z E32), aby Home Assistant mógł edytować jego plan pomieszczeń."
+        }
+      }
+    },
+    "circuit_pump_unreachable": {
+      "title": "{circuit}: wtyczka Plug pompy nie odpowiada",
+      "description": "E32 od ponad 3 minut nie dostaje odpowiedzi od wtyczki Shelly Plug pompy. Pomieszczenia dalej proszą o ciepło, a wtyczka Plug sama włączy pompę w ciągu 30 minut. Sprawdź, czy wtyczka Plug ma zasilanie i Wi-Fi oraz czy zachowuje stały adres w routerze. Ten komunikat zniknie sam, gdy wtyczka Plug znów odpowie."
+    },
+    "circuit_pump_error": {
+      "title": "{circuit}: wtyczka Plug pompy zgłasza błąd",
+      "description": "Wtyczka Shelly Plug pompy odpowiada błędem. Wyjmij ją z gniazdka na 10 sekund; jeśli komunikat pozostanie, zaktualizuj oprogramowanie wtyczki w aplikacji Shelly."
+    },
+    "circuit_pump_wrong_device": {
+      "title": "{circuit}: pod adresem wtyczki Plug odpowiada inne urządzenie",
+      "description": "Pod adresem wtyczki Shelly Plug pompy odpowiada teraz inne urządzenie, więc E32 nic do niego nie wysyła. Nadaj wtyczce stały adres (rezerwacja DHCP) w routerze albo wpisz jej nowy adres na stronie Shelly w E32."
+    },
+    "circuit_pump_password": {
+      "title": "{circuit}: wtyczka Plug odrzuca hasło E32",
+      "description": "Wtyczka Shelly Plug pompy odrzuca hasło, które ma dla niej E32. Wpisz ponownie hasło wtyczki na stronie Shelly w E32."
+    },
+    "circuit_pump_no_power": {
+      "title": "{circuit}: pompa nie pobiera prądu",
+      "description": "Wtyczka Plug jest włączona, ale pompa od 2 minut prawie nie pobiera prądu. Zwykle własny wyłącznik pompy (termostat na rurze) wciąż ją blokuje: zleć jego zmostkowanie lub ustawienie na najniższą wartość. W przeciwnym razie sprawdź wtyczkę pompy i samą pompę."
+    },
+    "circuit_probe_missing": {
+      "title": "{circuit}: sonda zasilania nie podaje pomiaru",
+      "description": "Sonda na rurze zasilania od 5 minut nie podaje pomiaru. Sprawdź jej kabel przy The Pill i czy mocno przylega do rury. E32 dalej przełącza pompę bez niej, ale w tym czasie nikt nie pilnuje zbyt gorącej wody."
+    },
+    "circuit_too_hot": {
+      "title": "{circuit}: woda za gorąca, pompa wyłączona",
+      "description": "Woda do tego obiegu przez 2 minuty była o ponad 5 °C cieplejsza od swojego maksimum, więc E32 wyłączył pompę. Sprawdź zawór mieszający. Pompa sama ruszy ponownie, gdy woda spadnie poniżej maksimum."
+    },
+    "probe_no_reading": {
+      "title": "Sonda temperatury nie podaje pomiaru",
+      "description": "Od 5 minut brak pomiaru z: {probes}. Sprawdź kabel sondy przy The Pill i czy mocno przylega do rury."
+    },
+    "valve_gateway_silent": {
+      "title": "BLU Gateway nie odpowiada",
+      "description": "E32 nie może połączyć się z Shelly BLU Gateway tych zaworów: {valves}. Zawory zachowują ostatni cel lub położenie. Sprawdź zasilanie USB i Wi-Fi bramki; E32 sam znów ją wykryje."
+    },
+    "valve_not_found": {
+      "title": "Nie znaleziono zaworu przy BLU Gateway w pomieszczeniu {room}",
+      "description": "BLU Gateway nie zna (już) tych zaworów albo nie są z nią sparowane: {valves}. Sparuj zawór ponownie w aplikacji Shelly i sprawdź, czy jest na liście swojej bramki na stronie Shelly w E32, albo usuń go z pomieszczenia."
+    },
+    "boiler_other_boiler": {
+      "title": "Podłączono inny kocioł",
+      "fix_flow": {
+        "step": {
+          "confirm_boiler": {
+            "title": "Potwierdź kocioł, który jest teraz podłączony",
+            "description": "{name}: potwierdź w E32, że {boiler} jest teraz Twoim kotłem. E32 rozpozna go ponownie, co trwa około 10 minut. Kotłem EMS+ steruje dopiero wtedy, gdy jego model jest zweryfikowany; kotłem EMS Classic w sposób Classic."
+          }
+        },
+        "error": {
+          "e32_settings_no_free_session": "E32 nie ma wolnej sesji WWW: zamknij nieużywane strony E32 lub odczekaj dwie minuty, a potem spróbuj ponownie.",
+          "e32_settings_unreachable": "Nie udało się połączyć z E32 ({error}). Nic nie zostało zapisane.",
+          "e32_settings_busy": "E32 jest aktualizowany lub uruchamia się ponownie. Spróbuj ponownie, gdy jego strona otworzy się normalnie.",
+          "e32_settings_unconfirmed": "E32 nie mógł potwierdzić zapisania ustawień. Sprawdź je w E32, zanim spróbujesz ponownie."
+        },
+        "abort": {
+          "e32_rooms_unavailable": "Najpierw połącz E32 (Połączenie z E32), aby Home Assistant mógł edytować jego plan pomieszczeń.",
+          "e32_password_changed": "E32 nie akceptuje już zapisanego hasła. Home Assistant prosi o nowe: Ustawienia → Urządzenia i usługi → OpenThermostat → Uwierzytelnij ponownie.",
+          "e32_settings_password_default": "E32 nadal używa domyślnego hasła i nie przyjmuje zmian, dopóki nie wybierzesz nowego: Ustawienia → Naprawy → „E32 nadal używa domyślnego hasła”.",
+          "e32_settings_update_required": "To oprogramowanie E32 nie ma tego ustawienia. Najpierw zaktualizuj E32 (Aktualizacja oprogramowania).",
+          "boiler_confirmed": "Ten kocioł jest już potwierdzony w E32. Nie musisz nic więcej robić."
+        }
+      },
+      "description": "{name}: E32 wykrył na magistrali inny kocioł: {boiler}. Do czasu potwierdzenia E32 nie steruje kotłem EMS+; kotłem EMS Classic nadal steruje w sposób Classic. Czy kocioł został wymieniony? Wybierz Napraw, aby go potwierdzić. Jeśli nie, sprawdź przewód między E32 a kotłem."
+    },
+    "tester_recording_unavailable": {
+      "title": "E32 nie może nagrywać magistrali",
+      "description": "{name}: program testerów jest włączony, ale ten E32 nie ma w pamięci miejsca na nagranie magistrali. Uruchom ponownie E32 i ponownie rozpocznij nagrywanie. Wynik możesz też udostępnić bez nagrania albo wyłączyć program testerów: Konfiguruj → Zaawansowane i diagnostyka → Program testerów."
+    },
+    "tester_recording_update": {
+      "title": "Zaktualizuj E32, aby nagrywać magistralę",
+      "description": "{name}: program testerów jest włączony, ale to oprogramowanie E32 jeszcze nie nagrywa magistrali. Zaktualizuj E32 (Aktualizacja oprogramowania). Wynik możesz też udostępnić bez nagrania albo wyłączyć program testerów: Konfiguruj → Zaawansowane i diagnostyka → Program testerów."
     }
   },
   "services": {
@@ -4322,6 +5094,18 @@
     },
     "e32_busy": {
       "message": "E32 jest aktualizowany lub uruchamia się ponownie. Spróbuj ponownie, gdy jego strona znów normalnie się otworzy."
+    },
+    "boiler_setting_refused": {
+      "message": "E32 nie zmienił ustawienia {setting}: {reason}."
+    },
+    "shelly_rejected": {
+      "message": "E32 odrzucił zmianę ({error}). Nic nie zostało zmienione."
+    },
+    "shelly_unconfirmed": {
+      "message": "E32 nie potwierdził zmiany. Spróbuj ponownie za minutę."
+    },
+    "shelly_unreachable": {
+      "message": "Nie udało się połączyć z E32, aby zmienić pompę ({error})."
     }
   },
   "device": {
@@ -4336,6 +5120,12 @@
     },
     "ems_boiler_brand": {
       "name": "Kocioł {brand} (produkt {product}) ({address})"
+    },
+    "circuit_floor": {
+      "name": "Obieg podłogowy"
+    },
+    "circuit_radiators": {
+      "name": "Obieg grzejnikowy"
     }
   }
 }

@@ -162,7 +162,8 @@ def comfort_configuration(entry):
     from .e32_comfort import comfort_options
     settings = comfort_options(entry)
     return {key: settings.get(key) for key in ("presence_entities", "away_delay_min", "room_persons", "contacts",
-                                               "contact_delay_s", "contact_delays", "override_minutes")}
+                                               "contact_delay_s", "contact_delays", "doors", "door_delay_s",
+                                               "door_delays", "override_minutes")}
 
 
 def entity_counts(hass, entry):

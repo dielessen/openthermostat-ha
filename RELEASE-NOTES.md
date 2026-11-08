@@ -1,3 +1,101 @@
+# HA 1.1.0 — separate pause delays for doors and windows, boiler settings and recognition, EMS+ values, Shelly floor circuits
+<!-- user-release-notes:v2:en -->
+
+Companion of E32 1.1.0; also runs with E32 1.0.0. Needs Home Assistant
+2026.10.0 or newer.
+
+## New
+
+- **Window contacts and door contacts:** Configure → Rooms → the room →
+  Windows and doors has Window contacts, "Pause after (windows)" (default 2
+  minutes), Door contacts and "Pause after (doors)" (default 5 minutes).
+  Letting the dog out no longer pauses the heating. A sensor is a window or a
+  door, not both; up to 8 per room. Defaults for all rooms: Configure → House →
+  Comfort defaults for rooms.
+- **The reason names the kind:** "Paused: a door is open" or "Paused: a window
+  is open", with the contact's name when Home Assistant sees it open. The room
+  card, house card and Today say the same. With E32 1.0.0 they keep "window
+  or door".
+- **Boiler counters:** a counter your boiler or adapter never fills in shows
+  unknown with "Not reported by this boiler or adapter" instead of 0.
+- **Heating problem:** "Burner switches on and off too often" appears only when
+  E32 1.1.0 says it persists after its self-tuning. If the E32 stays online but
+  sends no room and boiler values for 15 minutes, they show as unavailable and
+  a repair asks you to restart it.
+- **Boiler recognition:** a diagnostic sensor says which boiler the E32
+  recognised and whether it may control it; Configure → Heating and boiler →
+  Boiler model shows it. The repair "A different boiler is connected" confirms
+  a replaced boiler.
+- **EMS+ boilers:** nine more values (display code, cause number, heating
+  active, burner rest left, 3-way valve, heating starts and more). EMS+
+  boilers are read, not controlled yet. Testers switch on Tester and choose
+  Share result: Home Assistant writes the files and links to a GitHub form; it
+  sends nothing itself.
+- **Boiler settings (preview):** Configure → Heating and boiler → Boiler
+  settings lets the E32 change the boiler's own settings after you allow it,
+  one at a time; one not yet verified is watched for up to 15 minutes, then
+  kept or put back. New: the sensor "Boiler settings writes" and the repair
+  "Check the boiler: a setting could not be put back".
+
+Optional, with E32 firmware 1.1.0 on an E32 V2 and Shelly devices:
+
+- **Shelly floor circuit:** a device with **Floor pump** (running or not, why in
+  words, its power), **Floor supply**, **Floor return**, their difference and
+  **Floor circuit problem**. **Floor pump mode** switches the pump on or off for
+  an hour, through the E32 (Home Assistant never talks to the Plug). **Heat
+  goes to** says whether it goes to the floor only, the radiators or both. A
+  floor loop that returns warmer or cooler than the others is a notification.
+- **Heating circuits form:** Configure → Heating and boiler → Heating circuits
+  has **Pump control by the E32** (off: the E32 only shows what it would do),
+  the **highest water temperature to the floor** and **how long the pump may run
+  on** while the water is still warm. While it runs on, the reason says "Running
+  on (rest heat)".
+- **Shelly BLU TRVs through the BLU Gateway:** choose them under Configure →
+  Rooms → the room → Radiator valves, mark **Floor loop valves** and the
+  radiator to **Keep this radiator open**; up to 8 valves per room. A valve
+  that reports no opening (Sonoff TRV Gen2) says "Regulates itself to the
+  target; the position cannot be read".
+- **New Repairs:** the Plug does not answer, refuses the password or has another
+  device at its address; the pump takes no power; the floor water is too hot; a
+  probe gives no reading; the gateway does not answer; a valve it does not
+  know. Each clears itself.
+
+## Fixed
+
+- Room entities no longer disappear on Home Assistant 2026.11 after a learned
+  value or a restart.
+- A contact removed from a room, or moved from window to door, while it was
+  open no longer keeps the room paused for up to 15 minutes, also when Home
+  Assistant restarted in between.
+- After an E32 restart or firmware update the room values, contacts and
+  presence are sent once, as soon as the E32 is back online.
+- Radiator valve entities are no longer removed when the E32 briefly reports
+  its plan without its valve list.
+- The E32's four web sessions fill up less easily.
+- Smaller fixes: "Still to learn" is in your language; Yesterday says "1 h
+  late"; the room list and installation status are in Polish; removing an
+  installation clears its repairs.
+
+## Updating
+
+Update Home Assistant first: an older integration does not read the E32's
+longer list of boiler values. Update through HACS and restart Home Assistant.
+HACS checks a repository added by URL only every 48 hours of Home Assistant
+uptime: "Update information" in the OpenThermostat menu shows a new version at
+once. Then install E32 1.1.0 from the Firmware entity.
+
+- Every contact you chose before is a window with its own delay. Nothing
+  changes until you move a door to "Door contacts".
+
+## Limitations
+
+- With E32 1.0.0 the E32 knows only "a window or door is open": a window opened
+  while a door is already open can pause the room sooner than 2 minutes, and
+  the E32 pages say "a window or door". E32 1.1.0 keeps them apart.
+- No EMS+ boiler is controlled yet, and boiler settings are a preview.
+- The Shelly entities need E32 firmware 1.1.0, the devices and the E32 V2, and
+  have met simulated devices only.
+
 # HA 1.0.0 — the first stable release
 <!-- user-release-notes:v2:en -->
 

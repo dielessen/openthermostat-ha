@@ -144,12 +144,14 @@
           "comfort_temperature": "Comfort without a week program",
           "eco_temperature": "Night without a week program",
           "contact_delay": "Pause after a window opens",
+          "door_delay": "Pause after a door opens",
           "override_minutes": "Length of a manual change"
         },
         "data_description": {
           "comfort_temperature": "The Comfort preset of a room without a week program. With a week program, Comfort is its warmest temperature.",
           "eco_temperature": "The Night preset of a room without a week program. With a week program, Night is its coolest temperature.",
-          "contact_delay": "Minutes a window or door must stay open before a room pauses, so airing briefly or walking through a door does not stop the heating. A room's own \"Pause after\" (Configure → Rooms) takes precedence. A paused room still protects against frost.",
+          "contact_delay": "Minutes a window must stay open before a room pauses, so airing briefly does not stop the heating. A room's own \"Pause after (windows)\" (Configure → Rooms) takes precedence. A paused room still protects against frost.",
+          "door_delay": "The same for doors, usually longer, so letting the dog out or walking through the front door does not stop the heating. Default 5 minutes. A room's own \"Pause after (doors)\" takes precedence.",
           "override_minutes": "A new temperature on the thermostat lasts until the next switch point of the room's week program. A room without a week program keeps it this many minutes, then follows its plan again."
         }
       },
@@ -165,12 +167,14 @@
       },
       "comfort_contacts_room": {
         "title": "Window and door contacts",
-        "description": "Room: {room}. When one of these sensors has been open for {delay}, the room pauses: it drops to frost protection (8 °C) and asks for no heat. When all are closed again, it follows its program. Remove all sensors to switch this off for the room.",
+        "description": "Room: {room}. When a window has been open for {delay}, or a door for {door_delay}, the room pauses: it drops to frost protection (8 °C) and asks for no heat. When all are closed again, it follows its program. Remove all sensors to switch this off for the room.",
         "data": {
-          "contacts": "Window and door contacts"
+          "contacts": "Window contacts",
+          "door_contacts": "Door contacts"
         },
         "data_description": {
-          "contacts": "Binary sensors of the class window, door, opening or garage door, of any brand (Zigbee, Z-Wave, Shelly, Bluetooth …). Home Assistant sends their state to the E32 on every change. You can choose several, up to 8: after you choose one, an empty field appears below it for the next."
+          "contacts": "Binary sensors of the class window, door, opening or garage door, of any brand (Zigbee, Z-Wave, Shelly, Bluetooth …). Home Assistant sends their state to the E32 on every change. You can choose several, up to 8 windows and doors together: after you choose one, an empty field appears below it for the next.",
+          "door_contacts": "Doors you open often for a moment (front door, back door, the door to the garden). They pause the room only after the longer door delay. A sensor is a window or a door, not both."
         }
       },
       "init": {
@@ -308,14 +312,14 @@
       },
       "room": {
         "title": "Your room · 1 of 3",
-        "description": "Choose a name and heating type. Radiators are supported by this setup route. Floor and combined profiles are not yet available here; choosing them never silently creates a radiator configuration.",
+        "description": "Choose a name and heating type. This older room setup creates radiator rooms only. Floor heating is set up in the E32 rooms: connect the E32 under Configure → E32 connection, then add the room under Configure → Rooms.",
         "data": {
           "name": "Room name",
           "emitter": "Heating in this room"
         },
         "data_description": {
-          "name": "Shown on the room controls. Renaming keeps its identity and saved programme.",
-          "emitter": "Determines which valves and temperature limits apply. Floor heating needs its own compatible profile."
+          "name": "Shown on the room controls. Renaming keeps its identity and saved program.",
+          "emitter": "Determines which valves and temperature limits apply. This setup creates radiator rooms only."
         },
         "submit": "Next"
       },
@@ -333,15 +337,15 @@
         "submit": "Next"
       },
       "room_temperature": {
-        "title": "Temperature and programme · 3 of 3",
-        "description": "Set the temperature outside programme blocks. You can edit the week before the final save. Advanced settings are optional.",
+        "title": "Temperature and program · 3 of 3",
+        "description": "Set the temperature outside program blocks. You can edit the week before the final save. Advanced settings are optional.",
         "data": {
-          "base_temperature": "Temperature outside programme blocks",
-          "program_action": "Week programme"
+          "base_temperature": "Temperature outside program blocks",
+          "program_action": "Week program"
         },
         "data_description": {
           "base_temperature": "Applies when no week block is active. A higher target can increase heat demand.",
-          "program_action": "Keep the programme, edit its time blocks or explicitly remove it. Each block has its own temperature."
+          "program_action": "Keep the program, edit its time blocks or explicitly remove it. Each block has its own temperature."
         },
         "sections": {
           "advanced": {
@@ -354,16 +358,16 @@
             },
             "data_description": {
               "minimum_target_temperature": "Prevents lower targets. Existing week blocks must remain within the limits.",
-              "maximum_target_temperature": "Prevents higher targets; changing this can invalidate existing programme blocks.",
+              "maximum_target_temperature": "Prevents higher targets; changing this can invalidate existing program blocks.",
               "maximum_age_seconds": "After this many seconds without a valid report, the sensor is stale. Too short causes interruptions; too long permits old information.",
-              "schedule_entity": "Replaces the local week programme as its source. Choose one programme source per room."
+              "schedule_entity": "Replaces the local week program as its source. Choose one program source per room."
             }
           }
         },
         "submit": "Review"
       },
       "copy_day": {
-        "title": "Copy a programme day",
+        "title": "Copy a program day",
         "description": "Copies all blocks, including temperatures. Existing blocks on destination days are replaced in this draft. Nothing is saved until you confirm the room.",
         "data": {
           "source_day": "Copy from",
@@ -381,14 +385,14 @@
           "action": "What would you like to do?"
         },
         "data_description": {
-          "room": "Choose an existing room. Its identity and programme are preserved when editing.",
+          "room": "Choose an existing room. Its identity and program are preserved when editing.",
           "action": "Edit its configuration or remove only this room and its bindings."
         },
         "description": "Add, change or remove the rooms of this installation."
       },
       "remove_room": {
         "title": "Remove {name}?",
-        "description": "Removes this room, its programme and its own radiator-group bindings. Shared groups, physical devices and Recorder history are preserved. Active control must be stopped first. Cancelling changes nothing.",
+        "description": "Removes this room, its program and its own radiator-group bindings. Shared groups, physical devices and Recorder history are preserved. Active control must be stopped first. Cancelling changes nothing.",
         "data": {
           "confirm_remove": "Remove this room and its own bindings"
         },
@@ -418,7 +422,7 @@
       },
       "block": {
         "title": "Time block",
-        "description": "Local wall-clock interval [start, end). Split overnight blocks at midnight. Repeated autumn hours apply twice; nonexistent spring times are skipped.",
+        "description": "Set the days, start, end and temperature. For the night, use two blocks. A block that ends at midnight runs until the start of the next day.",
         "data": {
           "days": "Days",
           "start_time": "Start time",
@@ -485,7 +489,8 @@
           "e32_time_zone": "E32 time zone",
           "back": "← Back",
           "done": "Done",
-          "general": "Dashboard and name"
+          "general": "Dashboard and name",
+          "tester": "Tester program"
         }
       },
       "edit_room": {
@@ -496,16 +501,16 @@
           "emitter": "Heating in this room",
           "temperature_entity": "Room temperature sensor",
           "radiator_entities": "Radiator valves",
-          "base_temperature": "Temperature outside programme blocks",
+          "base_temperature": "Temperature outside program blocks",
           "confirm_source_change": "Confirm program source change"
         },
         "data_description": {
-          "name": "Shown on the room controls. Renaming keeps its identity and saved programme.",
+          "name": "Shown on the room controls. Renaming keeps its identity and saved program.",
           "emitter": "Determines which valves and temperature limits apply. Floor heating needs its own compatible profile.",
           "temperature_entity": "The room is controlled from this measurement. Use a representative room sensor; a device temperature may be inaccurate.",
           "radiator_entities": "Choose all radiator valves belonging to this room. A valve cannot belong to two rooms. Saving does not operate them.",
           "base_temperature": "Applies when no week block is active. A higher target can increase heat demand.",
-          "program_action": "Keep the programme, edit its time blocks or explicitly remove it. Each block has its own temperature.",
+          "program_action": "Keep the program, edit its time blocks or explicitly remove it. Each block has its own temperature.",
           "confirm_source_change": "Required only when changing between a local week program and a Schedule helper; choosing a helper removes local blocks."
         }
       },
@@ -607,14 +612,18 @@
         "sections": {
           "window": {
             "name": "Windows and doors",
-            "description": "Optional. Pick this room's window and door sensors from Home Assistant, of any brand: Zigbee, Z-Wave, Shelly, Bluetooth and more.",
+            "description": "Optional. Pick this room's window and door sensors from Home Assistant, of any brand: Zigbee, Z-Wave, Shelly, Bluetooth and more. A door can wait longer than a window before the room pauses.",
             "data": {
-              "contacts": "Window and door contacts",
-              "contact_delay": "Pause after"
+              "contacts": "Window contacts",
+              "contact_delay": "Pause after (windows)",
+              "door_contacts": "Door contacts",
+              "door_delay": "Pause after (doors)"
             },
             "data_description": {
-              "contacts": "When one of them has been open for {delay}, the room pauses: it drops to frost protection (8 °C) and asks for no heat. When all are closed again, it follows its program. Set the delay just below. You can choose several, up to 8: after you choose one, an empty field appears below it for the next.",
-              "contact_delay": "When one of them has been open this long, the room pauses: it drops to frost protection (8 °C) and asks for no heat. When all are closed again, it follows its program. Default 2 minutes, so airing briefly does not pause the room."
+              "contacts": "When one of them has been open for {delay}, the room pauses: it drops to frost protection (8 °C) and asks for no heat. When all windows and doors are closed again, it follows its program. Contacts chosen before stay here. You can choose several, up to 8 windows and doors together: after you choose one, an empty field appears below it for the next.",
+              "contact_delay": "When a window has been open this long, the room pauses. Default 2 minutes, so airing briefly does not pause the room.",
+              "door_contacts": "Doors you open often for a moment, such as the front door or the door to the garden. When one of them has been open for {door_delay}, the room pauses. A sensor is a window or a door, not both: move a door here from the window contacts.",
+              "door_delay": "When a door has been open this long, the room pauses. Default 5 minutes, so letting the dog out or walking through does not pause the room."
             }
           },
           "limits": {
@@ -643,16 +652,22 @@
           },
           "valves": {
             "name": "Radiator valves",
-            "description": "Optional. Pick the room's radiator valves; OpenThermostat works out how each one is driven. Zigbee2MQTT valves the E32 knows (Bosch BTH-RA, Sonoff TRVZB, Sonoff TRV Gen2, Tuya TV02) are driven by the E32 itself and keep working without Home Assistant. Every other valve goes through Home Assistant and keeps its last target while Home Assistant is down.",
+            "description": "Optional. Pick the room's radiator valves; OpenThermostat works out how each one is driven. Zigbee2MQTT valves the E32 knows (Bosch BTH-RA, Sonoff TRVZB, Sonoff TRV Gen2, Tuya TV02) and Shelly BLU TRVs behind the E32's BLU Gateway are driven by the E32 itself and keep working without Home Assistant. Every other valve goes through Home Assistant and keeps its last target while Home Assistant is down.",
             "data": {
               "valves": "Radiator valves",
               "kept": "Kept valves",
+              "gateway_valves": "BLU Gateway valves",
+              "loop_valves": "Floor loop valves",
+              "keep_open": "Keep this radiator open",
               "control": "Valve control",
               "choose_models": "Choose the models myself (advanced)"
             },
             "data_description": {
-              "valves": "Their thermostat (climate) entities, at most 4 per room and 16 in all. Valve control stays off until you switch it on below.\n\n{valve_routes}",
+              "valves": "Their thermostat (climate) entities, at most 4 per room. Valve control stays off until you switch it on below.\n\n{valve_routes}",
               "kept": "Zigbee2MQTT valves stored on the E32 that Home Assistant does not know (any more). They keep working as they are; deselect one to remove it.",
+              "gateway_valves": "The Shelly BLU TRVs of the E32's BLU Gateway in this room (a valve is added to its gateway on the E32's Shelly page). Up to 8 valves per room with these.",
+              "loop_valves": "Which of the chosen valves sit on the floor manifold (Floor loop valve): the E32 opens and closes them itself. The others are radiator valves.",
+              "keep_open": "Keep this radiator open as the water's path: the E32 keeps this radiator valve open while no other way for the water is open (until you know the boiler has a bypass). Not for a floor loop valve.",
               "control": "On: these valves follow the room (only while the E32 controls the boiler itself). Off: the valves keep their own settings and nothing is sent to them.",
               "choose_models": "Only needed for a Zigbee2MQTT valve whose model is not recognised (it then goes through Home Assistant). After saving you choose each Zigbee2MQTT valve's model, or Through Home Assistant."
             }
@@ -931,20 +946,22 @@
       },
       "heating_boiler": {
         "title": "Heating and boiler",
-        "description": "{saved}Warm-up, weather and water temperature, comfort and care for the boiler, and your boiler model.",
+        "description": "{saved}Warm-up, weather and water temperature, the heating circuits, comfort and care for the boiler, and your boiler model.",
         "menu_options": {
           "heating_boiler_limits": "Water temperature limits",
+          "heating_circuits": "Heating circuits (pump)",
           "boiler_model": "Boiler model",
           "back": "← Back",
           "done": "Done",
           "heating_warm_up": "Smart warm-up",
           "heating_weather": "Weather compensation",
-          "comfort_care": "Comfort and boiler care"
+          "comfort_care": "Comfort and boiler care",
+          "boiler_settings": "Boiler settings"
         }
       },
       "boiler_model": {
         "title": "Boiler model",
-        "description": "Choose your boiler, as on the E32's Boiler page. It names the boiler in Home Assistant and on the E32 and chooses the explanation of its display codes; it does not change how the boiler is controlled.\n\nNow: {current}.",
+        "description": "Choose your boiler, as on the E32's Boiler page. It names the boiler in Home Assistant and on the E32 and chooses the explanation of its display codes; it does not change how the boiler is controlled.\n\nNow: {current}.{recognised}",
         "data": {
           "model": "Boiler model"
         },
@@ -1107,6 +1124,125 @@
         "data_description": {
           "holiday_temperature": "The same setting as \"Temperature on holiday\" on the E32 device and on the E32's Home page."
         }
+      },
+      "boiler_settings": {
+        "title": "Boiler settings",
+        "description": "{saved}The boiler's own settings, such as the hot water temperature. The boiler keeps them in its own memory. The E32 changes one only when you allow it, one at a time, and reads it back from the boiler. A setting not yet verified on your boiler is tried while you watch the boiler, and put back by itself unless you keep it.\n\nChanging boiler settings: {state}\n\n{settings}",
+        "menu_options": {
+          "boiler_settings_allow": "Allow the E32 to change boiler settings",
+          "boiler_settings_stop": "Stop the E32 changing boiler settings",
+          "boiler_settings_pick": "Change a setting",
+          "boiler_settings_advanced": "Advanced (installer settings)",
+          "boiler_settings_watch": "The change you are watching now",
+          "back": "← Back",
+          "done": "Done"
+        }
+      },
+      "boiler_settings_allow": {
+        "title": "Allow the E32 to change boiler settings",
+        "description": "Boiler settings stay in the boiler, also after a restart of the boiler or the E32. A wrong setting can leave the house cold, make the hot water too hot or let the burner switch on and off too often.\n\nThe E32 changes a setting only when you ask, one at a time and at most {cap} a day. It reads every change back from the boiler and puts it back when the boiler does not take it. You can switch this off here at any time.",
+        "data": {
+          "confirm": "I understand: I watch the boiler after a change"
+        },
+        "data_description": {
+          "confirm": "Needed to switch it on. It is off until you do."
+        }
+      },
+      "boiler_settings_stop": {
+        "title": "Stop the E32 changing boiler settings",
+        "description": "From now on the E32 changes no boiler setting. A change you are watching is put back first. Settings you kept earlier stay as they are on the boiler.\n\nSubmit to switch it off."
+      },
+      "boiler_settings_pick": {
+        "title": "Change a boiler setting",
+        "description": "Choose a setting. One verified on your boiler is changed at once. Any other one is tried while you watch the boiler: you then keep it or put it back.",
+        "data": {
+          "setting": "Setting"
+        },
+        "data_description": {
+          "setting": "With its value now and whether it is verified on your boiler."
+        }
+      },
+      "boiler_settings_advanced": {
+        "title": "Advanced (installer settings)",
+        "description": "**At your own risk.** These are the settings an installer sets: burner power, switching margins, the pump and hot water details. A wrong value can waste gas, wear the boiler or stop heating or hot water. Change one only if you know what it does on your boiler, for example from its manual.\n\nHere the everyday settings also offer the boiler's whole range.",
+        "data": {
+          "setting": "Setting",
+          "own_risk": "I change this at my own risk"
+        },
+        "data_description": {
+          "setting": "With its value now and whether it is verified on your boiler.",
+          "own_risk": "Needed to go on."
+        }
+      },
+      "boiler_settings_value": {
+        "title": "Change {setting}",
+        "description": "Now: {current}. You can choose {range}.\n\n{verification}",
+        "data": {
+          "value": "New value"
+        },
+        "data_description": {
+          "value": "The boiler keeps it in its own memory."
+        }
+      },
+      "boiler_settings_off": {
+        "title": "Really switch it off?",
+        "description": "This really switches {what} off on the boiler. While you watch, it stays off for up to 15 minutes; if you keep the change, it stays off until you switch it on again.\n\nSubmit to switch it off, or close this window to leave it on."
+      },
+      "boiler_settings_watch": {
+        "title": "Watch your boiler",
+        "description": "{saved}Watch your boiler for up to 15 minutes. {setting} is now {value} (it was {before}); the boiler read it back.\n\nKeep the new value, or put it back? If you choose Done, the E32 puts it back by itself at {until}, 15 minutes after the change.",
+        "menu_options": {
+          "boiler_settings_keep": "Keep the new value",
+          "boiler_settings_put_back": "Put it back",
+          "boiler_settings_leave": "Done (the E32 puts it back after 15 minutes)",
+          "back": "← Back"
+        }
+      },
+      "heating_circuits": {
+        "title": "Heating circuits",
+        "description": "The E32 has more than one heating circuit with a pump. Which one?",
+        "data": {
+          "circuit": "Circuit"
+        },
+        "data_description": {
+          "circuit": "The circuits are set up on the E32's Shelly page."
+        }
+      },
+      "heating_circuit": {
+        "title": "{circuit}: pump",
+        "description": "While Pump control by the E32 is off, the E32 only shows what it would do with the pump and leaves the pump as it is. Switch it on once that looks right.",
+        "data": {
+          "pump_control": "Pump control by the E32",
+          "max_supply_c": "Highest water temperature to the floor",
+          "run_on_max_minutes": "Run on at most (minutes)"
+        },
+        "data_description": {
+          "pump_control": "On: the E32 switches the pump on and off itself, but only while it controls the boiler. Off: it only shows what it would do. The same switch as on the E32's Shelly page.",
+          "max_supply_c": "When the water to the floor stays 5 °C above this for 2 minutes, the E32 switches the pump off: the mixing valve lets too hot water through. 50 °C is usual for a floor. The same setting as on the E32's Home page, Heating circuits.",
+          "run_on_max_minutes": "After the heat the pump keeps running while the water to the floor is still at least 2 °C warmer than the water back, so the floor takes up the remaining heat. It stops sooner once that difference is gone or a room is warm enough; this is the longest it runs on. 30 minutes is usual. Needs both water probes."
+        }
+      },
+      "tester": {
+        "title": "Tester program",
+        "description": "Help test OpenThermostat with your boiler. While this is on, you can make a 30-minute recording of the messages on your boiler's cable and share the result with the OpenThermostat project on GitHub, so your boiler model can be tested and verified.\n\nHome Assistant never sends anything itself: it writes the files and shows you a link to the GitHub form. You see everything before you post it. Off: nothing is recorded and nothing is read for it.",
+        "data": {
+          "tester_enabled": "Take part in the tester program"
+        },
+        "data_description": {
+          "tester_enabled": "You can switch it off here at any time."
+        }
+      },
+      "tester_menu": {
+        "title": "Tester program",
+        "description": "{saved}{recording}\n\nStart a recording, then let the boiler rest, heat (set the thermostat higher) and make hot water (open a hot tap for a few minutes). After 30 minutes choose Share result. Keep your thermostat connected.",
+        "menu_options": {
+          "tester_start": "Start a bus recording (30 minutes)",
+          "tester_stop": "Stop the bus recording",
+          "tester_share": "Share result",
+          "tester_off": "Switch the tester program off",
+          "back": "← Back",
+          "done": "Done"
+        }
       }
     },
     "error": {
@@ -1115,6 +1251,7 @@
       "whole_number_invalid": "Enter a whole number within the limits.",
       "contacts_invalid": "Choose at most eight different sensors.",
       "not_contact_sensor": "Choose window, door or opening sensors only.",
+      "contact_window_and_door": "A sensor is a window or a door, not both: choose it in one of the two fields.",
       "room_invalid": "Choose one of the E32 rooms.",
       "invalid_adapter_id": "Use the same explicit owner ID as provisioned on the E32 (1–32 letters, digits, _ or -).",
       "graph_room_contract_unavailable": "These rooms do not fit the saved setup of the E32. Saving or ticking this box starts no heating.",
@@ -1146,7 +1283,7 @@
       "output_has_multiple_owners": "This output is already used by another room or device.",
       "input_output_loop": "An output cannot also be a configured input or an OpenThermostat-derived entity.",
       "setup_invalid": "The room could not be prepared. Check the selected devices and their existing assignments; nothing has been saved.",
-      "emitter_not_available": "This heating type is not yet available in this version. Nothing was saved. Choose radiators or wait for its compatible profile.",
+      "emitter_not_available": "This older room setup creates radiator rooms only. Nothing was saved. Choose radiators, or set up floor heating in the E32 rooms (Configure → Rooms, after Configure → E32 connection).",
       "weather_requires_outdoor_source": "Choose an outdoor source when weather compensation is selected.",
       "curve_must_not_fall_towards_cold_outdoors": "Supply targets must not decrease towards colder weather.",
       "unused_fallback_must_be_null": "Clear the fixed target when using the block-demand policy.",
@@ -1159,7 +1296,7 @@
       "pump_times_without_pump": "Clear both pump times when no group pump is selected.",
       "invalid_position_range": "Minimum position must be below maximum position.",
       "group_count": "At most 8 desired groups. This is not proof of firmware capacity.",
-      "actuator_count": "At most 64 desired actuators in total. Firmware resource capacity is not yet proven.",
+      "actuator_count": "At most 64 valves and other controlled devices in total. Remove some and save again.",
       "room_actuator_limit": "At most 8 desired actuator declarations per room.",
       "duplicate_actuator_or_missing_reference": "Use unique actuator identifiers and existing room/group references.",
       "confirm_group_cascade": "Confirm removal of this group’s actuator declarations, or cancel.",
@@ -1233,7 +1370,7 @@
       "e32_rejected_flow_limits": "The E32 did not accept these water temperature limits. Older E32 software accepts at most 60 °C; update the E32 to use a higher maximum.",
       "e32_flow_limits_floor_warning": "A room has floor heating. Above {floor_maximum} floor heating without a mixing valve can get too hot. Save again to keep this maximum.",
       "e32_flow_limits_above_boiler": "This maximum is above your boiler's own maximum; the boiler does not go higher anyway. Save again to keep it, or lower it.",
-      "controller_ha_version_unsupported": "This integration needs Home Assistant 2026.10.0 or newer (tested with 2026.10.2 to 2026.10.4). Update Home Assistant; if yours is newer, check for an integration update. Nothing has been changed.",
+      "controller_ha_version_unsupported": "This integration needs Home Assistant 2026.10.0 or newer (tested with 2026.10.2 to 2026.11.0). Update Home Assistant; if yours is newer, check for an integration update. Nothing has been changed.",
       "controller_mqtt_unconfirmed": "The E32 restarted with the Home Assistant settings, but Home Assistant received nothing from it over MQTT within 90 seconds. On the E32, check System → Network and Home Assistant → MQTT: the same broker as the MQTT integration in Home Assistant, and a user name and password that the broker accepts.",
       "legacy_rooms_plan_changed": "The E32 room plan changed since this list was made (on the E32 page or elsewhere). Nothing has been removed. Check the updated list and submit again.",
       "legacy_rooms_plan_failed": "The E32 did not save the updated room plan, so nothing has been removed. Check that the E32 is ready and try again.",
@@ -1246,9 +1383,9 @@
       "e32_valve_name_invalid": "Use the valve's Zigbee2MQTT friendly name: up to 64 characters, no # + \" \\ and no leading or trailing / or space.",
       "e32_valve_duplicate": "This valve is already used (here or in another room).",
       "e32_valve_model_missing": "Choose the valve's model.",
-      "e32_valve_limit": "The E32 drives at most 16 radiator valves.",
+      "e32_valve_limit": "The E32 drives at most 16 radiator valves, 24 with the BLU Gateway (E32 1.1).",
       "e32_valve_entity_invalid": "Choose the climate entity of a radiator valve (not an OpenThermostat thermostat or this room's temperature source), with an entity ID of at most 64 characters.",
-      "e32_valve_room_limit": "A room has at most 4 radiator valves.",
+      "e32_valve_room_limit": "A room has at most 8 radiator valves, and at most 4 that are not on the BLU Gateway.",
       "e32_valves_rejected": "The E32 refused the radiator valves ({error}).",
       "entity_ids_confirm": "Tick the box to confirm.",
       "water_meter_unit": "Choose a water flow sensor (L/min, L/h, m³/h) or a water meter reading (m³, L).",
@@ -1309,27 +1446,45 @@
       "house_holiday_changed": "This holiday was changed elsewhere. Open it again.",
       "house_holiday_no_clock": "The E32 clock is not set yet, so a holiday date cannot be used. Try again in a minute.",
       "house_holiday_not_saved": "The E32 did not accept this ({error}). Try again.",
-      "house_holiday_temperature_invalid": "Choose a temperature between 5 and 25 °C."
+      "house_holiday_temperature_invalid": "Choose a temperature between 5 and 25 °C.",
+      "boiler_settings_confirm": "Tick the box to allow it.",
+      "boiler_settings_own_risk": "Tick the box to go on at your own risk.",
+      "boiler_setting_unknown": "Choose a setting from the list.",
+      "boiler_setting_out_of_range": "The boiler does not accept this value: choose one in the range shown.",
+      "boiler_setting_above_maximum": "This is above the highest water temperature of your room plan: raise that first (Water temperature limits).",
+      "boiler_setting_advanced": "This value is outside the everyday range: use Advanced (installer settings).",
+      "boiler_setting_writes_off": "Changing boiler settings is off: choose “Allow the E32 to change boiler settings” first.",
+      "boiler_setting_unavailable": "This E32 cannot change boiler settings.",
+      "boiler_setting_not_now": "The E32 cannot change boiler settings right now: the boiler test, an update or active heating is busy, or the boiler has not answered yet. Try again later.",
+      "boiler_setting_unsupported": "Your boiler does not support this setting.",
+      "boiler_setting_check_boiler": "A setting could not be put back: check the boiler and confirm it under Settings → Repairs first.",
+      "boiler_setting_too_soon": "Wait half a minute before changing this setting again.",
+      "boiler_setting_daily_limit": "The E32 changes at most 12 boiler settings a day. Try again tomorrow.",
+      "boiler_setting_busy": "The E32 is busy with another boiler setting change. Try again in a few minutes.",
+      "boiler_setting_store_failed": "The E32 could not store this. Try again.",
+      "boiler_setting_refused": "The E32 refused the change ({error}).",
+      "heating_circuit_failed": "The E32 did not store the change ({error}). Try again in a minute.",
+      "e32_valve_keep_open_loop": "A floor loop valve cannot be kept open as the water's path: choose it in one of the two lists only."
     },
     "abort": {
       "comfort_saved": "The comfort settings are saved and apply at once.",
       "presence_saved": "Presence saved.",
       "comfort_no_rooms": "The E32 has not reported any rooms yet. Add rooms under Configure → Rooms, wait a moment and try again.",
-      "graph_review_unavailable": "No existing source-selected graph connection is available. No profile was enabled.",
-      "graph_review_cancelled": "Nothing applied.",
-      "graph_review_changed": "Review/session/candidate changed or capability expired. Nothing new was approved; reopen review.",
-      "graph_review_complete": "Graph DATA review closed. No integration settings changed.",
-      "graph_prepare_unavailable": "No reviewed source-owned draft binding/qualification bundle is selected. No graph profile was enabled.",
-      "graph_prepare_failed": "Could not verify prepared heating DATA. No automatic apply was performed; check graph status and review again.",
+      "graph_review_unavailable": "There is no room plan of the older setup to review. Nothing was changed.",
+      "graph_review_cancelled": "Nothing was changed.",
+      "graph_review_changed": "Something changed while you were looking. Nothing was approved; open the review again.",
+      "graph_review_complete": "Review closed. No settings changed.",
+      "graph_prepare_unavailable": "There is no room plan to repair. Nothing was changed.",
+      "graph_prepare_failed": "The repaired room plan could not be checked. Nothing was applied; look at the room plan status and try again.",
       "native_plan_schedule_limit": "The saved programs exceed the current limit of eight UTC transitions across both rooms over the 15-day planning window. A weekly block can produce several transitions. Reduce the programs and try again. Saved room settings and existing plans were retained; nothing was sent. Full-week support remains pending.",
       "native_plan_config_limit": "The complete saved room plan exceeds the current 4096-byte device configuration limit. Reduce the program complexity and try again. Saved room settings and existing plans were retained; nothing was sent.",
       "native_plan_prepare_failed": "Could not verify the saved room plan. Check the connection, selected profile and configuration status, then prepare again. No automatic apply was performed.",
       "hot_water_information_complete": "Read-only hot water information closed; no settings changed.",
       "native_source_runtime_off_required": "Turn off the trial run first, then check the room setup.",
-      "native_source_review_changed": "Configuration, owner or registry changed. No new profile was saved.",
-      "native_source_review_cancelled": "Profile review cancelled; existing configuration is unchanged.",
-      "native_source_owner_conflict": "Another independent source owner is already selected. No profile was saved.",
-      "native_source_replacement_unsupported": "Changing an existing source profile needs a supported durable-plan migration. Existing profile and data were retained.",
+      "native_source_review_changed": "The settings changed in the meantime. Nothing new was saved.",
+      "native_source_review_cancelled": "Cancelled; the settings are unchanged.",
+      "native_source_owner_conflict": "Another room plan source is already in use for this installation. Nothing was saved.",
+      "native_source_replacement_unsupported": "Changing the room plan source this way is not possible yet. The current settings and data are kept.",
       "native_source_plan_apply_required": "The earlier room plan change is not finished or cannot be read. Check on the E32 what it has saved first. Nothing was lost.",
       "room_limit": "At most 8 rooms",
       "shadow_mode_required": "Choose the trial run mode first.",
@@ -1401,7 +1556,29 @@
       "e32_flow_options_saved": "The water temperature settings are saved on the E32.",
       "house_mode_unavailable": "The E32 does not report its house mode right now. Check that it is on, then try again.",
       "house_mode_saved": "Saved.",
-      "house_holidays_none": "No holidays are planned."
+      "house_holidays_none": "No holidays are planned.",
+      "boiler_settings_allowed": "The E32 may now change boiler settings.",
+      "boiler_settings_stopped": "The E32 no longer changes boiler settings.",
+      "boiler_setting_saved": "Saved: {setting} is now {value}; the boiler read it back.",
+      "boiler_setting_kept": "Kept: {setting} stays at {value}.",
+      "boiler_setting_put_back": "Put back: {setting} is {before} again.",
+      "boiler_setting_not_taken": "Written, but the boiler did not take it: {setting} stays at {before}.",
+      "boiler_setting_rejected": "The boiler refused it: {setting} stays at {before}.",
+      "boiler_setting_restored": "The boiler went back to {before} by itself: {setting} was not kept.",
+      "boiler_setting_not_started": "Not started: nothing was changed on the boiler.",
+      "boiler_setting_reverted": "Put back: the boiler did not confirm {value}, so the E32 set {setting} back to {before}.",
+      "boiler_setting_pending": "The E32 is still busy with {setting}. Look at Boiler settings again in a minute.",
+      "boiler_setting_unchanged": "Nothing changed: {setting} is already {value}.",
+      "boiler_setting_failed": "Could not put it back: check the boiler. {setting} should be {before} again, but the boiler did not confirm it. Look at it on the boiler; Settings → Repairs says what to do next.",
+      "heating_circuits_none": "The E32 reports no heating circuit with a pump. Set one up on the E32's Shelly page first.",
+      "heating_circuit_saved": "Saved on the E32.",
+      "tester_unchanged": "Nothing changed.",
+      "tester_recording_started": "Recording: the E32 keeps the newest {minutes} minutes of your boiler's messages until you stop it or choose Share result.",
+      "tester_recording_stopped": "The bus recording is stopped. Choose Share result to write the files.",
+      "tester_shared": "Ready: open the notification. It lists what is in the files, has the links to download them and the GitHub form. Nothing was sent.",
+      "tester_switched_off": "The tester program is off. Files you already wrote stay in www/open_thermostat until you delete them.",
+      "tester_recording_unavailable": "This E32 has no room in its memory for a bus recording. Restart the E32 and try again. You can still share the result without one.",
+      "tester_share_not_written": "Home Assistant could not write the files to its www/open_thermostat folder. Check that the configuration folder has free space, then try again."
     },
     "progress": {
       "controller_connect": "Connecting to the E32…",
@@ -1447,6 +1624,12 @@
       },
       "room_valve_problem": {
         "name": "Radiator valve problem"
+      },
+      "circuit_floor_pump": {
+        "name": "Floor pump"
+      },
+      "circuit_radiators_pump": {
+        "name": "Radiator pump"
       }
     },
     "number": {
@@ -1461,6 +1644,9 @@
       },
       "holiday_temperature": {
         "name": "Temperature on holiday"
+      },
+      "boiler_setting": {
+        "name": "{setting} (boiler setting)"
       }
     },
     "sensor": {
@@ -1522,8 +1708,12 @@
               "off": "Frost protection only (room off)",
               "window_open": "Paused: a window or door is open",
               "window_open_contact": "Paused: {contact} open since {since}",
+              "window_open_window": "Paused: a window is open",
+              "window_open_door": "Paused: a door is open",
               "window_pending": "A window or door is open: the room pauses soon",
               "window_pending_contact": "{contact} open: the room pauses soon",
+              "window_pending_window": "A window is open: the room pauses soon",
+              "window_pending_door": "A door is open: the room pauses soon",
               "no_measurement": "No measurement: this room does not ask for heat",
               "hot_water": "Waiting: the boiler is making hot water",
               "boiler_pause": "Waiting: minimum boiler pause",
@@ -1596,7 +1786,11 @@
               "smart_on": "Smart warm-up on",
               "home": "At home",
               "away": "Away",
-              "holiday": "Holiday"
+              "holiday": "Holiday",
+              "window_open": "Window open",
+              "door_open": "Door open",
+              "window_pending": "Window open, pausing soon",
+              "door_pending": "Door open, pausing soon"
             }
           },
           "program": {
@@ -1607,6 +1801,13 @@
               "night": "Night",
               "holiday": "Holiday",
               "step": "{level} until {time}, then {next}"
+            }
+          },
+          "opening": {
+            "name": "What is open",
+            "state": {
+              "window": "A window",
+              "door": "A door"
             }
           }
         }
@@ -1702,7 +1903,9 @@
               "not_warm": "not warm within 3 h",
               "yesterday_starts": "Burner starts per heating hour",
               "yesterday_heating": "Heating energy (estimate)",
-              "warm_on_time": "{room}: warm on time"
+              "warm_on_time": "{room}: warm on time",
+              "late_h": "{h} h late",
+              "early_h": "{h} h early"
             }
           }
         }
@@ -1816,22 +2019,52 @@
         }
       },
       "field_reported_burner_starts": {
-        "name": "Burner starts"
+        "name": "Burner starts",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "field_reported_burner_runtime": {
-        "name": "Burner runtime"
+        "name": "Burner runtime",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "field_reported_heating_runtime": {
-        "name": "Heating runtime"
+        "name": "Heating runtime",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "field_reported_heating_starts": {
-        "name": "Heating starts"
+        "name": "Heating starts",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "field_reported_dhw_runtime": {
-        "name": "Hot water runtime"
+        "name": "Hot water runtime",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "field_reported_dhw_starts": {
-        "name": "Hot water starts"
+        "name": "Hot water starts",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "field_display_code": {
         "name": "Display code",
@@ -1937,7 +2170,12 @@
         "name": "Heating pump speed"
       },
       "field_reported_second_burner_runtime": {
-        "name": "Second burner runtime"
+        "name": "Second burner runtime",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "field_heating_hysteresis_off": {
         "name": "Heating switch-off margin (hysteresis)"
@@ -2155,13 +2393,28 @@
         }
       },
       "field_plus_burner_starts": {
-        "name": "Burner starts (EMS+)"
+        "name": "Burner starts (EMS+)",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "field_plus_burner_runtime": {
-        "name": "Burner runtime (EMS+)"
+        "name": "Burner runtime (EMS+)",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "field_plus_heating_runtime": {
-        "name": "Heating runtime (EMS+)"
+        "name": "Heating runtime (EMS+)",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "field_plus_heating_pump_modulation": {
         "name": "Heating pump speed (EMS+)"
@@ -2176,10 +2429,20 @@
         "name": "Hot water flow (EMS+)"
       },
       "field_plus_dhw_runtime": {
-        "name": "Hot water runtime (EMS+)"
+        "name": "Hot water runtime (EMS+)",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "field_plus_dhw_starts": {
-        "name": "Hot water starts (EMS+)"
+        "name": "Hot water starts (EMS+)",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "field_plus_dhw_selected_temperature": {
         "name": "Selected hot water temperature (EMS+)"
@@ -2261,7 +2524,12 @@
         "name": "Last blocking fault number"
       },
       "field_boiler_uptime": {
-        "name": "Boiler uptime"
+        "name": "Boiler uptime",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
       },
       "heating_advice": {
         "name": "Heating advice"
@@ -2288,6 +2556,18 @@
               "more": "And {n} more.",
               "done": "It has learned everything it needs; it keeps checking as the seasons change.",
               "waiting": "The E32 has not reported what it knows yet."
+            }
+          },
+          "items": {
+            "name": "What it still learns",
+            "state": {
+              "warmup": "It still has to see how fast {room} warms up.",
+              "cooling": "It still has to see how fast {room} cools down.",
+              "arrival": "It still has to check whether {room} is warm on time.",
+              "curve": "It is still learning how much warmer the water must be when it gets colder outside.",
+              "boiler_minimum": "It is still finding out from which water temperature your boiler starts heating.",
+              "boiler_response": "It is still listening to how your boiler holds its temperature.",
+              "house": "It is still working out how fast your house loses heat."
             }
           }
         }
@@ -2368,7 +2648,8 @@
               "off": "Weather compensation is off; the lines show what it would ask.",
               "waiting": "The E32 has not reported its weather compensation yet.",
               "house": "Estimated from your house",
-              "asks": "E32 asks {flow} °C"
+              "asks": "E32 asks {flow} °C",
+              "would_ask": "E32 would ask {flow} °C"
             }
           },
           "design_flow_c": {
@@ -2607,6 +2888,255 @@
       },
       "gas_per_degree_day": {
         "name": "Heating energy per degree-day (yesterday)"
+      },
+      "boiler_settings_writes": {
+        "name": "Boiler settings writes",
+        "state": {
+          "off": "Off",
+          "ready": "Ready",
+          "watching": "Watching a change",
+          "failed": "Check the boiler"
+        },
+        "state_attributes": {
+          "last_setting": {
+            "name": "Last setting"
+          },
+          "last_result": {
+            "name": "Last result"
+          },
+          "when": {
+            "name": "When"
+          }
+        }
+      },
+      "circuit_floor_pump_reason": {
+        "name": "Floor pump reason",
+        "state": {
+          "idle": "Not needed",
+          "demand": "Heat asked",
+          "run_on": "Running on (rest heat)",
+          "frost": "Frost protection",
+          "exercise": "Short run against sticking",
+          "manual_on": "On by hand",
+          "manual_off": "Off by hand",
+          "too_hot": "Off: water too hot"
+        }
+      },
+      "circuit_floor_pump_power": {
+        "name": "Floor pump power"
+      },
+      "circuit_floor_supply": {
+        "name": "Floor supply"
+      },
+      "circuit_floor_return": {
+        "name": "Floor return"
+      },
+      "circuit_floor_delta": {
+        "name": "Floor temperature difference"
+      },
+      "circuit_floor_problem": {
+        "name": "Floor circuit problem",
+        "state": {
+          "none": "No problem",
+          "unreachable": "The pump's Plug does not answer",
+          "wrong_device": "Another device at the Plug's address",
+          "auth_failed": "The Plug refuses the password",
+          "device_error": "The Plug reports an error",
+          "no_power": "The pump takes no power",
+          "probe_missing": "The supply probe gives no reading",
+          "too_hot": "Floor water too hot"
+        }
+      },
+      "circuit_radiators_pump_reason": {
+        "name": "Radiator pump reason",
+        "state": {
+          "idle": "Not needed",
+          "demand": "Heat asked",
+          "run_on": "Running on (rest heat)",
+          "frost": "Frost protection",
+          "exercise": "Short run against sticking",
+          "manual_on": "On by hand",
+          "manual_off": "Off by hand",
+          "too_hot": "Off: water too hot"
+        }
+      },
+      "circuit_radiators_pump_power": {
+        "name": "Radiator pump power"
+      },
+      "circuit_radiators_supply": {
+        "name": "Radiator supply"
+      },
+      "circuit_radiators_return": {
+        "name": "Radiator return"
+      },
+      "circuit_radiators_delta": {
+        "name": "Radiator temperature difference"
+      },
+      "circuit_radiators_problem": {
+        "name": "Radiator circuit problem",
+        "state": {
+          "none": "No problem",
+          "unreachable": "The pump's Plug does not answer",
+          "wrong_device": "Another device at the Plug's address",
+          "auth_failed": "The Plug refuses the password",
+          "device_error": "The Plug reports an error",
+          "no_power": "The pump takes no power",
+          "probe_missing": "The supply probe gives no reading",
+          "too_hot": "Water too hot"
+        }
+      },
+      "heat_goes_to": {
+        "name": "Heat goes to",
+        "state": {
+          "floor_only": "The floor only",
+          "radiators": "The radiators",
+          "mixed": "The floor and the radiators",
+          "none": "Nobody asks for heat"
+        }
+      },
+      "probe_floor_supply": {
+        "name": "Floor supply"
+      },
+      "probe_floor_return": {
+        "name": "Floor return"
+      },
+      "probe_loop_return_1": {
+        "name": "Floor loop 1 return"
+      },
+      "probe_loop_return_2": {
+        "name": "Floor loop 2 return"
+      },
+      "probe_loop_return_3": {
+        "name": "Floor loop 3 return"
+      },
+      "probe_loop_return_4": {
+        "name": "Floor loop 4 return"
+      },
+      "probe_loop_return_5": {
+        "name": "Floor loop 5 return"
+      },
+      "probe_loop_return_6": {
+        "name": "Floor loop 6 return"
+      },
+      "probe_loop_return_7": {
+        "name": "Floor loop 7 return"
+      },
+      "probe_loop_return_8": {
+        "name": "Floor loop 8 return"
+      },
+      "probe_other_1": {
+        "name": "Extra probe 1"
+      },
+      "probe_other_2": {
+        "name": "Extra probe 2"
+      },
+      "probe_other_3": {
+        "name": "Extra probe 3"
+      },
+      "probe_other_4": {
+        "name": "Extra probe 4"
+      },
+      "boiler_recognition": {
+        "name": "Boiler recognition",
+        "state": {
+          "not_recognised": "Not recognised yet",
+          "read_only": "Reading only",
+          "probe_passed": "Tested by you",
+          "verified": "Verified",
+          "other_boiler": "A different boiler"
+        },
+        "state_attributes": {
+          "product": {
+            "name": "Product number"
+          },
+          "version": {
+            "name": "Boiler software version"
+          },
+          "family": {
+            "name": "EMS protocol"
+          },
+          "model": {
+            "name": "Model"
+          },
+          "profile": {
+            "name": "Boiler profile"
+          },
+          "route": {
+            "name": "Control route"
+          },
+          "reason": {
+            "name": "Reason (code)"
+          },
+          "reason_text": {
+            "name": "Reason"
+          },
+          "sentence": {
+            "name": "In words"
+          },
+          "confirmed": {
+            "name": "Confirmed this start"
+          },
+          "capabilities": {
+            "name": "Proven capabilities"
+          },
+          "settings_verified": {
+            "name": "Verified boiler settings"
+          },
+          "settings_tested": {
+            "name": "Boiler settings tested by you"
+          },
+          "table_current": {
+            "name": "Same boiler list as the E32"
+          }
+        }
+      },
+      "field_plus_status_info": {
+        "name": "Status display information"
+      },
+      "field_plus_display_code": {
+        "name": "Display code (EMS+)"
+      },
+      "field_plus_cause_code": {
+        "name": "Cause number (EMS+)"
+      },
+      "field_plus_heating_active": {
+        "name": "Heating active (EMS+)",
+        "state": {
+          "on": "On",
+          "off": "Off"
+        }
+      },
+      "field_plus_anti_cycle_time": {
+        "name": "Burner rest left"
+      },
+      "field_plus_dhw_three_way_valve": {
+        "name": "Hot water 3-way valve",
+        "state": {
+          "on": "On",
+          "off": "Off"
+        }
+      },
+      "field_plus_heating_starts": {
+        "name": "Heating starts (EMS+)",
+        "state_attributes": {
+          "not_reported": {
+            "name": "Not reported by this boiler or adapter"
+          }
+        }
+      },
+      "field_plus_heating_enabled": {
+        "name": "Heating enabled (EMS+)",
+        "state": {
+          "on": "On",
+          "off": "Off"
+        }
+      },
+      "field_plus_dhw_enabled": {
+        "name": "Hot water enabled (EMS+)",
+        "state": {
+          "on": "On",
+          "off": "Off"
+        }
       }
     },
     "select": {
@@ -2687,6 +3217,25 @@
           "away": "Away",
           "holiday": "Holiday"
         }
+      },
+      "boiler_setting": {
+        "name": "{setting} (boiler setting)"
+      },
+      "circuit_floor_pump_mode": {
+        "name": "Floor pump mode",
+        "state": {
+          "automatic": "Automatic",
+          "on": "On for 1 hour",
+          "off": "Off for 1 hour"
+        }
+      },
+      "circuit_radiators_pump_mode": {
+        "name": "Radiator pump mode",
+        "state": {
+          "automatic": "Automatic",
+          "on": "On for 1 hour",
+          "off": "Off for 1 hour"
+        }
       }
     },
     "datetime": {
@@ -2706,6 +3255,9 @@
       },
       "room_valve_control": {
         "name": "Radiator valve control"
+      },
+      "boiler_setting": {
+        "name": "{setting} (boiler setting)"
       }
     },
     "update": {
@@ -2814,7 +3366,7 @@
         },
         "block": {
           "title": "Time block",
-          "description": "Local wall-clock interval [start, end). Split overnight blocks at midnight. Repeated autumn hours apply twice; nonexistent spring times are skipped.",
+          "description": "Set the days, start, end and temperature. For the night, use two blocks. A block that ends at midnight runs until the start of the next day.",
           "data": {
             "days": "Days",
             "start_time": "Start time",
@@ -3021,7 +3573,7 @@
         },
         "block": {
           "title": "Time block",
-          "description": "Local wall-clock interval [start, end). Split overnight blocks at midnight. Repeated autumn hours apply twice; nonexistent spring times are skipped.",
+          "description": "Set the days, start, end and temperature. For the night, use two blocks. A block that ends at midnight runs until the start of the next day.",
           "data": {
             "days": "Days",
             "start_time": "Start time",
@@ -3107,14 +3659,14 @@
         },
         "room": {
           "title": "Your room · 1 of 3",
-          "description": "Choose a name and heating type. Radiators are supported by this setup route. Floor and combined profiles are not yet available here; choosing them never silently creates a radiator configuration.",
+          "description": "Choose a name and heating type. This older room setup creates radiator rooms only. Floor heating is set up in the E32 rooms: connect the E32 under Configure → E32 connection, then add the room under Configure → Rooms.",
           "data": {
             "name": "Room name",
             "emitter": "Heating in this room"
           },
           "data_description": {
-            "name": "Shown on the room controls. Renaming keeps its identity and saved programme.",
-            "emitter": "Determines which valves and temperature limits apply. Floor heating needs its own compatible profile."
+            "name": "Shown on the room controls. Renaming keeps its identity and saved program.",
+            "emitter": "Determines which valves and temperature limits apply. This setup creates radiator rooms only."
           },
           "submit": "Next"
         },
@@ -3132,15 +3684,15 @@
           "submit": "Next"
         },
         "room_temperature": {
-          "title": "Temperature and programme · 3 of 3",
-          "description": "Set the temperature outside programme blocks. You can edit the week before the final save. Advanced settings are optional.",
+          "title": "Temperature and program · 3 of 3",
+          "description": "Set the temperature outside program blocks. You can edit the week before the final save. Advanced settings are optional.",
           "data": {
-            "base_temperature": "Temperature outside programme blocks",
-            "program_action": "Week programme"
+            "base_temperature": "Temperature outside program blocks",
+            "program_action": "Week program"
           },
           "data_description": {
             "base_temperature": "Applies when no week block is active. A higher target can increase heat demand.",
-            "program_action": "Keep the programme, edit its time blocks or explicitly remove it. Each block has its own temperature."
+            "program_action": "Keep the program, edit its time blocks or explicitly remove it. Each block has its own temperature."
           },
           "sections": {
             "advanced": {
@@ -3152,7 +3704,7 @@
               },
               "data_description": {
                 "minimum_target_temperature": "Prevents lower targets. Existing week blocks must remain within the limits.",
-                "maximum_target_temperature": "Prevents higher targets; changing this can invalidate existing programme blocks.",
+                "maximum_target_temperature": "Prevents higher targets; changing this can invalidate existing program blocks.",
                 "maximum_age_seconds": "After this many seconds without a valid report, the sensor is stale. Too short causes interruptions; too long permits old information."
               }
             }
@@ -3160,7 +3712,7 @@
           "submit": "Review"
         },
         "copy_day": {
-          "title": "Copy a programme day",
+          "title": "Copy a program day",
           "description": "Copies all blocks, including temperatures. Existing blocks on destination days are replaced in this draft. Nothing is saved until you confirm the room.",
           "data": {
             "source_day": "Copy from",
@@ -3179,15 +3731,15 @@
             "emitter": "Heating in this room",
             "temperature_entity": "Room temperature sensor",
             "radiator_entities": "Radiator valves",
-            "base_temperature": "Temperature outside programme blocks"
+            "base_temperature": "Temperature outside program blocks"
           },
           "data_description": {
-            "name": "Shown on the room controls. Renaming keeps its identity and saved programme.",
+            "name": "Shown on the room controls. Renaming keeps its identity and saved program.",
             "emitter": "Determines which valves and temperature limits apply. Floor heating needs its own compatible profile.",
             "temperature_entity": "The room is controlled from this measurement. Use a representative room sensor; a device temperature may be inaccurate.",
             "radiator_entities": "Choose all radiator valves belonging to this room. A valve cannot belong to two rooms. Saving does not operate them.",
             "base_temperature": "Applies when no week block is active. A higher target can increase heat demand.",
-            "program_action": "Keep the programme, edit its time blocks or explicitly remove it. Each block has its own temperature."
+            "program_action": "Keep the program, edit its time blocks or explicitly remove it. Each block has its own temperature."
           }
         }
       },
@@ -3216,7 +3768,7 @@
         "output_has_multiple_owners": "A selected valve is already used by another room or device. Choose another valve, or fix its assignment in Advanced settings.",
         "input_output_loop": "A valve cannot also be a temperature-setting input. Check the selected devices.",
         "setup_invalid": "The room could not be prepared. Check the selected devices and their existing assignments; nothing has been saved.",
-        "emitter_not_available": "This heating type is not yet available in this version. Nothing was saved. Choose radiators or wait for its compatible profile.",
+        "emitter_not_available": "This older room setup creates radiator rooms only. Nothing was saved. Choose radiators, or set up floor heating in the E32 rooms (Configure → Rooms, after Configure → E32 connection).",
         "runtime_active": "Calculations are running. Nothing was changed.",
         "advanced_room_required": "This room profile cannot be changed here yet. All its data is kept.",
         "confirm_program_source_change": "Confirm the change of program source."
@@ -3492,7 +4044,7 @@
         "pump_times_without_pump": "Clear both pump times when no group pump is selected.",
         "invalid_position_range": "Minimum position must be below maximum position.",
         "group_count": "At most 8 desired groups. This is not proof of firmware capacity.",
-        "actuator_count": "At most 64 desired actuators in total. Firmware resource capacity is not yet proven.",
+        "actuator_count": "At most 64 valves and other controlled devices in total. Remove some and save again.",
         "room_actuator_limit": "At most 8 desired actuator declarations per room.",
         "duplicate_actuator_or_missing_reference": "Use unique actuator identifiers and existing room/group references.",
         "confirm_group_cascade": "Confirm removal of this group’s actuator declarations, or cancel.",
@@ -3621,8 +4173,8 @@
     "product_emitter": {
       "options": {
         "radiator": "Radiators",
-        "floor": "Floor heating — not yet available",
-        "combined": "Radiators and floor — not yet available"
+        "floor": "Floor heating (only in the E32 rooms)",
+        "combined": "Radiators and floor (not supported here)"
       }
     },
     "product_room_action": {
@@ -3756,6 +4308,126 @@
         "78": "78 °C",
         "79": "79 °C",
         "80": "80 °C"
+      }
+    },
+    "e32_room_list_text": {
+      "options": {
+        "inactive": "inactive",
+        "contacts": "window/door contacts: {count}",
+        "none": "No rooms yet."
+      }
+    },
+    "configuration_status_text": {
+      "options": {
+        "confirmed": "Configuration confirmed",
+        "unconfirmed": "Configuration not confirmed yet",
+        "calculations_on": "Calculations on; the E32 Overview shows who controls the boiler",
+        "calculations_off": "Calculations off; no device control",
+        "step": "step",
+        "review_limits": "Review room limits and program targets.",
+        "capabilities_unavailable": "Capabilities unavailable; check the valve connection.",
+        "external_program": "The existing external program has not been checked.",
+        "no_valves": "No radiator valves linked yet.",
+        "local_schedule_active": "The TV02 reports automatic scheduling, which can override the room target.",
+        "holiday_mode_active": "The TV02 reports a holiday program, which can override the room target.",
+        "heating_disabled": "The TV02 reports heating off; software will not turn the valve on automatically.",
+        "operating_mode_unknown": "The TV02 operating mode is unconfirmed. Check the valve, then reload."
+      }
+    },
+    "boiler_settings_text": {
+      "options": {
+        "name_heatingactivated": "Heating on the boiler",
+        "name_heatingtemp": "Maximum heating temperature (boiler)",
+        "name_burnmaxpower": "Maximum burner power",
+        "name_boilhystoff": "Switching margin off (hysteresis)",
+        "name_boilhyston": "Switching margin on (hysteresis)",
+        "name_burnminperiod": "Burner rest between starts",
+        "name_pumpdelay": "Pump run-on",
+        "name_pumpmodmax": "Highest pump speed",
+        "name_pumpmodmin": "Lowest pump speed",
+        "name_pumpmode": "Pump mode",
+        "name_dhw_activated": "Hot water on the boiler",
+        "name_dhw_seltemp": "Hot water temperature",
+        "name_dhw_hyston": "Hot water switching margin (hysteresis)",
+        "name_dhw_chargeoptimization": "Hot water charge optimisation",
+        "name_dhw_flowtempoffset": "Extra water temperature for hot water",
+        "name_dhw_circpump": "Hot water circulation pump",
+        "name_dhw_circmode": "Hot water circulation times",
+        "name_dhw_disinfectiontemp": "Hot water disinfection temperature",
+        "name_dhw_comfort": "Hot water comfort",
+        "value_on": "On",
+        "value_off": "Off",
+        "value_unknown": "not read yet",
+        "choice_hot": "Hot: always ready",
+        "choice_eco": "Eco: saves gas",
+        "choice_intelligent": "Intelligent: learns when you use it",
+        "pump_0": "Follows the heat demand",
+        "pump_fixed": "Fixed pressure, level {n}",
+        "circ_n": "{n} × 3 minutes an hour",
+        "circ_7": "Always on",
+        "range": "{low} to {high}",
+        "range_choices": "one of the choices below",
+        "verification_verified": "Verified on this boiler",
+        "verification_unverified": "Not yet verified: try it while you watch",
+        "verification_unsupported": "Not supported by this boiler",
+        "how_verified": "Verified on your boiler: the E32 writes it at once and reads it back.",
+        "how_watched": "Not yet verified on your boiler. After the change, watch the boiler for up to 15 minutes, then keep the new value or put it back. If you do neither, the E32 puts it back by itself.",
+        "state_off": "**off**: the E32 writes nothing to the boiler.",
+        "state_on": "**on**: {used} of {cap} changes used today.",
+        "state_busy": "a change of {setting} is running.",
+        "state_blocked": "**blocked**: a setting could not be put back. Check the boiler (Settings → Repairs).",
+        "state_not_now": "on, but not possible right now (the boiler test, an update or active heating is busy).",
+        "state_unavailable": "not possible on this E32.",
+        "off_heating": "the heating: radiators and floor get no heat",
+        "off_dhw": "the hot water: the taps stay cold",
+        "result_written": "Written and read back",
+        "result_kept": "Kept",
+        "result_unchanged": "Already set",
+        "result_not_taken": "Written, boiler did not take it",
+        "result_rejected": "Boiler refused",
+        "result_reverted": "Put back",
+        "result_boiler_restored": "The boiler went back by itself",
+        "result_not_started": "Not started",
+        "result_attendance_expired": "Not started: nobody confirmed",
+        "result_restored_after_restart": "Put back after a restart",
+        "result_failed": "Could not put it back: check the boiler",
+        "why_reverted_window_end": "nobody kept the new value within 15 minutes",
+        "why_reverted_cancelled": "the change was stopped (changing boiler settings was switched off, or the heating needed the boiler)",
+        "why_reverted_unconfirmed": "the boiler did not confirm the new value",
+        "why_reverted_mismatch": "the boiler reported another value",
+        "why_restored_after_restart": "the E32 restarted during the change",
+        "notify_title": "Boiler setting put back",
+        "notify_message": "The E32 put {setting} back to {before}: {why}.",
+        "cause_readback": "{setting} should be {before} again, but the boiler reports {readback}.",
+        "cause_no_answer": "The boiler did not answer when the E32 read {setting} back.",
+        "a_setting": "a boiler setting",
+        "reason_busy": "another change is running",
+        "reason_unreachable": "the E32 could not be reached ({error})",
+        "reason_not_verified": "it is no longer verified on this boiler; change it in Configure while you watch the boiler",
+        "reason_pending": "the E32 is still busy with it",
+        "refusal_persistent_writes_off": "changing boiler settings is off (Configure → Heating and boiler → Boiler settings)",
+        "refusal_too_soon_for_this_setting": "wait half a minute before changing it again",
+        "refusal_daily_limit_reached": "the E32 changes at most 12 boiler settings a day",
+        "refusal_check_boiler_first": "a setting could not be put back: check the boiler first (Settings → Repairs)",
+        "refusal_settings_busy": "another change is running",
+        "refusal_boiler_not_available": "not possible right now (the boiler test, an update or active heating is busy)",
+        "refusal_value_out_of_range": "the boiler does not accept this value",
+        "refusal_other": "the E32 refused it ({error})",
+        "cause_not_sent": "The E32 could not reach the boiler for 10 minutes to put {setting} back.",
+        "cause_restart_no_answer": "After a restart of the E32 the boiler did not answer when the E32 read {setting}.",
+        "cause_restart_value": "After a restart of the E32 the boiler reported {readback} for {setting}: neither the old nor the new value.",
+        "cause_detail": "(E32 reason: {detail})"
+      }
+    },
+    "tester_text": {
+      "options": {
+        "switched_on": "The tester program is on.",
+        "idle": "No bus recording yet.",
+        "recording": "Recording: {minutes} of 30 minutes, {frames} messages.",
+        "ready": "A bus recording is ready: {minutes} minutes, {frames} messages.",
+        "unavailable": "This E32 cannot make a bus recording (no room in its memory). You can still share the result.",
+        "not_supported": "This E32 firmware cannot make a bus recording yet. Update the E32 first, or share the result without one.",
+        "unreachable": "The E32 could not be reached just now."
       }
     }
   },
@@ -3910,7 +4582,7 @@
           "broker_login": "The E32 needs its own MQTT login first. On the E32, open System → Network and Home Assistant → MQTT, tick Enabled, enter the broker address and port and a broker user name and password, save and let the E32 restart. The E32 does not connect to Home Assistant through a broker without a login.",
           "mqtt_unconfirmed": "The E32 restarted with the Home Assistant settings, but Home Assistant received nothing from it over MQTT within 90 seconds. On the E32, check System → Network and Home Assistant → MQTT: the same broker as the MQTT integration in Home Assistant, and a user name and password that the broker accepts.",
           "e32_busy": "The E32 is updating or restarting. Wait until it is ready and try again.",
-          "ha_version_unsupported": "This integration needs Home Assistant 2026.10.0 or newer (tested with 2026.10.2 to 2026.10.4). Update Home Assistant; if yours is newer, check for an integration update. Nothing has been changed.",
+          "ha_version_unsupported": "This integration needs Home Assistant 2026.10.0 or newer (tested with 2026.10.2 to 2026.11.0). Update Home Assistant; if yours is newer, check for an integration update. Nothing has been changed.",
           "connection_failed": "The E32 connection could not be confirmed. Open Configure → E32 connection for details, then try again here.",
           "legacy_rooms_plan_changed": "The E32 room plan changed since this list was made (on the E32 page or elsewhere). Nothing has been removed. Check the updated list and submit again.",
           "legacy_rooms_plan_failed": "The E32 did not save the updated room plan, so nothing has been removed. Check that the E32 is ready and try again.",
@@ -3953,7 +4625,7 @@
           "broker_login": "The E32 needs its own MQTT login first. On the E32, open System → Network and Home Assistant → MQTT, tick Enabled, enter the broker address and port and a broker user name and password, save and let the E32 restart. The E32 does not connect to Home Assistant through a broker without a login.",
           "mqtt_unconfirmed": "The E32 restarted with the Home Assistant settings, but Home Assistant received nothing from it over MQTT within 90 seconds. On the E32, check System → Network and Home Assistant → MQTT: the same broker as the MQTT integration in Home Assistant, and a user name and password that the broker accepts.",
           "e32_busy": "The E32 is updating or restarting. Wait until it is ready and try again.",
-          "ha_version_unsupported": "This integration needs Home Assistant 2026.10.0 or newer (tested with 2026.10.2 to 2026.10.4). Update Home Assistant; if yours is newer, check for an integration update. Nothing has been changed.",
+          "ha_version_unsupported": "This integration needs Home Assistant 2026.10.0 or newer (tested with 2026.10.2 to 2026.11.0). Update Home Assistant; if yours is newer, check for an integration update. Nothing has been changed.",
           "connection_failed": "The E32 connection could not be confirmed. Open Configure → E32 connection for details, then try again here.",
           "legacy_rooms_plan_changed": "The E32 room plan changed since this list was made (on the E32 page or elsewhere). Nothing has been removed. Check the updated list and submit again.",
           "legacy_rooms_plan_failed": "The E32 did not save the updated room plan, so nothing has been removed. Check that the E32 is ready and try again.",
@@ -4011,7 +4683,7 @@
     },
     "valve_offline": {
       "title": "Radiator valve not reporting in {room}",
-      "description": "Not reporting to Zigbee2MQTT for more than two hours in {room}: {valves}. Check the battery and the Zigbee connection. The room keeps heating on its other temperature sources; a valve keeps regulating on its last setpoint by itself."
+      "description": "Not reporting for more than two hours in {room}: {valves}. Check the battery and the valve's connection (Zigbee or the BLU Gateway). The room keeps heating on its other temperature sources; a valve keeps regulating on its last setpoint by itself."
     },
     "valve_single_source": {
       "title": "{room} relies on a single temperature source",
@@ -4086,6 +4758,106 @@
           "room_missing": "This room is no longer in the E32 room plan."
         }
       }
+    },
+    "e32_boiler_setting_failed": {
+      "title": "Check the boiler: a setting could not be put back",
+      "description": "The E32 changed {setting} and tried to put it back to {before}, but could not confirm it. {cause} Until you confirm, the E32 changes no boiler setting. Choose Fix once you have checked the boiler.",
+      "fix_flow": {
+        "step": {
+          "boiler_setting_checked": {
+            "title": "Check the boiler",
+            "description": "{cause}\n\nLook at {setting} on the boiler (its display or its manual) and set it to {before} yourself if needed. Then submit: the E32 may change boiler settings again."
+          }
+        },
+        "error": {
+          "e32_settings_no_free_session": "The E32 has no free web session: close E32 pages you do not use, or wait two minutes, then try again.",
+          "e32_settings_unreachable": "The E32 could not be reached ({error}). Nothing was saved.",
+          "e32_settings_busy": "The E32 is updating or restarting. Try again once its web page opens normally.",
+          "e32_settings_changed": "The E32 settings were changed meanwhile (on its web page?). Nothing was saved; try again.",
+          "e32_settings_invalid": "The E32 refused these settings. Nothing was saved.",
+          "e32_settings_unconfirmed": "The E32 could not confirm that the settings were saved. Check them on the E32 before trying again.",
+          "boiler_setting_refused": "The E32 refused the change ({error}).",
+          "e32_password_changed": "The E32 no longer accepts the saved password. Home Assistant asks for the new one: Settings → Devices & services → OpenThermostat → Re-authenticate.",
+          "e32_settings_password_default": "The E32 still uses its default password and accepts no changes until you choose a new one: Settings → Repairs → “E32 still uses the default password”.",
+          "e32_settings_update_required": "This E32 firmware does not offer this setting. Update the E32 (Firmware update) first."
+        },
+        "abort": {
+          "e32_rooms_unavailable": "Connect the E32 first (E32 connection) so Home Assistant can edit its room plan."
+        }
+      }
+    },
+    "circuit_pump_unreachable": {
+      "title": "{circuit}: the pump's Plug does not answer",
+      "description": "The E32 has had no answer from the Shelly Plug of the pump for more than 3 minutes. The rooms keep asking for heat, and the Plug switches the pump back on by itself within 30 minutes. Check that the Plug has power and Wi-Fi and keeps its fixed address in your router. This message disappears by itself once the Plug answers again."
+    },
+    "circuit_pump_error": {
+      "title": "{circuit}: the pump's Plug reports an error",
+      "description": "The Shelly Plug of the pump answers with an error. Unplug it for 10 seconds; if this message stays, update the Plug's firmware in the Shelly app."
+    },
+    "circuit_pump_wrong_device": {
+      "title": "{circuit}: another device answers at the Plug's address",
+      "description": "Another device now answers at the address of the pump's Shelly Plug, so the E32 sends it nothing. Give the Plug a fixed address (DHCP reservation) in your router, or enter its new address on the E32's Shelly page."
+    },
+    "circuit_pump_password": {
+      "title": "{circuit}: the Plug refuses the E32's password",
+      "description": "The pump's Shelly Plug refuses the password the E32 has for it. Enter the Plug's password again on the E32's Shelly page."
+    },
+    "circuit_pump_no_power": {
+      "title": "{circuit}: the pump takes no power",
+      "description": "The Plug is on, but the pump has taken almost no power for 2 minutes. Usually the pump's own switch (a thermostat on the pipe) still holds it off: have it bridged or set to its lowest. Otherwise check the pump's plug and the pump itself."
+    },
+    "circuit_probe_missing": {
+      "title": "{circuit}: the supply probe gives no reading",
+      "description": "The probe on the supply pipe has given no reading for 5 minutes. Check its cable at The Pill and that it sits firmly on the pipe. The E32 keeps switching the pump without it, but meanwhile nobody watches for too hot water."
+    },
+    "circuit_too_hot": {
+      "title": "{circuit}: water too hot, pump off",
+      "description": "The water to this circuit stayed more than 5 °C above its maximum for 2 minutes, so the E32 switched the pump off. Check the mixing valve. The pump starts again by itself once the water is below its maximum."
+    },
+    "probe_no_reading": {
+      "title": "Temperature probe gives no reading",
+      "description": "No reading for 5 minutes from: {probes}. Check the probe's cable at The Pill and that it sits firmly on the pipe."
+    },
+    "valve_gateway_silent": {
+      "title": "The BLU Gateway does not answer",
+      "description": "The E32 cannot reach the Shelly BLU Gateway of these valves: {valves}. The valves keep their last target or position. Check the gateway's USB power and Wi-Fi; the E32 picks it up again by itself."
+    },
+    "valve_not_found": {
+      "title": "Radiator valve not found at the BLU Gateway in {room}",
+      "description": "The BLU Gateway does not know these valves (any more), or they are not paired with it: {valves}. Pair the valve again in the Shelly app and check that it is listed with its gateway on the E32's Shelly page, or remove it from the room."
+    },
+    "boiler_other_boiler": {
+      "title": "A different boiler is connected",
+      "fix_flow": {
+        "step": {
+          "confirm_boiler": {
+            "title": "Confirm the boiler now connected",
+            "description": "{name}: confirm on the E32 that {boiler} is your boiler now. The E32 then recognises it again, which takes about 10 minutes. It controls an EMS+ boiler only once its model is verified; an EMS Classic boiler the Classic way."
+          }
+        },
+        "error": {
+          "e32_settings_no_free_session": "The E32 has no free web session: close E32 pages you do not use, or wait two minutes, then try again.",
+          "e32_settings_unreachable": "The E32 could not be reached ({error}). Nothing was saved.",
+          "e32_settings_busy": "The E32 is updating or restarting. Try again once its web page opens normally.",
+          "e32_settings_unconfirmed": "The E32 could not confirm that the settings were saved. Check them on the E32 before trying again."
+        },
+        "abort": {
+          "e32_rooms_unavailable": "Connect the E32 first (E32 connection) so Home Assistant can edit its room plan.",
+          "e32_password_changed": "The E32 no longer accepts the saved password. Home Assistant asks for the new one: Settings → Devices & services → OpenThermostat → Re-authenticate.",
+          "e32_settings_password_default": "The E32 still uses its default password and accepts no changes until you choose a new one: Settings → Repairs → “E32 still uses the default password”.",
+          "e32_settings_update_required": "This E32 firmware does not offer this setting. Update the E32 (Firmware update) first.",
+          "boiler_confirmed": "This boiler is already confirmed on the E32. Nothing else to do."
+        }
+      },
+      "description": "{name}: the E32 found a different boiler on the bus: {boiler}. Until it is confirmed, the E32 does not control an EMS+ boiler; an EMS Classic boiler stays controlled the Classic way. Did you replace the boiler? Choose Fix to confirm it. If not, check the cable between the E32 and the boiler."
+    },
+    "tester_recording_unavailable": {
+      "title": "The E32 cannot make a bus recording",
+      "description": "{name}: the tester program is on, but this E32 has no room in its memory for a bus recording. Restart the E32 and start the recording again. You can still share the result without one, or switch the tester program off: Configure → Advanced and diagnostics → Tester program."
+    },
+    "tester_recording_update": {
+      "title": "Update the E32 for the bus recording",
+      "description": "{name}: the tester program is on, but this E32 firmware cannot make a bus recording yet. Update the E32 (Firmware update). You can still share the result without one, or switch the tester program off: Configure → Advanced and diagnostics → Tester program."
     }
   },
   "services": {
@@ -4322,6 +5094,18 @@
     },
     "e32_busy": {
       "message": "The E32 is updating or restarting. Try again once its web page opens normally."
+    },
+    "boiler_setting_refused": {
+      "message": "The E32 did not change {setting}: {reason}."
+    },
+    "shelly_rejected": {
+      "message": "The E32 refused the change ({error}). Nothing was changed."
+    },
+    "shelly_unconfirmed": {
+      "message": "The E32 did not confirm the change. Try again in a minute."
+    },
+    "shelly_unreachable": {
+      "message": "The E32 could not be reached to change the pump ({error})."
     }
   },
   "device": {
@@ -4336,6 +5120,12 @@
     },
     "ems_boiler_brand": {
       "name": "{brand} boiler (product {product}) ({address})"
+    },
+    "circuit_floor": {
+      "name": "Floor circuit"
+    },
+    "circuit_radiators": {
+      "name": "Radiator circuit"
     }
   }
 }

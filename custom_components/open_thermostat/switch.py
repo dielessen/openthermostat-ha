@@ -19,3 +19,5 @@ async def async_setup_entry(
     await async_setup_switches(hass, entry, async_add_entities)
     from .e32_valves import async_setup_switches as async_setup_valve_switches
     await async_setup_valve_switches(hass, entry, async_add_entities)
+    from .e32_boiler_settings_entities import async_setup_platform
+    await async_setup_platform(hass, entry, async_add_entities, "switch")  # boiler settings verified here

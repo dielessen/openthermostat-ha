@@ -128,9 +128,20 @@ CATALOG_FIELDS = (
     ('last_blocking_error_number', 'code', 1, REQUEST_ONLY, (17,), 0, 9999),
     ('boiler_uptime', 'min', 1, REQUEST_ONLY, (20,), 0, 16777214),
     ('thermostat_requested_dhw_temperature', 'degC', 1, 180000, (51,), 0, 100),
+    ('plus_status_info', 'bits', 1, 180000, (228,), 0, 254),
+    ('plus_display_code', 'text', 1, 180000, (228,), 2105376, 8289918),
+    ('plus_cause_code', 'code', 1, 180000, (228,), 0, 65534),
+    ('plus_heating_active', 'bool', 1, 180000, (228,), 0, 1),
+    ('plus_anti_cycle_time', 'min', 1, 180000, (228,), 0, 60),
+    ('plus_dhw_three_way_valve', 'bool', 1, 180000, (229,), 0, 1),
+    ('plus_heating_starts', 'starts', 1, 180000, (229,), 0, 16777214),
+    ('plus_heating_enabled', 'bool', 1, REQUEST_ONLY, (230,), 0, 1),
+    ('plus_dhw_enabled', 'bool', 1, REQUEST_ONLY, (234,), 0, 1),
 )
 # EMS 3-byte lifetime counters (EntityKind::u24): Home Assistant total_increasing
-CATALOG_COUNTERS = frozenset({'plus_burner_starts', 'plus_burner_runtime', 'plus_heating_runtime', 'plus_dhw_runtime', 'plus_dhw_starts', 'boiler_uptime'})
+CATALOG_COUNTERS = frozenset({'plus_burner_starts', 'plus_burner_runtime', 'plus_heating_runtime', 'plus_dhw_runtime', 'plus_dhw_starts', 'boiler_uptime', 'plus_heating_starts'})
+# Three-character texts (EntityKind::text3, the EMS+ status display code): c0 << 16 | c1 << 8 | c2
+CATALOG_TEXT3 = frozenset({'plus_display_code'})
 # (name, telegram type) rows decoded from real frames with plausible values
 CATALOG_VERIFIED = frozenset({('thermostat_requested_flow_temperature', 26), ('thermostat_requested_burner_power', 26), ('thermostat_requested_pump_modulation', 26), ('thermostat_setpoint', 177), ('thermostat_room_temperature', 177), ('thermostat_requested_dhw_temperature', 51)})
 # END GENERATED CATALOG FIELDS
@@ -194,7 +205,18 @@ PLUS_CLASSIC_TWINS = {
     'plus_dhw_selected_temperature': 'selected_dhw_temperature',
     'plus_heating_temperature': 'configured_heating_temperature',
     'plus_maximum_burner_power': 'maximum_burner_power',
+    # E4: E1's EMS+ fields appended to the catalog. Their status display (0xE4 1-5) is the Classic display
+    # and service code (0x18); the status info byte, the anti-cycle time left and the 3-way valve relay
+    # have no Classic field (plus_dhw_valve already pairs with the Classic valve bit).
+    'plus_display_code': 'display_code',
+    'plus_cause_code': 'service_number',
+    'plus_heating_active': 'heating_active',
+    'plus_heating_starts': 'reported_heating_starts',
+    'plus_heating_enabled': 'heating_enabled',
+    'plus_dhw_enabled': 'dhw_enabled',
 }
+# EMS+ catalog fields with no Classic field of the same value: an entity of their own.
+PLUS_WITHOUT_TWIN = frozenset({'plus_status_info', 'plus_anti_cycle_time', 'plus_dhw_three_way_valve'})
 INDEX_BY_NAME = {spec(index)[0]: index for index in INDEXES}
 _TWIN = {}
 for _plus, _classic in PLUS_CLASSIC_TWINS.items():
@@ -277,8 +299,27 @@ def validate_field(field, index, sampled):
           or not integer(source, FIELDS[index][4], FIELDS[index][4])
           or (raw is not None and not integer(raw, *LIMITS[index]))):
         raise ValueError("boiler field value")
-    if spec(index)[1] == "text" and raw is not None and not (32 <= raw >> 8 <= 126 and 32 <= raw & 255 <= 126):
+    if not printable_text(index, raw):
         raise ValueError("boiler display code")
+
+
+def text_width(index):
+    """The characters of a text field: three for the EMS+ status display code (CATALOG_TEXT3), else two."""
+    return 3 if index >= CATALOG_BASE and spec(index)[0] in CATALOG_TEXT3 else 2
+
+
+def text_value(index, raw):
+    """A text field's raw value as its characters (c0 << 16 | c1 << 8 | c2 for three)."""
+    width = text_width(index)
+    return "".join(chr((raw >> (8 * k)) & 255) for k in range(width - 1, -1, -1))
+
+
+def printable_text(index, raw):
+    """True unless a display or error code holds a character that is not printable ASCII."""
+    if spec(index)[1] != "text" or raw is None:
+        return True
+    width = text_width(index)
+    return 0 <= raw < 1 << (8 * width) and all(32 <= (raw >> (8 * k)) & 255 <= 126 for k in range(width))
 
 
 def _validate_values(value):
@@ -317,7 +358,10 @@ def validate_group(value, group):
     fields = value["fields"]
     begin = group * PER_GROUP
     end = len(FIELDS) if group < GROUPS else CATALOG_BASE + len(CATALOG_FIELDS)
-    if type(fields) is not list or len(fields) != min(PER_GROUP, end-begin):
+    expected = min(PER_GROUP, end-begin)
+    # E4: a catalog group of an E32 with a smaller catalog (it only grows at its end; 1.0.1 has 36 fields, so its
+    # group 10 holds 6) has fewer fields, each still checked by its index below.
+    if type(fields) is not list or not (len(fields) == expected or group >= GROUPS and 1 <= len(fields) < expected):
         raise ValueError("boiler group size")
     for index, field in enumerate(fields, begin):
         if (type(field) is not list or len(field) != 5 or not integer(field[0], index, index)
@@ -338,7 +382,7 @@ def validate_group(value, group):
               or not integer(source, FIELDS[index][4], FIELDS[index][4])
               or (raw is not None and not integer(raw, *LIMITS[index]))):
             raise ValueError("boiler field value")
-        if spec(index)[1] == "text" and raw is not None and not (32 <= raw >> 8 <= 126 and 32 <= raw & 255 <= 126):
+        if not printable_text(index, raw):
             raise ValueError("boiler display code")
     return value
 

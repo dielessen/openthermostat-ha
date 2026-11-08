@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from .const import (CONF_CREATE_DASHBOARD, CONF_TOPIC_PREFIX, DOMAIN, E32_DEVICE_NAME, MANUFACTURER,
-                    OLD_MANUFACTURER, PLATFORMS, TEST_SETUP_DEVICE_NAMES)
+                    OLD_MANUFACTURER, PLATFORMS)
 from .dashboard import RoomDashboard
 from .heating import HeatingTracker
 
@@ -58,16 +58,6 @@ def _rename_old_manufacturer(hass, entry):
             registry.async_update_device(device.id, manufacturer=MANUFACTURER)
 
 
-def _drop_test_setup_name(hass, entry):
-    """The hub device's long name from the project's test setup (TEST_SETUP_DEVICE_NAMES) goes: its entities
-    read "OpenThermostat E32 …" again instead of "E32-regelaar — ketel en diagnose …". Only that exact name;
-    a name the user chose stays. The entity IDs never change with a device name."""
-    registry = dr.async_get(hass)
-    device = registry.async_get_device_by_identifier((DOMAIN, entry.data[CONF_TOPIC_PREFIX]), entry.entry_id)
-    if device is not None and device.name_by_user in TEST_SETUP_DEVICE_NAMES:
-        registry.async_update_device(device.id, name_by_user=None)
-
-
 def _close_hub(state):
     """No new E32 entities once the entry unloads (heating_link.HeatingHub.close)."""
     if (hub := state.get("heating_hub")) is not None:
@@ -96,7 +86,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             config_entry_id=entry.entry_id, identifiers={(DOMAIN, prefix)},
             name="OpenThermostat", manufacturer=MANUFACTURER, model="OpenThermostat")
         _rename_old_manufacturer(hass, entry)
-        _drop_test_setup_name(hass, entry)
         if entry.options.get(CONF_CREATE_DASHBOARD, False):
             dashboard = RoomDashboard(hass, prefix, entry.entry_id)
             state["dashboard"] = dashboard
@@ -140,6 +129,11 @@ async def _async_options_updated(hass, entry):
     if password_only_update(state, entry):
         # Only the E32 password changed (re-authentication): use it, no reload or plan review.
         apply_password(hass, entry, state)
+        remember_configuration(hass, entry)
+        return
+    from .boiler_share import tester_only_update
+    if tester_only_update(state, entry):
+        # Only the Tester programme switch changed (boiler_share): its monitor follows, no reload.
         remember_configuration(hass, entry)
         return
     from .energy_input import energy_only_update
@@ -460,9 +454,6 @@ async def async_setup_entry(hass, entry):
         raise ConfigEntryNotReady("mqtt_unavailable")
     from .v1_heating_graph import reconcile_removed_rooms
     reconcile_removed_rooms(hass, entry)
-    # The hub's leftover test-setup name (TEST_SETUP_DEVICE_NAMES) also goes on this route: before 1.0 it
-    # was dropped on the legacy route only, so a shadow-mode installation kept it.
-    _drop_test_setup_name(hass, entry)
     from .v1_runtime import ShadowRuntime
     from .product import is_product
     product = is_product(entry)
@@ -521,10 +512,8 @@ async def async_setup_entry(hass, entry):
             # The dashboard cards' modules, also without the managed dashboard (idempotent, never raises).
             from .week_planner import async_ensure_cards
             await async_ensure_cards(hass)
-            tracker = HeatingTracker(hass, entry)
-            state["heating_tracker"] = tracker
-            cleanup.push_async_callback(tracker.async_stop)
-            await tracker.async_start()
+            # No legacy HeatingTracker here (R4-25): its <prefix>/status, /room_data and /ems_status topics are
+            # never published by E32 firmware; only the legacy route (_legacy_setup_entry) starts one.
             # Daily backups of the E32 settings (before the platforms: the button and sensor use them).
             from .e32_backup import async_setup_backups
             backups = None
@@ -541,6 +530,12 @@ async def async_setup_entry(hass, entry):
                 cleanup.callback(setup_time_zone_check(hass, entry, backups))
             except Exception:  # optional: never blocks the rooms
                 _LOGGER.exception("OpenThermostat %s: the E32 time zone check could not be started", entry.title)
+            # The tester programme (boiler_share, E5): the bus recording's status while it is switched on.
+            from .boiler_share import setup_tester
+            try:
+                cleanup.callback(setup_tester(hass, entry, state))
+            except Exception:  # optional: never blocks the rooms
+                _LOGGER.exception("OpenThermostat %s: the tester programme could not be started", entry.title)
         if not stale_link:
             await runtime.async_start()
         if runtime.enabled:
@@ -598,6 +593,11 @@ async def async_remove_entry(hass, entry):
     # Its insight notifications and the ones the owner dismissed (E32 rc.5, insight.py).
     from .insight import async_remove_insight
     await async_remove_insight(hass, entry.entry_id)
+    # What the shared bookkeeping kept for it: the Repairs groups and the information notes (R4-31).
+    from .issue_sync import forget_entry
+    forget_entry(hass, entry.entry_id)
+    from .metrics_reports import async_forget_entry
+    await async_forget_entry(hass, entry.entry_id)
     # The last installation removed: browsers stop loading the dashboard cards (week_planner).
     if not any(other.entry_id != entry.entry_id for other in hass.config_entries.async_entries(DOMAIN)):
         from .week_planner import async_remove_card_modules

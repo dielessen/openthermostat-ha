@@ -16,7 +16,9 @@ the summary as ``insight`` (heating_link.decode_insight):
   still learned) and ``return`` (the return temperature is reported). The flow document (fw/telemetry/flow)
   carries the same object beside ``flow``; the insight's wins;
 - ``house``: the house model (heat loss, emitter output, the curve it implies); not shown on its own;
-- ``insights``: yesterday against the house's own usual days, at most 4: {"kind", "pct", "room"?}.
+- ``insights``: yesterday against the house's own usual days, at most 4: {"kind", "pct", "room"?}; with E32 1.1
+  and floor loop probes on The Pill also one floor loop against the others (Shelly P5, LoopBalance):
+  {"kind": "loop_warm"|"loop_cold", "loop": 1..8, "delta_c": x}.
 
 On the product device, no new device: the sensor "Knowledge" (the percentage; the missing items as
 sentences and ``more``) and the sensor "Boiler response" (its state; held today, rest, ceiling, absorbed
@@ -44,6 +46,7 @@ from .learned_overview import language, number as decimal
 HOUSE_KEYS = ("curve", "boiler_minimum", "boiler_response", "house")
 ROOM_KEYS = ("warmup", "cooling", "arrival")
 INSIGHT_KINDS = ("gas_per_dd_up", "gas_per_dd_down", "starts_up", "hours_per_dd_up", "warmup_slower")
+LOOP_KINDS = ("loop_warm", "loop_cold")  # E32 1.1: a floor loop returns warmer or cooler than the others
 MAX_INSIGHTS = 8  # the E32 sends at most 4
 BOILER_STATES = ["collecting", "learned", "no_return", "not_driving"]
 # hass.data: per installation, the notifications this Home Assistant run shows (kept over an entry reload).
@@ -92,6 +95,15 @@ TEXT = {
                               "slow a room down.",
         "note": "The E32 compares each day with your house's own usual days, corrected for how cold it was. This is "
                 "information; you do not need to do anything.",
+        "insight.loop_warm": "Floor loop {loop} returns {delta} °C warmer than the others.",
+        "insight.loop_cold": "Floor loop {loop} returns {delta} °C cooler than the others.",
+        "title.loop_warm": "Floor loop {loop} returns warmer",
+        "title.loop_cold": "Floor loop {loop} returns cooler",
+        "mean.loop_warm": "It may be set too open: the other loops then get less water.",
+        "mean.loop_cold": "It may get too little water: open its valve on the manifold a little further, or the others "
+                          "a little less.",
+        "note.loop": "The E32 compares the water coming back from the floor loops over hours of floor heating. It "
+                     "changes nothing itself.",
     },
     "nl": {
         "missing.warmup": "Hij moet nog zien hoe snel {room} opwarmt.",
@@ -137,6 +149,15 @@ TEXT = {
                               "vertragen.",
         "note": "De E32 vergelijkt elke dag met de gewone dagen van je eigen huis, gecorrigeerd voor hoe koud het was. Dit "
                 "is informatie; je hoeft niets te doen.",
+        "insight.loop_warm": "Vloergroep {loop} komt {delta} °C warmer terug dan de andere.",
+        "insight.loop_cold": "Vloergroep {loop} komt {delta} °C kouder terug dan de andere.",
+        "title.loop_warm": "Vloergroep {loop} komt warmer terug",
+        "title.loop_cold": "Vloergroep {loop} komt kouder terug",
+        "mean.loop_warm": "Misschien staat hij te ver open: de andere groepen krijgen dan minder water.",
+        "mean.loop_cold": "Misschien krijgt hij te weinig water: draai zijn kraan op de verdeler iets verder open, of die "
+                          "van de andere iets minder.",
+        "note.loop": "De E32 vergelijkt het water dat terugkomt uit de vloergroepen over uren vloerverwarming. Zelf "
+                     "verandert hij niets.",
     },
     # Polish: a room name stands after "pomieszczenie" (docs/UX-GLOSSARY.md), so the sentence fits any name.
     "pl": {
@@ -186,6 +207,15 @@ TEXT = {
                               "nagrzewanie.",
         "note": "E32 porównuje każdy dzień ze zwykłymi dniami Twojego domu, z uwzględnieniem tego, jak było zimno. To "
                 "informacja; nie musisz nic robić.",
+        "insight.loop_warm": "Woda z pętli podłogowej {loop} wraca o {delta} °C cieplejsza niż z pozostałych.",
+        "insight.loop_cold": "Woda z pętli podłogowej {loop} wraca o {delta} °C chłodniejsza niż z pozostałych.",
+        "title.loop_warm": "Pętla podłogowa {loop} wraca cieplejsza",
+        "title.loop_cold": "Pętla podłogowa {loop} wraca chłodniejsza",
+        "mean.loop_warm": "Może być zbyt mocno otwarta: pozostałe pętle dostają wtedy mniej wody.",
+        "mean.loop_cold": "Może dostawać za mało wody: otwórz nieco bardziej jej zawór na rozdzielaczu albo nieco mniej "
+                          "zawory pozostałych.",
+        "note.loop": "E32 porównuje wodę wracającą z pętli podłogowych przez wiele godzin ogrzewania podłogowego. Sam "
+                     "niczego nie zmienia.",
     },
 }
 
@@ -218,18 +248,22 @@ def missing_item(key):
     return (kind, room) if colon and kind in ROOM_KEYS and ROOM_ID.fullmatch(room) else None
 
 
-def missing_sentences(part, names, lang):
-    """(sentences, more): each missing item in words, in the E32's order; an unknown key counts in more."""
-    t, sentences = TEXT[lang], []
-    more = part["more"] if part else 0
+def missing_items(part, names):
+    """[{"kind", "room"}]: each missing item this version knows, in the E32's order, with the room's name (or None)."""
+    items = []
     for key in (part or {}).get("missing") or []:
         item = missing_item(key)
-        if item is None:
-            more += 1
-            continue
-        kind, room = item
-        sentences.append(t["missing." + kind].format(room=names.get(room, room) if room else ""))
-    return sentences, more
+        if item is not None:
+            kind, room = item
+            items.append({"kind": kind, "room": names.get(room, room) if room else None})
+    return items
+
+
+def missing_sentences(part, names, lang):
+    """(sentences, more): each missing item in words, in the E32's order; an unknown key counts in more."""
+    t, items = TEXT[lang], missing_items(part, names)
+    more = (part["more"] if part else 0) + len((part or {}).get("missing") or []) - len(items)
+    return [t["missing." + item["kind"]].format(room=item["room"] or "") for item in items], more
 
 
 def boiler_response(summary):
@@ -315,10 +349,16 @@ def boiler_sentence(values, lang, cap=None, smart=None):
 
 
 def insight_items(summary):
-    """Yesterday's insights as the E32 reported them, checked: [{"kind", "pct", "room"}]."""
+    """Yesterday's insights as the E32 reported them, checked: [{"kind", "pct", "room"}]; a floor loop's (E32 1.1)
+    as {"kind", "pct": the difference in whole °C, "room": None, "loop": 1..8}."""
     items = (insight_status(summary) or {}).get("insights")
     result = []
     for item in items if type(items) is list else []:
+        if type(item) is dict and item.get("kind") in LOOP_KINDS:
+            loop, delta = item.get("loop"), number(item.get("delta_c"), -50, 50)
+            if type(loop) is int and 1 <= loop <= 8 and delta is not None:
+                result.append({"kind": item["kind"], "pct": round(abs(delta)), "room": None, "loop": loop})
+            continue
         if type(item) is not dict or item.get("kind") not in INSIGHT_KINDS:
             continue  # a kind this version does not know is left out, never half a sentence
         pct, room = number(item.get("pct"), 0, 10000), item.get("room")
@@ -332,7 +372,8 @@ def insight_items(summary):
 def insight_text(item, names, lang):
     """(title, text, meaning) of one insight in words."""
     t, kind = TEXT[lang], item["kind"]
-    values = {"pct": item["pct"], "room": names.get(item["room"], item["room"]) if item["room"] else ""}
+    values = {"pct": item["pct"], "room": names.get(item["room"], item["room"]) if item["room"] else "",
+              "loop": item.get("loop", ""), "delta": item["pct"]}
     return t["title." + kind].format(**values), t["insight." + kind].format(**values), t["mean." + kind]
 
 
@@ -386,7 +427,7 @@ class KnowledgeSensor(_InsightSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 0
     # The sentences are shown, not kept in the history (the percentage is).
-    _unrecorded_attributes = frozenset({"missing"})
+    _unrecorded_attributes = frozenset({"missing", "items"})
 
     def __init__(self, hub):
         self._attach(hub, "hub_knowledge")
@@ -402,9 +443,11 @@ class KnowledgeSensor(_InsightSensor):
         if part is None:
             return None
         entry = getattr(getattr(self, "platform", None), "config_entry", None)
-        missing, more = missing_sentences(part, room_names(self.hub, getattr(self, "hass", None),
-                                                           getattr(entry, "entry_id", None)), self._lang())
-        return {"missing": missing, "more": more}
+        names = room_names(self.hub, getattr(self, "hass", None), getattr(entry, "entry_id", None))
+        missing, more = missing_sentences(part, names, self._lang())
+        # HA 1.0.1: the same items as kinds and room names, so the card says them in the viewer's language (the
+        # sentences are in Home Assistant's own language).
+        return {"missing": missing, "more": more, "items": missing_items(part, names)}
 
 
 class BoilerResponseSensor(_InsightSensor):
@@ -445,6 +488,13 @@ class BoilerResponseSensor(_InsightSensor):
         if values is None:
             return None
         sentence = boiler_sentence(values, self._lang(), ceiling_in_effect(self.summary), self._smart())
+        if values.get("state") in ("collecting", "not_driving"):
+            # E4: a boiler the E32 may not control (not recognised yet, reading only, another boiler) says why,
+            # where it would say that the E32 is still listening.
+            from .boiler_capabilities import current, listening_replaced, state_sentence
+            doc = current(getattr(self, "hass", None), self.entry_id)
+            if listening_replaced(doc):
+                sentence = state_sentence(doc, self._lang())
         return {**{key: values[key] for key in ("held_today", "rest_min", "ceiling_c", "absorbed_kw", "kw_per_k",
                                                 "return_reported")},
                 "sentence": sentence}
@@ -454,7 +504,7 @@ class BoilerResponseSensor(_InsightSensor):
 
 
 def _signature(item):
-    return [item["kind"], item["room"], item["pct"]]
+    return [item["kind"], item["room"] if item["room"] else item.get("loop"), item["pct"]]
 
 
 def _dismissed(data):
@@ -503,7 +553,8 @@ class InsightNotifier:
             if self.dismissed.get(key) == _signature(item):
                 continue
             title, text, meaning = insight_text(item, names, lang)
-            shown = ("OpenThermostat: " + title, text + " " + meaning + "\n\n" + TEXT[lang]["note"], _signature(item))
+            note = TEXT[lang]["note.loop" if item["kind"] in LOOP_KINDS else "note"]
+            shown = ("OpenThermostat: " + title, text + " " + meaning + "\n\n" + note, _signature(item))
             if self.shown.get(key) != shown:
                 self.shown[key] = shown
                 persistent_notification.async_create(self.hass, shown[1], title=shown[0], notification_id=key)

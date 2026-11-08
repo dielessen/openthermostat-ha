@@ -47,7 +47,7 @@ const TEXT = {title: 'Your house', heating: 'Heating', status_heating: 'Heating 
  tap_open: 'Hot water: tap open', keeping_warm: 'Keeping hot water warm', gas_estimate: 'Gas today (estimate)',
  no_warmup: 'no warm-up yesterday', late_hours: '{h} h {m} min late', early_hours: '{h} h {m} min early',
  not_warm: 'not warm within 3 h', yesterday_starts: 'Burner starts per heating hour',
- yesterday_heating: 'Heating energy (estimate)', warm_on_time: '{room}: warm on time'};
+ yesterday_heating: 'Heating energy (estimate)', warm_on_time: '{room}: warm on time', late_h: '{h} h late', early_h: '{h} h early'};
 // The warm-on-time sensor's value for a room that did not get warm within 3 hours (the firmware's ArrivalLearner cap).
 const NOT_WARM_MIN = 180;
 const DASH = '—';  // a figure not known yet: the same in every language
@@ -69,6 +69,9 @@ const RESTATED = new Set(['heating', 'wants_heat', 'warm_enough']);
 // Sentences with a target of their own (room_overview.LINES with "target"): no "target X °C" in front of them, which
 // would say a figure twice, or two different ones during a warm-up.
 const OWN_TARGET = new Set(['warm_up', 'holiday', 'away', 'room_away', 'house_away', 'temporary', 'temporary_until']);
+// E32 1.0.1: the kind of contact that pauses the room (room_overview.opening), its glyph and English last resorts.
+const OPENING = {window: {icon: 'mdi:window-open-variant', words: {open: 'Window open', pending: 'Window open, pausing soon'}},
+ door: {icon: 'mdi:door-open', words: {open: 'Door open', pending: 'Door open, pausing soon'}}};
 const PRESENCE = {room_home: 'mdi:account-check', room_away: 'mdi:account-off-outline', house_home: 'mdi:home-account',
  house_away: 'mdi:home-export-outline'};
 const HISTORY_MS = 5 * 60000, STATS_MS = 10 * 60000, TICK_MS = 60000, DAY_MS = 86400000, PENDING_MS = 2 * 60000;
@@ -392,12 +395,17 @@ class OpenThermostatHouse extends OpenThermostatCard {
   // A new width (a phone turned, another column) places the hour marks around "now" again; nothing is asked.
   if (!this._resize && typeof ResizeObserver === 'function') this._resize = new ResizeObserver(() => this.fitTicks());
   this._resize?.observe(this);
+  // HA 1.0.1: Home Assistant's own font often arrives after the first drawing and makes the words wider without a new
+  // card width ("12 AM" under "now" in the demo at 390 px): the marks are placed again once it is there.
+  if (!this._fonts) this._fonts = () => { if (this.isConnected) this.fitTicks(); };
+  try { document.fonts?.addEventListener?.('loadingdone', this._fonts); document.fonts?.ready?.then(this._fonts); } catch (e) { /* older browser */ }
  }
  disconnectedCallback() {
   clearInterval(this._timer); this._timer = null;
   this._gen++;  // what is still on its way is dropped when it comes
   this._pending = {history: 0, stats: 0};
   this._resize?.disconnect();
+  try { document.fonts?.removeEventListener?.('loadingdone', this._fonts); } catch (e) { /* older browser */ }
  }
  getCardSize() { return 5; }
  getGridOptions() { return {columns: 12, min_columns: 12}; }
@@ -695,9 +703,14 @@ class OpenThermostatHouse extends OpenThermostatCard {
     'data-presence': a.presence}));
   }
   if (a.window === 'open' || a.window === 'pending') {
+   // E32 1.0.1 names the kind (the Reason sensor's opening): a door's own glyph and words ("Door open, pausing soon");
+   // E32 1.0.0 does not tell them apart: "Window or door open".
    const contact = typeof a.values?.contact === 'string' && a.values.contact ? a.values.contact + ': ' : '';
-   const text = contact + (this.word('room_reason.state_attributes.window.state.' + a.window) || a.window);
-   label.append(icon('mdi:window-open-variant', {role: 'img', 'aria-label': text, title: text, class: 'warn', 'data-window': a.window}));
+   const kind = OPENING[a.opening], key = kind ? a.opening + '_' + a.window : '';
+   const text = contact + (kind ? this.word('room_reason.state_attributes.card.state.' + key) || kind.words[a.window]
+    : this.word('room_reason.state_attributes.window.state.' + a.window) || a.window);
+   label.append(icon(kind ? kind.icon : 'mdi:window-open-variant', {role: 'img', 'aria-label': text, title: text, class: 'warn',
+    'data-window': a.window, ...(kind ? {'data-opening': a.opening} : {})}));
   }
   box.append(label);
   // As the sketch: the temperature large, under it its target and why it heats or not, in the room card's words.
@@ -814,7 +827,13 @@ class OpenThermostatHouse extends OpenThermostatCard {
   const hours = [...ticks.querySelectorAll('[data-hour]')];
   for (const span of hours) span.style.visibility = '';
   const a = now.getBoundingClientRect();
-  if (!a.width) return;  // not laid out yet (a hidden tab): the next redraw or a new width places them
+  if (!a.width) {  // not laid out yet (drawn before it was on the page): a few frames later, or a new width places them
+   this._fitTries = (this._fitTries || 0) + 1;
+   if (this.isConnected && !this._fitLater && this._fitTries <= 10)
+    this._fitLater = requestAnimationFrame(() => { this._fitLater = 0; this.fitTicks(); });
+   return;
+  }
+  this._fitTries = 0;
   for (const span of hours) {
    const b = span.getBoundingClientRect();
    if (b.right + 6 > a.left && b.left - 6 < a.right) span.style.visibility = 'hidden';
@@ -865,6 +884,8 @@ class OpenThermostatYesterday extends OpenThermostatCard {
    // away or on holiday) in words, muted, instead of "—" under a label that says it was warm.
    const minutes = value(room), m = minutes === null ? null : Math.round(minutes), num = m === null ? null : this.number(Math.abs(m));
    const long = m !== null && Math.abs(m) >= 60 ? {h: this.number(Math.floor(Math.abs(m) / 60)), m: this.number(Math.abs(m) % 60)} : null;
+   // A whole hour as the dashboard says it: "1 h late", never "1 h 0 min late" (HA 1.0.1, R4-17).
+   const hours = late => long && Math.abs(m) % 60 === 0 ? this.t(late ? 'late_h' : 'early_h', long) : long && this.t(late ? 'late_hours' : 'early_hours', long);
    const none = m === null && room.state === 'unknown';
    // The firmware records a room that did not get warm within 3 hours after the switch as 180 min late (ArrivalLearner):
    // that is no lateness to count, so it says so, muted as "no warm-up yesterday".
@@ -872,8 +893,8 @@ class OpenThermostatYesterday extends OpenThermostatCard {
    // A room that was not warm (no warm-up, or not within 3 hours) is labelled with the question, not "was warm".
    const name = c.room.name || room.attributes?.friendly_name || c.room.entity;
    add('room', c.room.entity, this.t(none || never ? 'warm_on_time' : 'warm', {room: name}),
-    none ? this.t('no_warmup') : never ? this.t('not_warm') : m === null ? null : m > 0 ? (long ? this.t('late_hours', long) : this.t('late', {m: num}))
-     : m < 0 ? (long ? this.t('early_hours', long) : this.t('early', {m: num})) : this.t('on_time'), none || never);
+    none ? this.t('no_warmup') : never ? this.t('not_warm') : m === null ? null : m > 0 ? (long ? hours(true) : this.t('late', {m: num}))
+     : m < 0 ? (long ? hours(false) : this.t('early', {m: num})) : this.t('on_time'), none || never);
   }
   const plain = (key, entity, label, v, unit) => {
    const num = v === null ? null : this.number(v, 1);

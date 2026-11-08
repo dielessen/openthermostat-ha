@@ -110,6 +110,12 @@ async def async_create_fix_flow(hass, issue_id, data):
     from .e32_reconfirm import RECONFIRM_ISSUE, ReconfirmTakeoverRepairFlow
     if issue_id.startswith(RECONFIRM_ISSUE + "_"):  # confirm the takeover again after a firmware update
         return ReconfirmTakeoverRepairFlow(issue_id, data)
+    from .e32_boiler_settings_flow import BoilerSettingFailedRepairFlow, issue_matches
+    if issue_matches(issue_id):  # a boiler setting could not be put back: the owner checked the boiler
+        return BoilerSettingFailedRepairFlow(issue_id, data)
+    from .boiler_capabilities import ISSUE as OTHER_BOILER_ISSUE, OtherBoilerRepairFlow
+    if issue_id.startswith(OTHER_BOILER_ISSUE + "_"):  # a different boiler: confirm it on the E32 (E4)
+        return OtherBoilerRepairFlow(issue_id, data)
     from .e32_system import TIME_ZONE_ISSUE, TimeZoneRepairFlow
     if issue_id.startswith(TIME_ZONE_ISSUE + "_"):  # the E32 takes Home Assistant's time zone
         return TimeZoneRepairFlow(issue_id, data)

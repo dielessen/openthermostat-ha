@@ -19,6 +19,8 @@ them; a plan without rooms never removes any
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import contextvars
 from copy import deepcopy
 from datetime import datetime, timezone
 import logging
@@ -187,6 +189,10 @@ class WriteSuperseded(Exception):
     """A newer write for the same key came in while this one waited: this one sends nothing."""
 
 
+# (link, task, client) while a task holds one E32 sign-in for several requests (RoomPlanLink.async_session).
+_SESSION = contextvars.ContextVar("openthermostat_e32_session", default=None)
+
+
 class RoomPlanLink:
     """The last plan read from the E32 and the only path that writes it."""
 
@@ -320,24 +326,59 @@ class RoomPlanLink:
         Returns what call(client) returns; raises ControllerLinkError.
         """
         wanted = self.claim(key) if write else None
-        waits = list(self.session_waits) if write else []
+        shared = _SESSION.get()
+        if shared is not None and shared[0] is self and shared[1] is asyncio.current_task():
+            # Inside async_session: this task already holds the lock and a signed-in client (R4-27).
+            if wanted is not None and not wanted():
+                raise WriteSuperseded()
+            return await call(shared[2])
         async with self._client() as client:
-            while True:
-                if wanted is not None and not wanted():
-                    raise WriteSuperseded()
-                async with self._lock:
-                    try:
-                        await self._sign_in(client)
-                    except ControllerLinkError as err:
-                        if not write or str(err) != "controller_session_capacity":
-                            raise
-                        if not waits:
-                            self._no_free_session()
-                    else:
-                        if write:
-                            self._session_issue(False)
-                        return await call(client)
-                await self._pause(waits.pop(0), wanted)
+            async with self._signed_in(client, write, wanted):
+                return await call(client)
+
+    @contextlib.asynccontextmanager
+    async def async_session(self):
+        """Several requests on one E32 sign-in (R4-27): each async_call of this task inside it uses that sign-in.
+
+        The E32 has only 4 web sessions; a slider move on an inactive room (switch it on, then its new target)
+        took two sign-ins and two sign-outs. This signs in once like a write (it waits for a free web session),
+        holds the lock until the last request is done and signs out after it is released. Tasks started inside
+        it make their own sign-in, as before.
+        """
+        current = asyncio.current_task()
+        shared = _SESSION.get()
+        if shared is not None and shared[0] is self and shared[1] is current:
+            yield
+            return
+        async with self._client() as client:
+            async with self._signed_in(client, True, None):
+                token = _SESSION.set((self, current, client))
+                try:
+                    yield
+                finally:
+                    _SESSION.reset(token)
+
+    @contextlib.asynccontextmanager
+    async def _signed_in(self, client, write, wanted):
+        """Hold the lock while client is signed in; a write waits for a free web session without holding it."""
+        waits = list(self.session_waits) if write else []
+        while True:
+            if wanted is not None and not wanted():
+                raise WriteSuperseded()
+            async with self._lock:
+                try:
+                    await self._sign_in(client)
+                except ControllerLinkError as err:
+                    if not write or str(err) != "controller_session_capacity":
+                        raise
+                    if not waits:
+                        self._no_free_session()
+                else:
+                    if write:
+                        self._session_issue(False)
+                    yield
+                    return
+            await self._pause(waits.pop(0), wanted)
 
     async def _sign_in(self, client):
         """One sign-in with the stored password, never with one the E32 refused before (any part of the entry)."""

@@ -14,12 +14,13 @@ async def async_setup_sensors(hass, entry, async_add_entities, *, native_metrics
     if native_metrics:
         from .device_diagnostics import async_setup_device_diagnostics
         await async_setup_device_diagnostics(hass, entry, async_add_entities, config_subentry_id=group_id)
-    tracker = hass.data[DOMAIN][entry.entry_id]["heating_tracker"]
+    # None for an E32 installation (R4-25): it runs no legacy HeatingTracker.
+    tracker = hass.data[DOMAIN][entry.entry_id].get("heating_tracker")
     online = False
     entities = {}
     command_entity = None
     # The DHW presentation reads legacy ems_status, which modern firmware never sends.
-    dhw = None if native_metrics else DhwStatus(prefix, tracker)
+    dhw = None if native_metrics or tracker is None else DhwStatus(prefix, tracker)
     if dhw is not None:
         async_add_entities([dhw], config_subentry_id=group_id)
 
@@ -33,7 +34,8 @@ async def async_setup_sensors(hass, entry, async_add_entities, *, native_metrics
             if entity._observation_field:
                 entity.update_from_tracker()
 
-    entry.async_on_unload(tracker.async_add_listener(refresh))
+    if tracker is not None:
+        entry.async_on_unload(tracker.async_add_listener(refresh))
 
     @callback
     def availability(message):

@@ -17,7 +17,9 @@ planner and, per room, the room status card (frontend/room-status-card.js):
   planner, the outdoor temperature, the next holiday). Nothing else;
 * Rooms: per room its thermostat, 24-hour graph, sensors, windows and people,
   and what it learned for that room; then the sensors that feed no single room;
-* Week program (with an E32 room plan): the visual week planner card;
+* Week program (with an E32 room plan): the visual week planner card; with
+  rooms of the older Home Assistant setup instead, Room settings (the first
+  such room's editor) and one subview per such room;
 * Boiler, in this order: Now (one card, custom:openthermostat-boiler-now: what
   the boiler does in a band of its colour with its display code in words, the
   connection with the boiler and whether it serves hot water; the water to the
@@ -42,7 +44,8 @@ planner and, per room, the room status card (frontend/room-status-card.js):
   the free heat under it beside your boiler, yesterday and the settings;
 * Diagnostics (last): the connection with the E32 in plain words (is it heard, do
   the room values reach it, the MQTT broker, the firmware), the E32 itself, the
-  thermostat on the boiler bus, the energy and hot water counters, the raw boiler data and the hot water capability;
+  thermostat on the boiler bus, the energy and hot water counters, the raw boiler data and the hot water capability,
+  and the older Home Assistant rooms' heat model and history while such rooms are left;
 * Comparison (subview, trial run with a thermostat on the bus only).
 
 Layout: every view is sections; a section hides as a whole while nothing in it
@@ -315,6 +318,7 @@ TEXT = {
         "gas_note": "Add heating and hot water to the Energy dashboard under Gas consumption; keeping warm is a part of hot water, so leave it out there.",
         "yesterday": "Yesterday", "burner_per_day": "Burner hours per day",
         "missed_per_day": "Missed comfort per day (minutes)",
+        "missed_series": "Missed comfort",
         "day_burner": "Burner {h} h, {starts}{short}.",
         "day_gas": "Gas: heating {heating}, hot water {hot_water}.",
         "day_room": "{room}: asked for heat {h} h; warm after {ttt} min on average; missed comfort {missed} min.",
@@ -452,6 +456,8 @@ TEXT = {
         "today_holiday": "{room} is on holiday until {date}; it is warm again when you are back.",
         "today_return": "{room} is warming up for your return.",
         "today_window": "{room} is paused: a window or door is open.",
+        "today_window_window": "{room} is paused: a window is open.",
+        "today_window_door": "{room} is paused: a door is open.",
         "day_yesterday": "Yesterday",
         "day_today": "Today",
         "day_on": "On {date}",
@@ -589,6 +595,7 @@ TEXT = {
         "gas_note": "Voeg verwarmen en warm water toe aan het energiedashboard onder Gasverbruik; warmhouden is een deel van warm water, laat dat daar weg.",
         "yesterday": "Gisteren", "burner_per_day": "Branderuren per dag",
         "missed_per_day": "Gemist comfort per dag (minuten)",
+        "missed_series": "Gemist comfort",
         "day_burner": "Brander {h} uur, {starts}{short}.",
         "day_gas": "Gas: verwarmen {heating}, warm water {hot_water}.",
         "day_room": "{room}: vroeg {h} uur warmte; gemiddeld na {ttt} min op temperatuur; gemist comfort {missed} min.",
@@ -722,6 +729,8 @@ TEXT = {
         "today_holiday": "{room} is met vakantie tot {date}; bij thuiskomst is het weer warm.",
         "today_return": "{room} warmt op voor je thuiskomst.",
         "today_window": "{room} is gepauzeerd: er staat een raam of deur open.",
+        "today_window_window": "{room} is gepauzeerd: er staat een raam open.",
+        "today_window_door": "{room} is gepauzeerd: er staat een deur open.",
         "day_yesterday": "Gisteren",
         "day_today": "Vandaag",
         "day_on": "Op {date}",
@@ -861,6 +870,7 @@ TEXT = {
                     "częścią ciepłej wody, więc tam je pomiń.",
         "yesterday": "Wczoraj", "burner_per_day": "Godziny pracy palnika na dzień",
         "missed_per_day": "Utracony komfort na dzień (minuty)",
+        "missed_series": "Utracony komfort",
         "day_burner": "Palnik: {h} godz., {starts}{short}.",
         "day_gas": "Gaz: ogrzewanie {heating}, ciepła woda {hot_water}.",
         "day_room": "{room}: żądanie ciepła przez {h} godz.; ciepło średnio po {ttt} min; utracony komfort {missed} min.",
@@ -998,6 +1008,8 @@ TEXT = {
         "today_holiday": "{room}: urlop do {date}; po powrocie będzie ciepło.",
         "today_return": "{room}: nagrzewanie na Twój powrót.",
         "today_window": "{room}: wstrzymane, otwarte okno lub drzwi.",
+        "today_window_window": "{room}: wstrzymane, otwarte okno.",
+        "today_window_door": "{room}: wstrzymane, otwarte drzwi.",
         "day_yesterday": "Wczoraj",
         "day_today": "Dziś",
         "day_on": "Dnia {date}",
@@ -1362,13 +1374,17 @@ def _boiler_section(t, boiler, flow=None, learned=None):
                           {"type": "markdown", "content": content})
 
 
-def _curve_section(t, curve):
+def _curve_section(t, curve, request=None):
     """Water temperature by outdoor temperature (E32 rc.5): the heating-curve card (frontend/heating-curve-card.js)
-    under a heading of its own, so the card leaves its own title out; shown while the curve has a value."""
+    under a heading of its own, so the card leaves its own title out; shown while the curve has a value. With the
+    heat request (``request``, HA 1.0.1) the card says "E32 would ask" in the trial run and before the takeover is
+    confirmed, as the house card does."""
     if not curve:
         return None
-    return _section_known([curve], _heading(t["curve_title"], ICONS["curve"]), _wide(
-        {"type": CURVE_CARD_TYPE, "entity": curve, "show_name": False, "visibility": _known(curve)}))
+    card = {"type": CURVE_CARD_TYPE, "entity": curve, "show_name": False, "visibility": _known(curve)}
+    if request:
+        card["request"] = request
+    return _section_known([curve], _heading(t["curve_title"], ICONS["curve"]), _wide(card))
 
 
 def _noticed_section(t, learned):
@@ -1543,7 +1559,9 @@ def _energy_section(t, hub):
         # The one gas chart of the dashboard; the Overview has today's figure, Learning yesterday's line.
         _per_day(t["gas_per_day"], [{"entity": entity_id, "name": name} for entity_id, name in posts], gas)
         if gas else None,
-        _per_day(t["burner_per_day"], [{"entity": burner}], burner) if burner else None,
+        # The legend names the series as short as its figure above it: the entity's own name ("OpenThermostat E32
+        # Burner time (total)") was cut on a phone (demo, HA 1.0.1).
+        _per_day(t["burner_per_day"], [{"entity": burner, "name": t["burner_today"]}], burner) if burner else None,
         note))
 
 
@@ -1723,7 +1741,7 @@ def _yesterday_figures(t, rooms, names, house, summary=None, missed=None, gas_un
         {"type": YESTERDAY_CARD_TYPE, "grid_options": {"columns": 12}, **figures, "visibility": _any_known(entities)}
         if figures else None,
         {"type": "markdown", "show_empty": False, "content": content},
-        _per_day(t["missed_per_day"], [{"entity": missed}], missed) if missed else None,
+        _per_day(t["missed_per_day"], [{"entity": missed, "name": t["missed_series"]}], missed) if missed else None,
         _note(t, t["scoreboard_note"]))
 
 
@@ -1890,6 +1908,17 @@ HELD_COMFORT = {"away": "holiday", "presence_away": "house_away", "window_open":
 NOT_WARM_MIN = 180  # ArrivalLearner: a room not warm within 3 hours counts as 3 hours late
 
 
+def _held_line(t, text, room, reason):
+    """Jinja: Today's line for a held room (HELD_REASONS). An open window names its kind when the E32 does (1.0.1, the
+    Reason sensor's ``opening``: "Living room is paused: a door is open."); 1.0.0 does not tell them apart."""
+    plain = "{{ " + _jinja_text(t[text], room=room) + " }}"
+    if text != "today_window":
+        return plain
+    return ("{% set op = state_attr(" + reason + ", 'opening') %}{% if op in ['window', 'door'] %}"
+            "{{ (" + _jinja_text(t["today_window_door"], room=room) + ") if op == 'door' else ("
+            + _jinja_text(t["today_window_window"], room=room) + ") }}{% else %}" + plain + "{% endif %}")
+
+
 def _arrived(t, warm):
     """Jinja: how the room's last judged warm-up turned out, from its "Warm on time" (scoreboard.py: minutes after the
     switch time, negative early). Today's figure once this morning was judged ("Today it was warm 2 minutes late."),
@@ -1961,7 +1990,7 @@ def _warm_up_line(t, name, start, state=None, warm=None, smart=None, reason=None
                 "{% if u is not none %}{% set u = as_local(u) %}{{ "
                 + _jinja_text(t["today_holiday"], room=room, date=_date(t, "u")) + " }}"
                 "{% else %}{{ " + _jinja_text(t["today_away"], room=room) + " }}{% endif %}"
-                + "".join("{% elif why == " + json.dumps(key) + " %}{{ " + _jinja_text(t[text], room=room) + " }}"
+                + "".join("{% elif why == " + json.dumps(key) + " %}" + _held_line(t, text, room, r)
                           for key, text in HELD_REASONS.items())
                 + "{% elif w is not none and g is number %}")
     # b: the planned start, w: the program step's time and g its temperature (local), d: days from today.
@@ -2765,7 +2794,7 @@ class RoomDashboard:
         # Smart warm-up and weather compensation as rows; after them what it learned and who controls the boiler.
         learning = [section for section in (_knowledge_section(t, hub.get("knowledge")),
                                             _boiler_section(t, hub.get("boiler_response"), flow, learned_overview),
-                                            _curve_section(t, flow.get("curve"))) if section]
+                                            _curve_section(t, flow.get("curve"), request)) if section]
         # Yesterday in figures, once (dashboard-spec §6): the scoreboard (E32 rc.4) and the daily summary, with the
         # gas in the gas sensor's unit. Is it getting better? Only once one figure has a value. The headline figures
         # large (rc.5, as the owner's sketch): the warm on time of the lead room, the first room switched on that

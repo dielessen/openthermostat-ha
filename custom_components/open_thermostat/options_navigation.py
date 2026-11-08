@@ -28,8 +28,15 @@ UNCHANGED = {"en": "Nothing changed.", "nl": "Niets veranderd.", "pl": "Nic się
 SAVED_REASONS = frozenset({
     "comfort_saved", "presence_saved", "installation_saved", "energy_saved", "e32_flow_options_saved",
     "e32_flow_limits_saved", "care_saved", "e32_logging_saved", "e32_time_zone_saved", "boiler_model_saved",
-    "house_mode_saved", "room_saved", "e32_room_saved"})
-UNCHANGED_REASONS = frozenset({"e32_room_unchanged", "care_unchanged", "e32_settings_unchanged"})
+    "house_mode_saved", "room_saved", "e32_room_saved", "heating_circuit_saved",
+    # Boiler settings (e32_boiler_settings_flow.MENU_RESULTS): the result of a change, shown on its menu.
+    "boiler_settings_allowed", "boiler_settings_stopped", "boiler_setting_saved", "boiler_setting_kept",
+    "boiler_setting_put_back", "boiler_setting_not_taken", "boiler_setting_rejected", "boiler_setting_restored",
+    "boiler_setting_not_started", "boiler_setting_reverted", "boiler_setting_pending",
+    # The tester programme (e32_tester): the bus recording started or stopped, the result written, switched off.
+    "tester_recording_started", "tester_recording_stopped", "tester_shared", "tester_switched_off"})
+UNCHANGED_REASONS = frozenset({"e32_room_unchanged", "care_unchanged", "e32_settings_unchanged",
+                               "boiler_setting_unchanged", "tester_unchanged"})
 
 # The room list after a save or removal is the Rooms menu with its own text.
 ALIASES = {"e32_rooms_saved": "e32_rooms", "e32_rooms_removed": "e32_rooms"}
@@ -51,6 +58,26 @@ def _abort_texts(language):
 def _language(hass):
     language = str(getattr(getattr(hass, "config", None), "language", "en") or "en").split("-")[0]
     return language if language in SAVED else "en"
+
+
+@lru_cache(maxsize=16)
+def _selector_texts(language, key):
+    path = Path(__file__).parent / "translations" / f"{language}.json"
+    return dict(json.loads(path.read_text(encoding="utf-8"))["selector"][key]["options"])
+
+
+async def async_flow_texts(hass, key):
+    """The text pieces of ``selector.<key>.options`` in the Home Assistant language (English, Dutch or Polish).
+
+    For texts a form builds itself (a list of rooms, a status line) that a description placeholder carries
+    (R4-24: Polish users got English): the pieces live in strings.json and its translations, with English for a
+    key a language lacks.
+    """
+    language = _language(hass)
+    texts = await hass.async_add_executor_job(_selector_texts, "en", key)
+    if language != "en":
+        texts = {**texts, **await hass.async_add_executor_job(_selector_texts, language, key)}
+    return texts
 
 
 def _wrap(step):

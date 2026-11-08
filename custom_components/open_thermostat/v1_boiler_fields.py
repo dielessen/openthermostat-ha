@@ -28,6 +28,11 @@ PLACEHOLDER = "not_reported_placeholder"
 # Registry option: disabled and hidden by apply_boiler_profile (this boiler lacks
 # the value); the record comes back by itself once the profile says supported.
 PROFILE_HIDDEN = "hidden_by_boiler_profile"
+
+
+def lifetime_counter(name):
+    """The boiler's own running totals (burner starts and hours, hot water starts, its uptime)."""
+    return not name.startswith("thermostat_") and (name.endswith(("_starts", "_runtime")) or name == "boiler_uptime")
 _INTEGRATION = er.RegistryEntryDisabler.INTEGRATION
 _HIDDEN = er.RegistryEntryHider.INTEGRATION
 
@@ -662,6 +667,11 @@ class BoilerFieldEntity(SensorEntity):
         from .display_codes import CODE_FIELDS
         self._cause_index = INDEX_BY_NAME.get(CODE_FIELDS[name]) if name in CODE_FIELDS else None
         self._code_field = name in CODE_FIELDS
+        # A boiler counter that has read 0 since the first value: behind an adapter such as the Bosch EasyControl
+        # the boiler's own counters are never filled in, and the E32's boiler profile counts a table counter's 0
+        # as a value. Unknown (with not_reported) until it counts; once it did, every value shows.
+        self._counter = any(lifetime_counter(spec(member)[0]) for member in self.members)
+        self._counted = False
         # Other whole numbers on the wire (counts, minutes, %, state bits): "9" and "37 %", not "9.0" and
         # "37.0 %"; only when every wire family of the value sends whole numbers.
         if (self._presentation is None and unit != "text"
@@ -762,13 +772,25 @@ class BoilerFieldEntity(SensorEntity):
             return None
         raw = value["raw"]
         name, unit, divisor, _ = spec(index)
+        if self._never_counted(raw):
+            return None
         if unit == "text":
-            return chr(raw >> 8) + chr(raw & 255)
+            from .boiler_fields import text_value
+            return text_value(index, raw)  # two characters, three for the EMS+ status display code
         if self._presentation is not None:
             return shown_value(self._presentation, raw)
         # A whole number on the wire stays one: Home Assistant shows a state without a unit as written, and
         # raw / 1 read "Service number 200.0" and "Boiler state bits (raw) 11.0".
         return raw if divisor == 1 else raw / divisor
+
+    def _never_counted(self, raw):
+        """True for a boiler counter that has read 0 since its first value (not reported by the boiler)."""
+        if not self._counter or self._counted:
+            return False
+        if raw != 0:
+            self._counted = True
+            return False
+        return True
 
     def _code_attributes(self):
         if not self._code_field:
@@ -795,7 +817,9 @@ class BoilerFieldEntity(SensorEntity):
         raw = ({"raw_value": value["raw"]} if usable and self._presentation is not None else {}) | (
             {"hex": f"0x{value['raw']:02X}"} if usable and unit == "bits" else {})
         live = self._live()
-        reason = ("session_unavailable" if not live and not self.client.ready else
+        never = usable and self._never_counted(value["raw"])
+        reason = ("not_reported" if never else
+                  "session_unavailable" if not live and not self.client.ready else
                   "capability_unavailable" if not live else
                   "not_fitted" if profile == "not_fitted" and not (value and value["usable"]) else
                   "not_reported" if profile == "not_reported" and not (value and value["usable"]) else
@@ -803,6 +827,7 @@ class BoilerFieldEntity(SensorEntity):
         return {"data_role":"read_only_boiler_field", "control_qualified":False,
                 "field_name":name, "raw_divisor":divisor, "source_ttl_ms":ttl,
                 **self._read_attributes(index, usable),
+                **({"not_reported": True} if never else {}),
                 "measurement_state":value["measurement_state"] if value else "unknown",
                 "availability_reason":reason,
                 "age_basis":"firmware_snapshot_plus_local_elapsed; network transit unmeasured",

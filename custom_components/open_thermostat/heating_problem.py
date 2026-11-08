@@ -24,7 +24,10 @@ each held long enough that a short hiccup never raises it:
   target for WARN_ROOM_SLOW_HOURS (with a working measurement; a gap in the
   E32's data starts the wait again, so nothing fires on a day with gaps);
 * the E32 is online but Home Assistant has had no working session with it for
-  WARN_SESSION_LOST_MINUTES (the shadow link is switched on but not ready).
+  WARN_SESSION_LOST_MINUTES (the shadow link is switched on but not ready);
+* the burner keeps switching on and off too often after the E32's self-tuning had its
+  chance (E32 1.0.1 ``tuning.short_cycling_persists``: its burner rest at its limit, or three
+  days without fewer starts). Short cycling alone is learning information, never a problem.
 
 Each problem is also a Repairs issue (issue_sync.py), created when the
 problem starts and removed when it clears; the water pressure keeps its own
@@ -71,6 +74,8 @@ TEXT = {
                                            "room does not ask for heat. Check {source} in Home Assistant; for a "
                                            "Bluetooth sensor, its battery and distance to the E32.",
         "e32_offline": "The E32 has not reported for more than 10 minutes. Check its power and Wi-Fi.",
+        "e32_stalled": "The E32 is online, but its room and boiler values have not come in for more than 15 "
+                       "minutes, so Home Assistant shows them as unavailable. Restart the E32.",
         "awaiting_confirmation": "The E32 is waiting for you to confirm that it may control the boiler; it is not "
                                  "heating until you do. Open the E32 Rooms page → Active control.",
         "awaiting_confirmation_thermostat": "The E32 is waiting for you to confirm that the old thermostat is "
@@ -92,6 +97,8 @@ TEXT = {
         "session_lost": "The E32 is online, but Home Assistant has had no working connection with it for more "
                         "than {minutes} minutes, so rooms get no new targets from Home Assistant. Open the "
                         "integration and choose Connect E32 again if it does not recover.",
+        "short_cycling_persists": "The burner keeps switching on and off too often, even after the E32 lengthened its "
+                                  "rest. Have the boiler's settings checked, for example by your installer.",
     },
     "nl": {
         "room_without_measurement": "{room}: al meer dan 30 minuten geen temperatuurmeting, dus deze ruimte "
@@ -100,6 +107,8 @@ TEXT = {
                                            "vraagt geen warmte. Controleer {source} in Home Assistant; bij een "
                                            "Bluetooth-sensor de batterij en de afstand tot de E32.",
         "e32_offline": "De E32 meldt zich al meer dan 10 minuten niet. Controleer de stroom en de wifi.",
+        "e32_stalled": "De E32 is online, maar zijn ruimte- en ketelwaarden komen al meer dan 15 minuten niet "
+                       "binnen, dus Home Assistant toont ze als niet beschikbaar. Herstart de E32.",
         "awaiting_confirmation": "De E32 wacht tot je bevestigt dat hij de ketel mag regelen; tot dan verwarmt hij "
                                  "niet. Open op de E32 de pagina Ruimtes → Actieve regeling.",
         "awaiting_confirmation_thermostat": "De E32 wacht tot je bevestigt dat de oude thermostaat is losgekoppeld; "
@@ -121,6 +130,8 @@ TEXT = {
         "session_lost": "De E32 is online, maar Home Assistant heeft al meer dan {minutes} minuten geen werkende "
                         "verbinding met hem, dus de ruimtes krijgen geen nieuwe doelen uit Home Assistant. Open de "
                         "integratie en kies opnieuw Connect E32 als het niet vanzelf herstelt.",
+        "short_cycling_persists": "De brander slaat nog steeds te vaak aan en uit, ook nu de E32 de rusttijd heeft "
+                                  "verlengd. Laat de instellingen van de ketel nakijken, bijvoorbeeld door je installateur.",
     },
     "pl": {
         "room_without_measurement": "{room}: brak pomiaru temperatury od ponad 30 minut, więc to pomieszczenie "
@@ -129,6 +140,8 @@ TEXT = {
                                            "pomieszczenie nie żąda ciepła. Sprawdź {source} w Home Assistant; w "
                                            "przypadku czujnika Bluetooth baterię i odległość od E32.",
         "e32_offline": "E32 nie odzywa się od ponad 10 minut. Sprawdź jego zasilanie i Wi-Fi.",
+        "e32_stalled": "E32 jest online, ale od ponad 15 minut nie przychodzą jego wartości pomieszczeń i kotła, "
+                       "więc Home Assistant pokazuje je jako niedostępne. Uruchom ponownie E32.",
         "awaiting_confirmation": "E32 czeka, aż potwierdzisz, że może sterować kotłem; do tego czasu nie grzeje. "
                                  "Otwórz na E32 stronę Rooms → Active control.",
         "awaiting_confirmation_thermostat": "E32 czeka, aż potwierdzisz, że stary termostat jest odłączony; do tego "
@@ -148,6 +161,8 @@ TEXT = {
         "session_lost": "E32 jest online, ale Home Assistant od ponad {minutes} minut nie ma z nim działającego "
                         "połączenia, więc pomieszczenia nie dostają nowych temperatur docelowych z Home Assistant. "
                         "Otwórz integrację i ponownie wybierz Połącz E32, jeśli połączenie samo nie wróci.",
+        "short_cycling_persists": "Palnik nadal zbyt często się włącza, mimo że E32 wydłużył przerwę między startami. "
+                                  "Zleć sprawdzenie ustawień kotła, na przykład instalatorowi.",
     },
 }
 
@@ -175,6 +190,20 @@ def thermostat_seen(hub):
     active = getattr(hub, "active", None)
     active = active if type(active) is dict else _active(hub.status)
     return bool(active) and active.get("thermostat_seen") is True
+
+
+def short_cycling_persists(hub):
+    """Whether the burner keeps switching on and off too often after the E32's self-tuning had its chance.
+
+    E32 1.0.1 reports it in its tuning telemetry (``fw/telemetry/tuning``, merged into the summary as
+    ``tuning``): ``short_cycling_persists`` true. Older firmware does not, and then short cycling stays
+    learning information (the dashboard's learning area), as before.
+    """
+    tuning = getattr(hub, "tuning_doc", None)
+    if type(tuning) is not dict:
+        summary = getattr(hub, "summary", None)
+        tuning = summary.get("tuning") if type(summary) is dict else None
+    return type(tuning) is dict and tuning.get("short_cycling_persists") is True
 
 
 def first_takeover(hub):
@@ -258,6 +287,9 @@ class ProblemTracker:
             since = last if last is not None else self.started
             if not hub.fresh and now - since > TELEMETRY_STALE_SECONDS:
                 result.append(("e32_offline", {}))
+        if getattr(hub, "stalled", False):
+            # Heard (heartbeat) but its control sends nothing for HEATING_STALE_SECONDS (R4-33).
+            result.append(("e32_stalled", {}))
         if hub.fresh:
             if self.awaiting is not None and now - self.awaiting >= AWAITING_CONFIRMATION_SECONDS:
                 # The same problem id either way; the words name the old thermostat only when there was one.
@@ -280,6 +312,8 @@ class ProblemTracker:
                                                  "hours": WARN_ROOM_SLOW_HOURS, "margin": WARN_ROOM_SLOW_MARGIN_C}))
             if self.session_lost is not None and now - self.session_lost >= SESSION_LOST_SECONDS:
                 result.append(("session_lost", {"minutes": WARN_SESSION_LOST_MINUTES}))
+            if short_cycling_persists(hub):
+                result.append(("short_cycling_persists", {}))
         for item in advice_items or ():
             if item.get("id") in ("pressure_low", "pressure_high"):
                 result.append((item["id"], {"pressure": item.get("values", {}).get("pressure")}))
@@ -291,6 +325,7 @@ SHORT = {
     "en": {
         "room_without_measurement": "No measurement in {room}",
         "e32_offline": "E32 not reporting",
+        "e32_stalled": "E32 sends no values",
         "awaiting_confirmation": "Waiting for your confirmation",
         "pressure_low": "Water pressure low",
         "pressure_high": "Water pressure high",
@@ -300,10 +335,12 @@ SHORT = {
         "active_transmit_failed": "Cannot reach the boiler",
         "room_slow": "{room} stays too cold",
         "session_lost": "Home Assistant lost the E32",
+        "short_cycling_persists": "Burner switches on and off too often",
     },
     "nl": {
         "room_without_measurement": "Geen meting in {room}",
         "e32_offline": "E32 meldt zich niet",
+        "e32_stalled": "E32 stuurt geen waarden",
         "awaiting_confirmation": "Wacht op jouw bevestiging",
         "pressure_low": "Waterdruk te laag",
         "pressure_high": "Waterdruk te hoog",
@@ -313,10 +350,12 @@ SHORT = {
         "active_transmit_failed": "Ketel niet bereikbaar",
         "room_slow": "{room} blijft te koud",
         "session_lost": "Home Assistant is de E32 kwijt",
+        "short_cycling_persists": "Brander slaat te vaak aan en uit",
     },
     "pl": {
         "room_without_measurement": "Brak pomiaru: {room}",
         "e32_offline": "E32 się nie odzywa",
+        "e32_stalled": "E32 nie wysyła wartości",
         "awaiting_confirmation": "Czeka na Twoje potwierdzenie",
         "pressure_low": "Ciśnienie wody za niskie",
         "pressure_high": "Ciśnienie wody za wysokie",
@@ -326,6 +365,7 @@ SHORT = {
         "active_transmit_failed": "Brak łączności z kotłem",
         "room_slow": "{room}: zbyt zimno",
         "session_lost": "Home Assistant utracił E32",
+        "short_cycling_persists": "Palnik zbyt często się włącza",
     },
 }
 

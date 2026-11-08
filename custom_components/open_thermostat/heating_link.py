@@ -12,6 +12,10 @@ most 1.5 KB, sent on a real change (deadbands), at most every 10 s, else every
 - ``fw/state/trv/<room>`` (E32 beta.24, only with radiator valves configured):
   one room's valves (position, battery, health), listed in ``fw/config/plan``
   ``trv``; the valve output and flow offset are ``fw/state/heating`` ``trv``;
+- ``fw/state/circuit/<id>`` (E32 1.1, Shelly, only with heating circuits): one
+  heating circuit (its pump, supply and return, problem), listed in
+  ``fw/config/plan`` ``circuits``; ``fw/state/probes`` (E32 1.1): The Pill's
+  probes that no circuit uses, by role (e32_shelly.py);
 - ``fw/config/plan``: the plan's room and sensor ids and how many parts the
   entity list has; ``fw/config/entities`` (and ``.../entities/<k>``): the HA
   entities the plan reads (``ha_entities``);
@@ -76,10 +80,33 @@ MAX_ENTITIES = 40  # the E32 plan: 8 rooms x (4 sources + setpoint entity)
 HEARTBEAT_SECONDS = 60
 STALE_SECONDS = 3 * HEARTBEAT_SECONDS + 15
 STALE_CHECK = timedelta(seconds=15)
+# One E32 restart, one resend: its last will ("offline"), "online" again (published once it listens to
+# ha/heating_input again) and the new run's first heartbeat with a lower uptime arrive within seconds. "Online"
+# already sent everything to the new run, so a lower uptime this soon after it sends nothing again.
+RESTART_RESEND_S = 30
+# fw/state/heating comes at least every 5 minutes (the firmware's TelemetryPolicy stateCadence). Three missed while
+# the heartbeat still runs (R4-33): the E32's control has stalled, and its frozen room values are unavailable.
+HEATING_STALE_SECONDS = 900
+# The summary, fw/telemetry/shadow and fw/telemetry/readiness come every 5 minutes (summaryCadence), each
+# learned/<room> at least every 15 (learnedCadence). Older than these they are dropped (R4-32): old advice never
+# shows as live while the heartbeat continues.
+SUMMARY_STALE_SECONDS = 900
+LEARNED_STALE_SECONDS = 3600
+# fw/state/circuit/<id> and fw/state/probes come at least every 5 minutes (stateCadence). Three missed while the
+# E32 runs: a retained one left behind (firmware without Shelly after a downgrade) is not current any more.
+SHELLY_STALE_SECONDS = 900
 # A telemetry listener that keeps failing logs its traceback at most this often (R4-10).
 LISTENER_LOG_SECONDS = 60
 ROOM_ID = re.compile(r"[a-z0-9_]{1,32}")
 BLE_ID = re.compile(r"[0-9a-f]{12}")
+# A heating circuit's id (ShellyCircuit::identifier, at most 16) and the E32's limit of two circuits.
+CIRCUIT_ID = re.compile(r"[a-z0-9_]{1,16}")
+MAX_CIRCUITS = 2
+# The Pill's probe roles (ShellyConfig.h ProbeRole), the keys of fw/state/probes.
+PROBE_ROLES = ("floor_supply", "floor_return", *(f"loop_return_{n}" for n in range(1, 9)),
+               *(f"other_{n}" for n in range(1, 5)))
+# Radiator valves per room document: 8 since E32 1.1 (more than 4 only through the BLU Gateway).
+MAX_ROOM_VALVES = 8
 ROOM_STATUSES = ["ok", "fallback", "stale", "lost", "inactive", "window_open", "window_pending"]
 # The E32's own room statuses; the window states come from the room's comfort (RoomOverrides.h).
 E32_ROOM_STATUSES = ROOM_STATUSES[:5]
@@ -114,6 +141,8 @@ HEATING_TOPIC = "fw/state/heating"
 ROOM_TOPIC = "fw/state/room/"
 BLE_TOPIC = "fw/state/ble/"
 TRV_TOPIC = "fw/state/trv/"
+CIRCUIT_TOPIC = "fw/state/circuit/"
+PROBES_TOPIC = "fw/state/probes"
 PLAN_TOPIC = "fw/config/plan"
 ENTITIES_TOPIC = "fw/config/entities"
 LEARNED_TOPIC = "fw/telemetry/learned/"
@@ -142,8 +171,8 @@ AVAILABILITY_TOPIC = "fw/availability"
 # What only the hub reads: the shadow session (v1_mqtt.NativeShadowConnection, subscribed to fw/#)
 # drops these at once instead of decoding every E32 message a second time (R4-03).
 _HUB_ONLY = (HEATING_TOPIC, PLAN_TOPIC, ENTITIES_TOPIC, SUMMARY_TOPIC, FLOW_TOPIC, TUNING_TOPIC, SCOREBOARD_TOPIC,
-             INSIGHT_TOPIC, SHADOW_TOPIC, READINESS_TOPIC)
-_HUB_ONLY_PARTS = (ROOM_TOPIC, BLE_TOPIC, TRV_TOPIC, LEARNED_TOPIC, ENTITIES_TOPIC + "/")
+             INSIGHT_TOPIC, SHADOW_TOPIC, READINESS_TOPIC, PROBES_TOPIC)
+_HUB_ONLY_PARTS = (ROOM_TOPIC, BLE_TOPIC, TRV_TOPIC, CIRCUIT_TOPIC, LEARNED_TOPIC, ENTITIES_TOPIC + "/")
 
 
 def hub_only_topic(suffix):
@@ -203,12 +232,75 @@ def decode_trv(payload, topic_id):
     """One ``fw/state/trv/<room>`` document whose room is the topic's, or None."""
     value = decode_document(payload)
     if (value is None or type(topic_id) is not str or not ROOM_ID.fullmatch(topic_id) or value.get("room") != topic_id
-            or type(value.get("control")) is not bool or type(value.get("valves")) is not list or len(value["valves"]) > 4
+            or type(value.get("control")) is not bool or type(value.get("valves")) is not list
+            or len(value["valves"]) > MAX_ROOM_VALVES
             or any(type(v) is not dict or type(v.get("name")) is not str for v in value["valves"])):
         return None
     value = dict(value)
     del value["schema"]
     return value
+
+
+_CODE = re.compile(r"[a-z0-9_]{1,32}")
+
+
+def _code(value):
+    return type(value) is str and _CODE.fullmatch(value) is not None
+
+
+def _optional_number(value, key, low, high):
+    return key not in value or number(value[key], low, high) is not None
+
+
+def decode_circuit(payload, topic_id):
+    """One ``fw/state/circuit/<id>`` document whose id is the topic's, or None (E32 1.1, CircuitControl::json).
+
+    {"id","kind","demand","heat","pump"?:{"state","wanted","reason","control","acting","power_w"?,"manual"?,"warm"?},
+    "supply_c"?,"supply_health"?,"return_c"?,"return_health"?,"delta_c"?,"fault"?}; reasons and faults are short
+    codes (a later firmware's new one is kept; e32_shelly shows it as unknown).
+    """
+    value = decode_document(payload)
+    if (value is None or type(topic_id) is not str or not CIRCUIT_ID.fullmatch(topic_id) or value.get("id") != topic_id
+            or value.get("kind") not in ("floor", "radiators") or type(value.get("demand")) is not bool
+            or type(value.get("heat")) is not bool or ("fault" in value and not _code(value["fault"]))
+            or not all(_optional_number(value, key, -50, 150) for key in ("supply_c", "return_c", "delta_c"))
+            or any(key in value and not _code(value[key]) for key in ("supply_health", "return_health"))):
+        return None
+    pump = value.get("pump")
+    if pump is not None and (type(pump) is not dict or pump.get("state") not in ("on", "off", "unknown")
+                             or type(pump.get("wanted")) is not bool or not _code(pump.get("reason"))
+                             or type(pump.get("control")) is not bool or type(pump.get("acting")) is not bool
+                             or not _optional_number(pump, "power_w", 0, 100000)
+                             or pump.get("manual", "on") not in ("on", "off")
+                             or type(pump.get("warm", True)) is not bool):
+        return None
+    value = dict(value)
+    del value["schema"]
+    return value
+
+
+def decode_probes(payload):
+    """``fw/state/probes``: {role: {"t_c"?, "health"}} of The Pill's probes without a circuit, or None.
+
+    Roles this release does not know are left out (a later firmware's).
+    """
+    value = decode_document(payload)
+    if value is None:
+        return None
+    probes = {}
+    for role, probe in value.items():
+        if role == "schema":
+            continue
+        if type(probe) is not dict or not _code(probe.get("health")) or not _optional_number(probe, "t_c", -60, 130):
+            return None
+        if role in PROBE_ROLES:
+            probes[role] = {key: probe[key] for key in ("t_c", "health") if key in probe}
+    return probes
+
+
+def plan_circuits(plan):
+    """The circuit ids of a ``fw/config/plan`` (E32 1.1 ``circuits``); () without the key (no circuits)."""
+    return tuple(plan["circuits"]) if _ids(plan.get("circuits"), CIRCUIT_ID, MAX_CIRCUITS) else ()
 
 
 def status_valves(status):
@@ -479,6 +571,7 @@ class HeatingHub:
         # fw/telemetry/summary, fw/telemetry/flow, fw/telemetry/tuning, fw/telemetry/scoreboard and
         # fw/telemetry/insight as received; summary is the five merged.
         self.summary_doc = None
+        self.summary_doc_received = None  # when fw/telemetry/summary itself last arrived (its parts do not count)
         self.flow_doc = None
         self.tuning_doc = None
         self.scoreboard_doc = None
@@ -504,11 +597,18 @@ class HeatingHub:
         self.room_states = {}
         self.ble_states = {}
         self.trv_states = {}
+        # E32 1.1 (Shelly): {circuit id: fw/state/circuit/<id>} and when each came; fw/state/probes and when.
+        self.circuit_states = {}
+        self.circuit_received = {}
+        self.probes = None
+        self.probes_received = None
+        self.probes_expired = False  # the last probes document expired (SHELLY_STALE_SECONDS): not a message
         self.config = None
         self.entity_parts = {}
         self.entities = None  # the last complete entity list
         self.shadow = None
         self.readiness = None
+        self.shadow_received = self.readiness_received = None
         self.online = None  # fw/availability: None until known
         self.heartbeat = None
         self.boots = 0  # E32 restarts seen as a falling heartbeat uptime (DhwCarry)
@@ -535,6 +635,12 @@ class HeatingHub:
         return self.status is not None
 
     @property
+    def circuits(self):
+        """{circuit id: fw/state/circuit/<id>} of the circuits the plan lists (E32 1.1); empty without any."""
+        listed = plan_circuits(self.config) if self.config is not None else tuple(self.circuit_states)
+        return {c: self.circuit_states[c] for c in listed if c in self.circuit_states}
+
+    @property
     def revision(self):
         revision = self.status.get("revision") if self.status else None
         return revision if type(revision) is int else None
@@ -546,6 +652,19 @@ class HeatingHub:
             return False
         since = self.heartbeat_received if self.heartbeat_received is not None else self.started
         return 0 <= self.clock() - since <= STALE_SECONDS
+
+    @property
+    def heating_stalled(self):
+        """fw/state/heating arrived once but not for HEATING_STALE_SECONDS (R4-33). A status set with update()
+        (older firmware, tests) has no parts and never stalls this way."""
+        if self.heating is None:
+            return False
+        return self.heating_received is None or not 0 <= self.clock() - self.heating_received <= HEATING_STALE_SECONDS
+
+    @property
+    def stalled(self):
+        """The E32 is heard (heartbeat) but its control sends nothing: its values are unavailable (heating_problem)."""
+        return self.alive and self.heating_stalled
 
     @property
     def learned_header(self):
@@ -638,7 +757,7 @@ class HeatingHub:
     def _assemble(self):
         """The status from the parts, or None while the E32 is not alive or a part is missing."""
         config, heating = self.config, self.heating
-        if not self.alive or config is None or heating is None:
+        if not self.alive or config is None or heating is None or self.heating_stalled:
             return None
         parts = [self.entity_parts.get(k) for k in range(config["entity_parts"])]
         if all(p is not None and p["parts"] == config["entity_parts"] and p["revision"] == config["revision"] for p in parts):
@@ -739,6 +858,19 @@ class HeatingHub:
                 self.trv_states.pop(key, None)
             else:
                 self.trv_states[key] = value
+        elif suffix.startswith(CIRCUIT_TOPIC):
+            # A circuit is not dropped with the plan: its document stays until the E32 clears it (or it expires),
+            # so a plan sent during the E32's start-up never removes its entities (e32_shelly.remove_stale_entities).
+            key = suffix[len(CIRCUIT_TOPIC):]
+            value = None if empty else decode_circuit(payload, key)
+            if value is None:
+                self.circuit_states.pop(key, None)
+                self.circuit_received.pop(key, None)
+            else:
+                self.circuit_states[key], self.circuit_received[key] = value, self.clock()
+        elif suffix == PROBES_TOPIC:
+            self.probes = None if empty else decode_probes(payload)
+            self.probes_received, self.probes_expired = self.clock(), False  # empty or broken: none any more
         elif suffix.startswith(LEARNED_TOPIC):
             room_id = suffix[len(LEARNED_TOPIC):]
             if empty:
@@ -751,6 +883,7 @@ class HeatingHub:
         elif suffix in (SUMMARY_TOPIC, FLOW_TOPIC, TUNING_TOPIC, SCOREBOARD_TOPIC, INSIGHT_TOPIC):
             if suffix == SUMMARY_TOPIC:
                 self.summary_doc = None if empty else decode_summary(payload)
+                self.summary_doc_received = self.clock() if self.summary_doc is not None else None
             elif suffix == FLOW_TOPIC:
                 flow = None if empty else decode_document(payload)
                 self.flow_doc = ({k: flow[k] for k in FLOW_KEYS if type(flow.get(k)) is dict}
@@ -770,8 +903,10 @@ class HeatingHub:
             self.summary_received = self.clock() if summary is not None else None
         elif suffix == SHADOW_TOPIC:
             self.shadow = None if empty else decode_document(payload)
+            self.shadow_received = self.clock()
         elif suffix == READINESS_TOPIC:
             self.readiness = None if empty else decode_document(payload)
+            self.readiness_received = self.clock()
         else:
             return
         if not retained and suffix != AVAILABILITY_TOPIC:
@@ -821,13 +956,53 @@ class HeatingHub:
         self.summary_received = self.clock() if summary is not None else None
         self.notify()
 
+    def _expire(self):
+        """Drop the learned rooms, summary, shadow and readiness that are too old (R4-32); True when one went."""
+        now, expired = self.clock(), False
+
+        def old(at, limit):
+            return at is not None and not 0 <= now - at <= limit
+        for room_id in [r for r, (at, _, _) in self.learned_messages.items() if old(at, LEARNED_STALE_SECONDS)]:
+            del self.learned_messages[room_id]
+            expired = True
+        if self.summary_doc is not None and old(self.summary_doc_received, SUMMARY_STALE_SECONDS):
+            self.summary_doc = self.summary_doc_received = None
+            self.summary, self.summary_received = self._merged_summary(), None
+            expired = True
+        elif self.summary is not None and self.summary_doc is None and old(self.summary_received, SUMMARY_STALE_SECONDS):
+            self.summary = self.summary_received = None  # one set with update_summary
+            expired = True
+        if self.shadow is not None and old(self.shadow_received, SUMMARY_STALE_SECONDS):
+            self.shadow = None
+            expired = True
+        if self.readiness is not None and old(self.readiness_received, SUMMARY_STALE_SECONDS):
+            self.readiness = None
+            expired = True
+        for circuit_id in [c for c, at in self.circuit_received.items() if old(at, SHELLY_STALE_SECONDS)]:
+            self.circuit_states.pop(circuit_id, None)
+            del self.circuit_received[circuit_id]
+            expired = True
+        if self.probes is not None and old(self.probes_received, SHELLY_STALE_SECONDS):
+            self.probes, self.probes_expired = None, True
+            expired = True
+        return expired
+
     @callback
     def check_stale(self, _now=None):
-        """Periodically: three missed heartbeats make every value unavailable; a heartbeat restores them."""
-        if self.status is not None and not self.alive:
+        """Periodically: three missed heartbeats, or a heating topic that stopped (R4-33), make every value
+        unavailable; a heartbeat and a new heating message restore them. Old learned rooms, summary, shadow and
+        readiness go (R4-32)."""
+        expired = self._expire()
+        if self.status is not None and (not self.alive or self.heating_stalled):
             self.update(None)
         elif self.status is None and self.alive and self.heating is not None:
             self.refresh()
+        elif expired:
+            if self.status is not None and self.heating is not None:
+                self.refresh()  # assembled from the parts: again without the old ones
+            else:
+                self._merge_learned()
+                self.notify()
 
     @callback
     def stop(self):
@@ -1349,15 +1524,31 @@ class HubEntity:
                 name = current.name
             if name is not None:
                 extra["name"] = name
-        return {**info, **extra}
+        return DeviceInfo(**{**info, **extra})  # a DeviceInfo, never a plain mapping (deprecated in 2026.11)
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         self.async_on_remove(self.hub.add_listener(self._hub_changed))
 
+    # The last _write_token written (R4-08); a sentinel until the first write.
+    _written = object()
+
+    def _write_token(self):
+        """Everything this entity's state, attributes, availability and device name depend on, or None.
+
+        One E32 message notifies every hub entity; an entity with a token writes its state only when the token
+        changed (R4-08: a message about one room writes only that room's entities). None: always write (the
+        default, for entities that read more of the hub than a small part).
+        """
+        return None
+
     @callback
     def _hub_changed(self):
         if self.hass is not None and self.entity_id:
+            token = self._write_token()
+            if token is not None and token == self._written:
+                return
+            self._written = token if token is not None else HubEntity._written
             self._follow_name()
             self.async_write_ha_state()
 
@@ -1520,6 +1711,9 @@ class RoomTemperatureSensor(RoomEntity, SensorEntity):
         if key == "setpoint":
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
+    def _write_token(self):
+        return self.hub.fresh, self.room
+
     @property
     def native_value(self):
         room = self.room
@@ -1537,10 +1731,18 @@ class RoomStatusSensor(RoomEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ROOM_STATUSES
     _attr_entity_category = EntityCategory.DIAGNOSTIC  # Reason on the Overview says it in words
-    _unrecorded_attributes = frozenset({"revision"})  # changes with every plan save
+    # Live only, not in the history (R4-09): the revision changes with every plan save, and the room's values each
+    # have their own entity (temperature, target, heat demand) and history; recorded they made every room change a
+    # new attribute row.
+    _unrecorded_attributes = frozenset({"revision", "temperature", "setpoint", "demand", "state", "inactive_until",
+                                        "window", "source"})
 
     def __init__(self, hub, room):
         self._attach_room(hub, room, "status")
+
+    def _write_token(self):
+        plan = self.hub.plan.room(self.room_id) if self.hub.plan is not None else None
+        return self.hub.fresh, self.room, self.hub.revision, (plan or {}).get("inactive_until")
 
     @property
     def native_value(self):
@@ -1568,6 +1770,9 @@ class RoomDemandBinarySensor(RoomEntity, BinarySensorEntity):
     def __init__(self, hub, room):
         self._attach_room(hub, room, "demand")
 
+    def _write_token(self):
+        return self.hub.fresh, self.room
+
     @property
     def is_on(self):
         room = self.room
@@ -1589,6 +1794,8 @@ class BleSensor(HubEntity, SensorEntity):
     """One reading of a Bluetooth sensor paired on the E32."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
+    # Live only (R4-09): the reading's age changes with every E32 message.
+    _unrecorded_attributes = frozenset({"age_s"})
 
     def __init__(self, hub, sensor, metric):
         self.sensor_id, self.metric = sensor["id"], metric
@@ -1601,6 +1808,11 @@ class BleSensor(HubEntity, SensorEntity):
 
     def _device_name(self, item, current):
         return ble_device_name(item, self.hub.rooms, current)
+
+    def _write_token(self):
+        # The device name follows the rooms that measure with this sensor (ble_device_name).
+        rooms = tuple((room.get("source"), label(room)) for room in self.hub.rooms.values())
+        return self.hub.fresh, self.sensor, rooms
 
     def _named_item(self):
         return self.sensor
@@ -2328,6 +2540,8 @@ async def async_setup_heating_link(hass, entry, async_add_entities, **options):
         energy.publish()
 
     boots = hub.boots
+    resent_at = None  # hub.clock() of the last resend to a returning or restarted E32 (RESTART_RESEND_S)
+    seen = False  # the E32 was fresh before: a "back" after that is a return, not the first status after setup
 
     @callback
     def follow():
@@ -2337,18 +2551,29 @@ async def async_setup_heating_link(hass, entry, async_add_entities, **options):
         shorter than STALE_SECONDS never makes it silent). A restarted E32 has no room reading until Home
         Assistant sends one, so the rooms and the energy values go out at once, not at the next refresh. The
         comfort forwarder sends the contacts and presence itself when the E32 is back (hub_changed); after a
-        quick restart it is told here.
+        quick restart it is told here. Once per restart: a lower uptime within RESTART_RESEND_S of the E32
+        coming back (online again after its last will, or heard again) is the same restart, and everything
+        already went out then.
         """
-        nonlocal forwarded, unsubscribe_states, was_fresh, boots
+        nonlocal forwarded, unsubscribe_states, was_fresh, boots, resent_at, seen
         status = hub.status
         back = status is not None and not was_fresh
         was_fresh = status is not None
         if status is None:
             return
+        returned, seen = back and seen, True
         restarted, boots = hub.boots != boots, hub.boots
-        comfort = state.get("comfort_forwarder")
-        if restarted and not back and comfort is not None:
-            comfort.publish()
+        now = hub.clock()
+        if returned:
+            resent_at = now
+        elif restarted and not back:
+            if resent_at is not None and 0 <= now - resent_at <= RESTART_RESEND_S:
+                restarted = False  # the same restart: sent when it came back online
+            else:
+                resent_at = now
+                comfort = state.get("comfort_forwarder")
+                if comfort is not None:
+                    comfort.publish()
         if status["ha_entities"] == forwarded:
             if back or restarted:
                 refresh()
@@ -2384,7 +2609,7 @@ async def async_setup_heating_link(hass, entry, async_add_entities, **options):
     entry.async_on_unload(hub.add_listener(follow, first=True))
     for topic in (AVAILABILITY_TOPIC, HEARTBEAT_TOPIC, HEATING_TOPIC, ROOM_TOPIC + "+", BLE_TOPIC + "+", TRV_TOPIC + "+", PLAN_TOPIC,
                   ENTITIES_TOPIC, ENTITIES_TOPIC + "/+", LEARNED_TOPIC + "+", SUMMARY_TOPIC, FLOW_TOPIC, TUNING_TOPIC, SCOREBOARD_TOPIC,
-                  INSIGHT_TOPIC, SHADOW_TOPIC, READINESS_TOPIC):
+                  INSIGHT_TOPIC, SHADOW_TOPIC, READINESS_TOPIC, CIRCUIT_TOPIC + "+", PROBES_TOPIC):
         entry.async_on_unload(await mqtt.async_subscribe(hass, base + topic, receive))
     entry.async_on_unload(async_track_time_interval(hass, refresh, timedelta(seconds=REFRESH_SECONDS)))
     entry.async_on_unload(async_track_time_interval(hass, hub.check_stale, STALE_CHECK))

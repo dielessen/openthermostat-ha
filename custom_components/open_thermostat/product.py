@@ -8,7 +8,7 @@ PRODUCT_CONFIG = "product_configuration"
 PRODUCT_VERSION = 1
 # The Home Assistant releases this integration version is tested on (CI and the
 # release evidence in scripts/package_ha_release.py read this tuple).
-SUPPORTED_HA_VERSIONS = ("2026.10.2", "2026.10.3", "2026.10.4")
+SUPPORTED_HA_VERSIONS = ("2026.10.2", "2026.10.3", "2026.10.4", "2026.11.0")
 # The oldest Home Assistant that works: its schema library (probatio 0.13, which
 # every form uses) and the config entry save routine below match the tested
 # releases from 2026.10.0 on. Newer releases are accepted while that save

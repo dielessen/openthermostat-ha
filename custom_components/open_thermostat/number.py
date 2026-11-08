@@ -31,6 +31,8 @@ async def async_setup_entry(
         await async_setup_numbers(hass, entry, async_add_entities)  # E32 room fallback setpoints
         from .e32_house import async_setup_numbers as async_setup_house_numbers
         await async_setup_house_numbers(hass, entry, async_add_entities)  # the house's away temperature
+        from .e32_boiler_settings_entities import async_setup_platform
+        await async_setup_platform(hass, entry, async_add_entities, "number")  # boiler settings verified here
         return
     prefix = entry.data[CONF_TOPIC_PREFIX]
     durations = hass.data[DOMAIN][entry.entry_id]["duration_minutes"]

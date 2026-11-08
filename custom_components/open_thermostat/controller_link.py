@@ -10,6 +10,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 import ipaddress
 import json
+import logging
 import re
 import secrets
 import socket
@@ -18,6 +19,16 @@ from urllib.parse import urlsplit
 import aiohttp
 from aiohttp.abc import AbstractResolver
 from yarl import URL
+
+_LOGGER = logging.getLogger(__name__)
+# How long a sign-out may take (R4-26). An E32 that writes its flash or installs an update answers slowly; a
+# sign-out it never confirms keeps one of its 4 web sessions in use until it frees an idle one (2 minutes),
+# and a burst of changes can then find them all in use (429 session_capacity). Every request of the client
+# itself stops after 10 s (its ClientTimeout); the sign-out ends after the lock is released (RoomPlanLink).
+LOGOUT_TIMEOUT_S = 8
+# A sign-out the E32 did not confirm is logged as a warning at most this often (then at debug level).
+LOGOUT_WARNING_S = 600
+_logout_warned = None  # the event-loop time of the last such warning
 
 
 class ControllerLinkError(ValueError):
@@ -74,16 +85,53 @@ HEATING_FLOW = "/config/heating/flow"
 HEATING_HANDOVER = "/config/heating/handover"
 # The radiator valves per room, reached through Zigbee2MQTT (E32 beta.24, TrvConfig.h).
 HEATING_TRV = "/config/heating/trv"
+# The Shelly devices the E32 drives itself (E32 1.1, ShellyConfig.h): GET the record without secrets ("password":
+# bool per device), POST the whole record back (a device without "password" keeps its stored one); the circuits'
+# pump override POST {"id","pump":"on"|"off"|"automatic","minutes"?}; and the live status with the BLU Gateway's
+# valves. Firmware without Shelly answers 404.
+SHELLY_CONFIG = "/config/shelly"
+SHELLY_CIRCUIT = "/config/shelly/circuit"
+SHELLY_STATUS = "/status/shelly"
+SHELLY_PATHS = (SHELLY_CONFIG, SHELLY_CIRCUIT, SHELLY_STATUS)
 # The E32 system log: syslog forwarding and the kept log levels (diagnostics/LogSettings.h).
 # Not part of a settings backup; refusals are plain text (400 invalid, 503 not confirmed or unavailable).
 LOGGING = "/config/logging"
 # The boiler model shown on the E32 (BoilerDisplay.h): GET/POST {"model": <catalog id>}; refusals are plain text.
 BOILER_DISPLAY = "/config/boiler-display"
+# The owner confirms the boiler now connected after the E32 found another one (E4, BoilerCapabilitiesReport.h):
+# POST {"acknowledge": true}; 409 {"error": "no_other_boiler"} when there is nothing to confirm.
+BOILER_MATCH_ACKNOWLEDGE = "/boiler/match/acknowledge"
 # The paired Bluetooth sensors (REST.h bluetoothSettings): GET with an ETag of this sign-in, POST the whole
 # list with If-Match; a change restarts the E32 about 30 s later. The answer lists the sensors and the
 # discovery, so it may be larger than the other settings.
 BLUETOOTH = "/config/bluetooth"
 BLUETOOTH_RESPONSE_BYTES = 32768
+# The boiler's own settings (E32 V2 with track W, ClassicBoilerSettingsService.h): GET the table with the values
+# and the open change; POST one write, a keep / put back (confirm) or the owner's switch (persistent). Every answer
+# carries the whole GET document (about 7 KB), refusals too: {"accepted", "duplicate", "error", "settings"}.
+# Firmware without them answers 404 (e32_boiler_settings.py then offers nothing).
+BOILER_SETTINGS = "/boiler/settings"
+BOILER_SETTINGS_WRITE = "/boiler/settings/write"
+BOILER_SETTINGS_CONFIRM = "/boiler/settings/confirm"
+BOILER_SETTINGS_PERSISTENT = "/boiler/settings/persistent"
+BOILER_SETTINGS_POSTS = frozenset((BOILER_SETTINGS_WRITE, BOILER_SETTINGS_CONFIRM, BOILER_SETTINGS_PERSISTENT))
+BOILER_SETTINGS_RESPONSE_BYTES = 16384
+# The tester programme (E5, boiler_share.py): what "Share result" reads (GET, JSON), the bus recording's start and stop
+# (POST, no body; 503 without PSRAM for it) and the recording itself (GET /ems/recording?offset=N, text in parts of at
+# most 32 KiB with the recording's ETag). Firmware without them answers 404 (controller_update_required).
+BOILER_MATCH = "/boiler/match"
+PLUS_PROBE = "/boiler/plus-probe"
+EMS_DEVICES = "/status/ems/devices"
+BOILER_PROFILE = "/status/boiler/profile"
+RECORDING_STATUS = "/ems/recording/status"
+RECORDING_START = "/ems/recording/start"
+RECORDING_STOP = "/ems/recording/stop"
+RECORDING = "/ems/recording"
+TESTER_READS = frozenset((BOILER_MATCH, PLUS_PROBE, EMS_DEVICES, BOILER_PROFILE, RECORDING_STATUS))
+RECORDING_POSTS = frozenset((RECORDING_START, RECORDING_STOP))
+TESTER_RESPONSE_BYTES = 32768
+RECORDING_PART_BYTES = 32768
+RECORDING_MAX_BYTES = 2 * 1024 * 1024  # a full E32 ring (192 KiB) is about 550 KB of text
 HEATING_PLAN_BYTES = 8192  # The E32 refuses larger request bodies (413 plan_too_large).
 # Backup and restore of the E32 settings (E32 beta.19, ConfigBackupRoute.h): export,
 # validate and apply, each one POST. A backup file holds at most 24 KB; a request
@@ -115,6 +163,36 @@ class BluetoothRejected(ControllerLinkError):
         super().__init__(error)
         self.status = status
         self.error = error
+
+
+class BoilerSettingsRejected(ControllerLinkError):
+    """The E32 refused a boiler settings request with a named reason (persistent_writes_off, settings_busy, ...).
+
+    ``settings`` is the settings document the refusal carried (None when it had none).
+    """
+
+    def __init__(self, status, error, settings=None):
+        super().__init__(error)
+        self.status = status
+        self.error = error
+        self.settings = settings
+
+
+async def _settings_refusal(response):
+    """(error name, settings document) of a refused boiler settings request; never response text verbatim."""
+    body = bytearray()
+    try:
+        async for chunk in response.content.iter_chunked(2048):
+            body.extend(chunk)
+            if len(body) > BOILER_SETTINGS_RESPONSE_BYTES:
+                return "settings_refused", None
+        value = json.loads(bytes(body))
+    except (ValueError, UnicodeError, RecursionError, aiohttp.ClientError):
+        # The E32's own gates answer in plain text: an update, the boiler test (409).
+        return "settings_busy" if response.status == 409 else "settings_refused", None
+    error = value.get("error") if type(value) is dict else None
+    settings = value.get("settings") if type(value) is dict and type(value.get("settings")) is dict else None
+    return (error if type(error) is str and re.fullmatch(r"[a-z0-9_]{1,48}", error) else "settings_refused"), settings
 
 
 class ControllerProvisioningError(ControllerLinkError):
@@ -532,10 +610,12 @@ class ControllerClient:
 
     _reads = frozenset(("/auth/session", "/status/version", "/status", "/updates/status",
                         "/config/device", "/config/rooms", HEATING_PLAN, HEATING_COMFORT, HEATING_FLOW,
-                        HEATING_TRV, "/status/heating", LOGGING, BOILER_DISPLAY, BLUETOOTH))
+                        HEATING_TRV, "/status/heating", LOGGING, BOILER_DISPLAY, BLUETOOTH, BOILER_SETTINGS,
+                        SHELLY_CONFIG, SHELLY_STATUS, *TESTER_READS))
     _writes = frozenset(("/auth/login", "/auth/logout", "/auth/password", "/config/device", "/updates/reboot",
                          HEATING_PLAN, HEATING_COMFORT, HEATING_FLOW, HEATING_HANDOVER, HEATING_TRV, CONFIG_BACKUP,
-                         LOGGING, BOILER_DISPLAY, BLUETOOTH))
+                         LOGGING, BOILER_DISPLAY, BLUETOOTH, *BOILER_SETTINGS_POSTS, SHELLY_CONFIG, SHELLY_CIRCUIT,
+                         BOILER_MATCH_ACKNOWLEDGE, *RECORDING_POSTS))
 
     def __init__(self, address):
         self.address = controller_address(address)
@@ -606,8 +686,10 @@ class ControllerClient:
             elif len(data.encode()) >= 2048:
                 raise ControllerLinkError("controller_settings_too_large")
         backup = path == CONFIG_BACKUP
+        settings = path == BOILER_SETTINGS or path in BOILER_SETTINGS_POSTS
         limit = (CONFIG_BACKUP_RESPONSE_BYTES if backup else BLUETOOTH_RESPONSE_BYTES if path == BLUETOOTH
-                 else 8192)
+                 else BOILER_SETTINGS_RESPONSE_BYTES if settings
+                 else TESTER_RESPONSE_BYTES if path in TESTER_READS else 8192)
         extra = {"timeout": aiohttp.ClientTimeout(total=CONFIG_BACKUP_TIMEOUT)} if backup else {}
         try:
             async with self._session.request(method, self.address + path, data=data,
@@ -616,18 +698,42 @@ class ControllerClient:
                     raise ControllerLoginRejected()
                 if path == "/auth/password" and response.status in (400, 403, 409, 503):
                     raise PasswordChangeRejected(response.status, await _error_name(response))
+                if settings and response.status == 404:
+                    raise ControllerLinkError("controller_update_required")  # firmware without boiler settings
+                if settings and method == "POST" and response.status in (400, 403, 409, 429, 500):
+                    error, document = await _settings_refusal(response)
+                    if error == "password_change_required":
+                        raise ControllerPasswordChangeRequired()
+                    if error in ("csrf_required", "authentication_required"):
+                        raise ControllerLinkError("controller_auth_failed")
+                    raise BoilerSettingsRejected(response.status, error, document)
                 if response.status == 403 and await _error_name(response) == "password_change_required":
                     raise ControllerPasswordChangeRequired()
                 if response.status in (401, 403):
                     raise ControllerLinkError("controller_auth_failed")
                 if path in (HEATING_PLAN, HEATING_COMFORT, HEATING_FLOW, HEATING_HANDOVER, HEATING_TRV) and response.status in (400, 409, 413, 503, 507):
                     raise HeatingPlanRejected(response.status, await _error_name(response))
+                if path in SHELLY_PATHS and response.status in (400, 404, 409, 503):
+                    name = await _error_name(response) if response.status != 404 or method == "POST" else ""
+                    if response.status == 404 and not name.startswith("unknown_"):
+                        raise ControllerLinkError("controller_update_required")  # firmware without Shelly
+                    raise HeatingPlanRejected(response.status, name)
                 if backup and response.status in (400, 409, 413, 500, 503):
                     raise BackupRejected(response.status, await _backup_error(response))
                 if backup and response.status == 404:
                     raise ControllerLinkError("controller_update_required")  # firmware before beta.19
                 if path == BLUETOOTH and response.status in (400, 413, 503, 507):
                     raise BluetoothRejected(response.status, await _error_name(response))
+                if path == BOILER_MATCH_ACKNOWLEDGE and response.status in (404, 409):
+                    # 404: firmware without the route; 409: no other boiler to confirm (already done), or busy.
+                    raise ControllerLinkError("controller_update_required" if response.status == 404
+                                              else "controller_boiler_confirmed"
+                                              if await _error_name(response) == "no_other_boiler"
+                                              else "controller_busy_or_conflict")
+                if (path in TESTER_READS or path in RECORDING_POSTS) and response.status == 404:
+                    raise ControllerLinkError("controller_update_required")  # firmware without the tester programme
+                if path == RECORDING_START and response.status == 503:
+                    raise ControllerLinkError("controller_recording_unavailable")  # no PSRAM for the ring
                 if path in (BLUETOOTH, BOILER_DISPLAY) and response.status == 404:
                     raise ControllerLinkError("controller_update_required")
                 if path in (LOGGING, BOILER_DISPLAY) and response.status in (400, 404, 503):
@@ -648,6 +754,7 @@ class ControllerClient:
                 accepted = ({200, 201} if method == "POST" and path in ("/config/device", CONFIG_BACKUP, BLUETOOTH)
                             else {202} if method == "POST" and path == "/updates/reboot"
                             else {204} if method == "POST" and path == "/auth/password"
+                            else {200, 202} if method == "POST" and settings
                             else {200})
                 if response.status not in accepted:
                     raise ControllerLinkError("controller_response_invalid")
@@ -782,6 +889,74 @@ class ControllerClient:
         raw, _, _ = await self._request("POST", BOILER_DISPLAY, document={"model": model})
         return _decode(raw)
 
+    async def async_boiler_match_acknowledge(self):
+        """POST the owner's "this is the boiler now connected" (E4); returns the E32's answer {"acknowledged", "match"}."""
+        raw, _, _ = await self._request("POST", BOILER_MATCH_ACKNOWLEDGE, document={"acknowledge": True})
+        return _decode(raw)
+
+    async def async_tester_read(self, path):
+        """One of the tester programme's reads (TESTER_READS), parsed; firmware without it: controller_update_required."""
+        if path not in TESTER_READS:
+            raise ControllerLinkError("controller_request_invalid")
+        return await self.async_read(path)
+
+    async def async_recording(self, start):
+        """POST /ems/recording/start (True) or /stop (False); returns the recording's status document.
+
+        Without PSRAM for the ring a start raises controller_recording_unavailable; during an update
+        controller_busy_or_conflict; firmware without it controller_update_required.
+        """
+        if type(start) is not bool:
+            raise ControllerLinkError("controller_request_invalid")
+        raw, _, _ = await self._request("POST", RECORDING_START if start else RECORDING_STOP, document={})
+        return _decode(raw)
+
+    async def async_recording_download(self, total):
+        """The stopped recording's emsrec text, ``total`` bytes (its status "bytes"), read part by part.
+
+        Every part must carry the same ETag (the same recording); a recording that changed meanwhile, or ends
+        short, raises controller_recording_changed; one that is not stopped controller_recording_not_ready.
+        """
+        if (self._session is None or self._session.closed or type(total) is not int
+                or not 0 < total <= RECORDING_MAX_BYTES):
+            raise ControllerLinkError("controller_request_invalid")
+        body, tag = bytearray(), None
+        headers = {"Origin": self.address, "Accept": "text/plain"}
+        try:
+            while len(body) < total:
+                async with self._session.request("GET", f"{self.address}{RECORDING}?offset={len(body)}", headers=headers,
+                                                 allow_redirects=False,
+                                                 timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    if response.status in (401, 403):
+                        raise ControllerLinkError("controller_auth_failed")
+                    if response.status == 404:
+                        raise ControllerLinkError("controller_update_required")
+                    if response.status == 409:
+                        raise ControllerLinkError("controller_recording_not_ready")
+                    if response.status != 200:
+                        raise ControllerLinkError("controller_recording_changed" if response.status == 416
+                                                  else "controller_response_invalid")
+                    etag = response.headers.get("ETag")
+                    if type(etag) is not str or re.fullmatch(r'"[0-9]{1,10}-[0-9]{1,20}"', etag) is None:
+                        raise ControllerLinkError("controller_response_invalid")
+                    if tag is None:
+                        tag = etag
+                    elif etag != tag:
+                        raise ControllerLinkError("controller_recording_changed")
+                    part = bytearray()
+                    async for chunk in response.content.iter_chunked(4096):
+                        if len(part) + len(chunk) > RECORDING_PART_BYTES or len(body) + len(part) + len(chunk) > total:
+                            raise ControllerLinkError("controller_recording_changed")
+                        part.extend(chunk)
+                if not part:
+                    break
+                body.extend(part)
+        except (aiohttp.ClientError, TimeoutError):
+            raise ControllerLinkError("controller_unreachable") from None
+        if len(body) != total:
+            raise ControllerLinkError("controller_recording_changed")
+        return bytes(body)
+
     async def async_bluetooth(self, document=None, etag=None):
         """GET the paired Bluetooth sensors with this sign-in's ETag, or POST the whole list with it.
 
@@ -812,6 +987,52 @@ class ControllerClient:
         if type(document) is not dict:
             raise ControllerLinkError("controller_request_invalid")
         raw, _, _ = await self._request("POST", HEATING_TRV, document=document)
+        return _decode(raw)
+
+    async def async_boiler_settings(self):
+        """GET /boiler/settings: the settings table, the values, the open change and the last result.
+
+        Firmware without the boiler settings raises controller_update_required.
+        """
+        return await self.async_read(BOILER_SETTINGS)
+
+    async def async_boiler_settings_post(self, path, document):
+        """POST one boiler settings request; returns (HTTP status, answer document).
+
+        202: the E32 started the change; 200: done, or ``attendance_required`` (the token is in the
+        answer's settings transaction). A refusal raises BoilerSettingsRejected with the E32's name.
+        """
+        if path not in BOILER_SETTINGS_POSTS or type(document) is not dict:
+            raise ControllerLinkError("controller_request_invalid")
+        raw, _, status = await self._request("POST", path, document=document)
+        return status, _decode(raw)
+
+    async def async_shelly(self, document=None):
+        """GET the Shelly record (no secrets), or POST the whole record; returns what the E32 stored.
+
+        A refusal raises HeatingPlanRejected with the E32's error name (invalid_..., unknown_field: 400;
+        save_unconfirmed: 503); firmware without Shelly raises controller_update_required.
+        """
+        if document is None:
+            return await self.async_read(SHELLY_CONFIG)
+        if type(document) is not dict:
+            raise ControllerLinkError("controller_request_invalid")
+        raw, _, _ = await self._request("POST", SHELLY_CONFIG, document=document)
+        return _decode(raw)
+
+    async def async_shelly_status(self):
+        """GET /status/shelly: the devices, the circuits and each BLU Gateway's valves (E32 1.1)."""
+        return await self.async_read(SHELLY_STATUS)
+
+    async def async_shelly_circuit(self, command):
+        """POST the owner's pump override of one circuit; returns the E32's Shelly status.
+
+        A refusal raises HeatingPlanRejected (unknown_circuit, unknown_device: 404; invalid_request,
+        invalid_pump, invalid_minutes, circuit_without_pump: 400).
+        """
+        if type(command) is not dict:
+            raise ControllerLinkError("controller_request_invalid")
+        raw, _, _ = await self._request("POST", SHELLY_CIRCUIT, document=command)
         return _decode(raw)
 
     async def async_config_backup(self, request):
@@ -886,18 +1107,31 @@ class ControllerClient:
             # refuses new sign-ins (429 session_capacity) while they are all in use.
             if (self._csrf or self._signed_in) and not self._session.closed:
                 try:
-                    async with asyncio.timeout(3):
+                    async with asyncio.timeout(LOGOUT_TIMEOUT_S):
                         if not self._csrf:
                             self._csrf = (await self._read_session())["csrf"]
                         await self._request("POST", "/auth/logout")
                     self.logout_confirmed = True
-                except (ControllerLinkError, TimeoutError):
-                    pass
+                except (ControllerLinkError, TimeoutError) as err:
+                    _logout_unconfirmed(err)
         finally:
             self._csrf = None
             self._signed_in = False
             self._session.cookie_jar.clear()
             await self._session.close()
+
+
+def _logout_unconfirmed(err):
+    """One clear line when the E32 did not confirm a sign-out: its web session stays in use for a while."""
+    global _logout_warned
+    why = f"no answer within {LOGOUT_TIMEOUT_S} s" if isinstance(err, TimeoutError) else str(err)
+    now = asyncio.get_running_loop().time()
+    if _logout_warned is None or not 0 <= now - _logout_warned < LOGOUT_WARNING_S:
+        _logout_warned = now
+        _LOGGER.warning("The E32 did not confirm the sign-out of Home Assistant (%s); that web session stays in use "
+                        "until the E32 frees it after 2 minutes", why)
+    else:
+        _LOGGER.debug("The E32 did not confirm a sign-out again (%s)", why)
 
 
 # The waits (s) before each new sign-in while every E32 web session is in use

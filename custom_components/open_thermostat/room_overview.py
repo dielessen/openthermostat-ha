@@ -30,10 +30,10 @@ from homeassistant.core import callback
 from .heating_link import RoomEntity, number
 
 # The room status card's module (served and loaded with the week planner's, week_planner.card_modules).
-CARD_URL = "/open_thermostat/room-status-card-1.0.0.js"
+CARD_URL = "/open_thermostat/room-status-card-1.1.0.js"
 # The Overview's house card (E32 rc.5, frontend/house-card.js): what the boiler does now, today in figures, the day
 # so far and, in a house with one room switched on, that room. The seventh card module, versioned like the others.
-HOUSE_CARD_URL = "/open_thermostat/house-card-1.0.0.js"
+HOUSE_CARD_URL = "/open_thermostat/house-card-1.1.0.js"
 HOUSE_CARD_TYPE = "custom:openthermostat-house"
 # Yesterday's headline figures on the Learning view, large as on the house card (the same module, house-card.js).
 YESTERDAY_CARD_TYPE = "custom:openthermostat-yesterday"
@@ -47,6 +47,8 @@ REASONS = ["off", "window_open", "window_pending", "no_measurement", "hot_water"
 LINES = {
     "off": (), "window_open": (), "window_open_contact": ("contact", "since"),
     "window_pending": (), "window_pending_contact": ("contact",), "no_measurement": (),
+    # E32 1.0.1 names the kind that pauses the room (comfort.opening) when no open contact can be named.
+    "window_open_window": (), "window_open_door": (), "window_pending_window": (), "window_pending_door": (),
     "hot_water": (), "boiler_pause": (), "warm_up": ("time", "target"), "away_return": (), "holiday": ("until", "target"),
     "away": ("target",), "room_away": ("target",), "house_away": ("target",),
     "boost": (), "boost_until": ("until",), "temporary": ("target",), "temporary_until": ("target", "until"),
@@ -59,7 +61,7 @@ PRESENCE = ["room_home", "room_away", "house_home", "house_away"]
 # The Boiler view's "Now" card (E32 rc.5, frontend/boiler-now-card.js): what the boiler does now in a band of its
 # colour with its display code in words, the water to the heating and back, the burner power and its starts as large
 # figures. The eighth card module, versioned like the others.
-BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.0.0.js"
+BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.1.0.js"
 BOILER_NOW_CARD_TYPE = "custom:openthermostat-boiler-now"
 
 
@@ -85,12 +87,22 @@ def _utc(value):
     return datetime.fromtimestamp(value, timezone.utc) if type(value) is int and value > 0 else None
 
 
+def opening(room):
+    """E32 1.0.1: "window" or "door", the kind of contact that pauses the room (comfort.opening) while its window
+    state is open or pending; None otherwise and on firmware that does not name it (1.0.0)."""
+    comfort = _dict(room.get("comfort")) if type(room) is dict else {}
+    if comfort.get("window") not in ("open", "pending") and comfort.get("mode") != "window_open":
+        return None
+    return comfort.get("opening") if comfort.get("opening") in ("window", "door") else None
+
+
 def room_reason(room, status=None, contact=None, warmup=None):
     """Why the room heats or not: a RoomReason, or None without a room.
 
     room: one room of the E32 status; status: the house (mode, request, away,
     burner); contact: the OpenContact HA sees open in this room (only used
-    while the E32 itself reports the window open or pending).
+    while the E32 itself reports the window open or pending; of the kind the
+    E32 names, see RoomReasonSensor._contact).
     """
     if type(room) is not dict:
         return None
@@ -106,15 +118,15 @@ def room_reason(room, status=None, contact=None, warmup=None):
 
     if room.get("state") == "inactive":
         return reason("off")  # the E32's frost protection still covers it
-    window = comfort.get("window")
+    window, kind = comfort.get("window"), opening(room)
     if window == "open" or mode == "window_open":
         if contact is not None:
             return reason("window_open", "window_open_contact", contact=contact.name, since=contact.since)
-        return reason("window_open")
+        return reason("window_open", f"window_open_{kind}" if kind else None)
     if window == "pending":
         if contact is not None:
             return reason("window_pending", "window_pending_contact", contact=contact.name)
-        return reason("window_pending")
+        return reason("window_pending", f"window_pending_{kind}" if kind else None)
     if room.get("status") == "lost" or temperature is None:
         return reason("no_measurement")
     demand = room.get("demand") is True
@@ -328,8 +340,8 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
     _attr_options = REASONS
     _attr_icon = "mdi:comment-question-outline"
     # The card's live values; the history keeps the reason itself (the room's own sensors keep the rest).
-    _unrecorded_attributes = frozenset({"values", "temperature", "setpoint", "presence", "window", "valve_position",
-                                        "valve_problem", "program", "comfort_mode", "comfort_until"})
+    _unrecorded_attributes = frozenset({"values", "temperature", "setpoint", "presence", "window", "opening",
+                                        "valve_position", "valve_problem", "program", "comfort_mode", "comfort_until"})
 
     def __init__(self, hub, room):
         self._attach_room(hub, room, "reason")
@@ -379,21 +391,25 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
             self._tick = None
         await super().async_will_remove_from_hass()
 
-    def _contact(self):
+    def _contact(self, opening=None):
+        """The open contact to name: of the kind the E32 says pauses the room (1.0.1), else any of the room's."""
         entry = self._entry()
         if entry is None or self.hass is None:
             return None
-        from .e32_comfort import room_contacts
-        return open_contact(self.hass, room_contacts(entry, self.room_id))
+        from .e32_comfort import comfort_options, doors_of, windows_of
+        settings = comfort_options(entry)
+        ids = {"door": doors_of, "window": windows_of}.get(opening, lambda *_: [])(settings, self.room_id)
+        return open_contact(self.hass, ids or settings["contacts"].get(self.room_id, []))
 
     def _reason(self):
         room = self.room
         if not room or not self.hub.fresh:
             return None
-        window = _dict(room.get("comfort")).get("window")
+        comfort = _dict(room.get("comfort"))
         warmup = self.hub.warmup.get(self.room_id) if type(getattr(self.hub, "warmup", None)) is dict else None
         start = warmup.get("optimum_start") if type(warmup) is dict else None
-        return room_reason(room, self.hub.status, self._contact() if window in ("open", "pending") else None, start)
+        contact = self._contact(comfort.get("opening")) if comfort.get("window") in ("open", "pending") else None
+        return room_reason(room, self.hub.status, contact, start)
 
     @property
     def native_value(self):
@@ -414,6 +430,9 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
                 "temperature": number(room.get("temperature"), -40, 85), "setpoint": number(room.get("setpoint"), 5, 35),
                 "presence": room_presence(room, self.hub.status),
                 "window": _dict(room.get("comfort")).get("window"),
+                # E32 1.0.1: which kind pauses the room while the window state is open or pending ("window" or
+                # "door"); None on 1.0.0, which does not tell them apart (the cards then say "window or door").
+                "opening": opening(room),
                 "valve_position": round(sum(moved) / len(moved)) if moved else None,
                 "valve_problem": bool(problems(valves)) if valves else None,
                 # HA 1.0.0rc7: the week program now and its next step (program_step), for the room status card.

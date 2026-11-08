@@ -25,12 +25,16 @@ from homeassistant.helpers import area_registry as ar, device_registry as dr, en
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util, slugify
 
-from .const import DOMAIN, TEST_SETUP_DEVICE_NAMES
+from .const import DOMAIN
 
 UNDO_DAYS = 30
 STORE_VERSION = 1
 PREVIEW_LINES = 40
 _SUFFIX = re.compile(r"_\d+$")
+# The device-name part of the IDs that installations from before 1.0 got from a long hub name of the
+# project's test setup. Only so this optional tidy recognises those IDs as generated (R4-22): no device is
+# renamed by it, and a fresh installation never has it.
+_EARLY_DEVICE_SLUGS = ("e32_regelaar_ketel_en_diagnose",)
 
 
 @dataclass
@@ -60,7 +64,7 @@ def _known_prefixes(hass, config_entry, entities) -> set[str]:
     [area_]device name, old or new, for every device and area of the entry. Room entities of early
     installations carry the hub's area and long name, so all of them count for each entity."""
     devices, areas = dr.async_get(hass), ar.async_get(hass)
-    names = {"openthermostat", *(slugify(n) for n in TEST_SETUP_DEVICE_NAMES)}
+    names = {"openthermostat", *_EARLY_DEVICE_SLUGS}
     area_ids = {e.area_id for e in entities}
     for device in dr.async_entries_for_config_entry(devices, config_entry.entry_id):
         names |= {slugify(n) for n in (device.name, device.name_by_user, getattr(device, "default_name", None)) if n}

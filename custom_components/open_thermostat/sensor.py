@@ -136,15 +136,26 @@ async def async_setup_entry(
             from .ems_devices import async_setup_ems_devices
             # The devices on the EMS bus (fw/config/ems_devices), beta.23.
             await _optional_step("EMS bus devices", async_setup_ems_devices, hass, entry)
+            from .boiler_capabilities import async_setup_boiler_capabilities
+            from .heating_link import add_options
+            # Which boiler the E32 recognised (fw/config/boiler_capabilities, E4): the sensor and its Repair.
+            await _optional_step("boiler recognition", async_setup_boiler_capabilities, hass, entry, async_add_entities,
+                                 add_options(hass, entry))
             from .e32_flow import async_setup_sensors as async_setup_flow_sensors
             # flow source, gas calibration, last night
             await _optional_step("flow sensors", async_setup_flow_sensors, hass, entry, async_add_entities)
             from .e32_valves import async_setup_sensors as async_setup_valve_sensors
             # radiator valves per room (only rooms with valves), their Repairs
             await _optional_step("valve sensors", async_setup_valve_sensors, hass, entry, async_add_entities)
+            from .e32_shelly import async_setup_sensors as async_setup_circuit_sensors
+            # E32 1.1: heating circuits (floor pump, supply and return) and floor probes, their Repairs
+            await _optional_step("heating circuit sensors", async_setup_circuit_sensors, hass, entry, async_add_entities)
             from .e32_backup_entities import async_setup_sensors as async_setup_backup_sensors
             # the last E32 settings backup (only with a stored E32 connection)
             await _optional_step("backup sensor", async_setup_backup_sensors, hass, entry, async_add_entities)
+            from .e32_boiler_settings_entities import async_setup_sensors as async_setup_boiler_settings
+            # "Boiler settings writes", once the E32 sends fw/telemetry/boiler_settings (track W)
+            await _optional_step("boiler settings", async_setup_boiler_settings, hass, entry, async_add_entities)
             return
         from .device_diagnostics import async_setup_device_diagnostics
         await async_setup_device_diagnostics(hass,entry,async_add_entities)

@@ -74,7 +74,11 @@ class BoilerModelSteps:
                                         description_placeholders={"error": "controller_response_invalid"})
             self._boiler_model = current
         choices = options(current, lang)
-        errors, placeholders = {}, {"error": "", "current": model_name(current, lang)}
+        from .boiler_capabilities import current as recognition, recognised_line
+        # E4: the boiler the E32 recognised on the bus and its state; nothing on firmware without it.
+        line = recognised_line(recognition(self.hass, self.config_entry.entry_id), lang)
+        errors = {}
+        placeholders = {"error": "", "current": model_name(current, lang), "recognised": "\n\n" + line if line else ""}
         if user_input is not None:
             chosen = user_input.get("model")
             if chosen not in {c["value"] for c in choices}:

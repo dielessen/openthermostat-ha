@@ -38,6 +38,23 @@ without Home Assistant. This module adds, on top of that plan (E32 beta.19,
   resumes when all are closed. Unknown states are not sent: the E32 then
   forgets the report after 15 minutes and the room heats normally.
 
+  Windows and doors (1.0.1): each contact of a room is a window (the default,
+  also for every contact chosen before) or a door, and a room has a delay for
+  each ("Pause after (windows)", default 2 min; "Pause after (doors)", default
+  5 min), so a door opened briefly many times a day pauses later. The delays
+  stay in the E32, which counts them from the first open report (a restart of
+  Home Assistant never restarts them). Firmware that announces door contacts
+  (away.door_contacts, contact.door.v1) gets each kind on its own; doors as::
+
+      {"kind": "contact", "room": "hall", "open": true, "delay_s": 300, "contact": "door"}
+
+  and windows exactly as before (no "contact"). Older firmware (1.0.0) keeps one
+  state per room, so it gets one report as before: open while any contact is
+  open, with the window delay while a window is open and the door delay while
+  only doors are open (legacy_contact_payload). There a window opened while a
+  door is already open can pause the room sooner than its own delay: the E32
+  counts from the door's opening.
+
 The entity reads the room from the E32 telemetry (``fw/state/room/<id>``: the
 room's ``temperature``, ``setpoint``, ``state``, ``demand`` and, while it
 deviates from its plan, ``comfort``; ``fw/state/heating``: ``away``) through the
@@ -46,7 +63,7 @@ entry's HeatingHub. Commands go over the stored controller connection
 """
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 from functools import partial
 import json
@@ -72,7 +89,11 @@ DEFAULTS = {"presence_entity": None, "presence_entities": [], "away_delay_min": 
             "contact_delay_s": 120,
             # Per room (beta.23): {room id: seconds}; a room without its own delay uses contact_delay_s.
             "contact_delays": {},
-            "override_minutes": 120, "contacts": {},
+            # Doors (1.0.1): the house default and per room, as for windows.
+            "door_delay_s": 300, "door_delays": {},
+            # {room id: [entity ids]}: every contact of the room (windows and doors, as before 1.0.1, so an
+            # older version still finds them all, as windows); doors: those of them that are doors.
+            "override_minutes": 120, "contacts": {}, "doors": {},
             # Persons per room (beta.23): {room id: [person entity ids]}; a room without uses the house.
             "room_persons": {}}
 TEMPERATURE_LIMITS = (5.0, 30.0)
@@ -123,17 +144,24 @@ def comfort_options(entry):
     for key, (low, high) in (("comfort_c", TEMPERATURE_LIMITS), ("eco_c", TEMPERATURE_LIMITS)):
         if number(raw.get(key), low, high) is not None:
             out[key] = float(raw[key])
-    for key, (low, high) in (("contact_delay_s", DELAY_LIMITS), ("override_minutes", MINUTES_LIMITS)):
+    for key, (low, high) in (("contact_delay_s", DELAY_LIMITS), ("door_delay_s", DELAY_LIMITS),
+                             ("override_minutes", MINUTES_LIMITS)):
         if type(raw.get(key)) is int and low <= raw[key] <= high:
             out[key] = raw[key]
-    delays = raw.get("contact_delays")
-    if type(delays) is dict:
-        out["contact_delays"] = {room: s for room, s in delays.items()
-                                 if type(room) is str and type(s) is int and DELAY_LIMITS[0] <= s <= DELAY_LIMITS[1]}
+    for key in ("contact_delays", "door_delays"):
+        delays = raw.get(key)
+        if type(delays) is dict:
+            out[key] = {room: s for room, s in delays.items()
+                        if type(room) is str and type(s) is int and DELAY_LIMITS[0] <= s <= DELAY_LIMITS[1]}
     contacts = raw.get("contacts")
     if type(contacts) is dict:
         out["contacts"] = {room: [e for e in ids if type(e) is str and e.startswith("binary_sensor.")][:MAX_CONTACTS]
                            for room, ids in contacts.items() if type(room) is str and type(ids) is list}
+    doors = raw.get("doors")
+    if type(doors) is dict:  # only contacts of the room itself; anything else stays a window
+        out["doors"] = {room: [e for e in out["contacts"].get(room, []) if e in ids]
+                        for room, ids in doors.items() if type(room) is str and type(ids) is list}
+        out["doors"] = {room: ids for room, ids in out["doors"].items() if ids}
     persons = raw.get("room_persons")
     if type(persons) is dict:
         out["room_persons"] = {
@@ -178,6 +206,7 @@ def validate_settings(hass, user_input, current):
             raise ComfortError(field, "temperature_invalid")
         out[key] = round(value * 2) / 2
     for field, key, limits in (("contact_delay", "contact_delay_s", DELAY_LIMITS),
+                               ("door_delay", "door_delay_s", DELAY_LIMITS),
                                ("override_minutes", "override_minutes", MINUTES_LIMITS)):
         value = number(user_input.get(field, out[key]), *limits)
         if value is None or value != int(value):
@@ -207,36 +236,77 @@ def validate_contacts(hass, selections, known=()):
     return list(selections)
 
 
+def validate_kinds(windows, doors):
+    """A room's window and door sensors from the two pickers: each sensor once, at most eight together."""
+    if set(windows) & set(doors):
+        raise ComfortError("contacts", "contact_window_and_door")
+    if len(windows) + len(doors) > MAX_CONTACTS:
+        raise ComfortError("contacts", "contacts_invalid")
+    return list(windows) + list(doors), list(doors)
+
+
 def room_contacts(entry, room_id):
-    """The window/door sensors of one E32 room (Configure → Rooms or Comfort)."""
+    """The window and door sensors of one E32 room (Configure → Rooms or Comfort), windows and doors alike."""
     return list(comfort_options(entry)["contacts"].get(room_id, []))
 
 
+def room_doors(entry, room_id):
+    """The door sensors of one E32 room (1.0.1): a part of room_contacts()."""
+    return list(comfort_options(entry)["doors"].get(room_id, []))
+
+
+def doors_of(settings, room_id):
+    return [e for e in settings.get("doors", {}).get(room_id, []) if e in settings["contacts"].get(room_id, [])]
+
+
+def windows_of(settings, room_id):
+    """The room's contacts that are no door: windows, also every contact chosen before 1.0.1."""
+    doors = doors_of(settings, room_id)
+    return [e for e in settings["contacts"].get(room_id, []) if e not in doors]
+
+
 def room_contact_delay(settings, room_id):
-    """Seconds an open window/door waits before this room pauses: its own delay, else the default."""
+    """Seconds an open window waits before this room pauses: its own delay, else the default."""
     return settings.get("contact_delays", {}).get(room_id, settings["contact_delay_s"])
 
 
-def own_contact_delay(settings, delay_s):
+def room_door_delay(settings, room_id):
+    """Seconds an open door waits before this room pauses (1.0.1): its own delay, else the default."""
+    return settings.get("door_delays", {}).get(room_id, settings.get("door_delay_s", DEFAULTS["door_delay_s"]))
+
+
+def own_contact_delay(settings, delay_s, door=False):
     """What a room stores for a pause delay: None when it is the house default (the room then follows it)."""
-    return None if delay_s == settings["contact_delay_s"] else delay_s
+    default = settings.get("door_delay_s", DEFAULTS["door_delay_s"]) if door else settings["contact_delay_s"]
+    return None if delay_s == default else delay_s
 
 
-def with_room_contacts(settings, room_id, contacts, delay_s=None):
+def with_room_contacts(settings, room_id, contacts, delay_s=None, doors=None, door_delay_s=None):
     """The comfort settings with this room's sensors replaced (none: the room has no sensors and no own
-    delay); delay_s: the room's own pause delay (None keeps it; the house default drops it, so the room
-    follows a later change of the default)."""
+    delays); delay_s / door_delay_s: the room's own pause delay for windows / doors (None keeps it; the
+    house default drops it, so the room follows a later change of the default); doors: which of the
+    contacts are doors (None keeps those that stay)."""
     rooms = {**settings["contacts"], room_id: list(contacts)}
-    delays = dict(settings.get("contact_delays", {}))
-    if delay_s is not None:
-        if own_contact_delay(settings, delay_s) is None:
+    door_rooms = dict(settings.get("doors", {}))
+    kept = [e for e in (door_rooms.get(room_id, []) if doors is None else doors) if e in contacts]
+    if kept:
+        door_rooms[room_id] = kept
+    else:
+        door_rooms.pop(room_id, None)
+    result = {**settings, "contacts": rooms, "doors": door_rooms}
+    for key, value, door in (("contact_delays", delay_s, False), ("door_delays", door_delay_s, True)):
+        delays = dict(settings.get(key, {}))
+        if value is not None:
+            if own_contact_delay(settings, value, door) is None:
+                delays.pop(room_id, None)
+            else:
+                delays[room_id] = value
+        if not contacts:
             delays.pop(room_id, None)
-        else:
-            delays[room_id] = delay_s
+        result[key] = delays
     if not contacts:
         rooms.pop(room_id, None)
-        delays.pop(room_id, None)
-    return {**settings, "contacts": rooms, "contact_delays": delays}
+    return result
 
 
 def room_persons(entry, room_id):
@@ -279,9 +349,19 @@ def supports_room_presence(hub):
     return type(away) is dict and away.get("room_presence") is True
 
 
-def contact_delay_text(settings, room_id=None):
-    """The pause delay as the forms show it: "2 min" or "45 s" (a room's own delay with room_id)."""
-    seconds = room_contact_delay(settings, room_id) if room_id else settings["contact_delay_s"]
+def supports_door_contacts(hub):
+    """E32 1.0.1 and newer keep windows and doors apart, each with its own delay (away.door_contacts)."""
+    status = getattr(hub, "status", None)
+    away = status.get("away") if type(status) is dict else None
+    return type(away) is dict and away.get("door_contacts") is True
+
+
+def contact_delay_text(settings, room_id=None, door=False):
+    """The pause delay as the forms show it: "2 min" or "45 s" (a room's own delay with room_id; door: the doors')."""
+    if door:
+        seconds = room_door_delay(settings, room_id) if room_id else settings.get("door_delay_s", DEFAULTS["door_delay_s"])
+    else:
+        seconds = room_contact_delay(settings, room_id) if room_id else settings["contact_delay_s"]
     return f"{seconds // 60} min" if seconds >= 60 and seconds % 60 == 0 else f"{seconds} s"
 
 
@@ -316,6 +396,9 @@ def settings_schema(vol, settings):
         vol.Required("eco_temperature", default=settings["eco_c"]): box(*TEMPERATURE_LIMITS, 0.5, "°C"),
         # In minutes, as in each room's own "Pause after" (stored in seconds, the E32's unit).
         vol.Required("contact_delay", default=settings["contact_delay_s"] / 60): box(
+            DELAY_LIMITS[0] / 60, DELAY_LIMITS[1] / 60, 0.5, "min"),
+        # Doors (1.0.1): usually longer, so walking through a door does not pause the room.
+        vol.Required("door_delay", default=settings["door_delay_s"] / 60): box(
             DELAY_LIMITS[0] / 60, DELAY_LIMITS[1] / 60, 0.5, "min"),
         vol.Required("override_minutes", default=settings["override_minutes"]): box(*MINUTES_LIMITS, 1, "min"),
     })
@@ -359,10 +442,11 @@ def contacts_room_schema(vol, rooms, room_id):
     })
 
 
-def contacts_schema(vol, contacts):
-    """Step two: that room's window/door sensors, prefilled with the ones it has."""
+def contacts_schema(vol, contacts, doors=()):
+    """Step two: that room's window and door sensors, prefilled with the ones it has."""
     return vol.Schema({
         vol.Optional("contacts", description={"suggested_value": contacts or None}): contact_selector(),
+        vol.Optional("door_contacts", description={"suggested_value": list(doors) or None}): contact_selector(),
     })
 
 
@@ -482,19 +566,60 @@ def contacts_open(states):
     return None
 
 
-def comfort_payloads(hass, settings, room_ids, only=None, now=None, room_presence=False):
+def contact_payloads(hass, settings, room_id, doors=False):
+    """The contact reports of one room: (kind, payload or None while unknown) for each kind it has.
+
+    doors: the E32 keeps doors apart (supports_door_contacts): windows as before (no "contact"), doors with
+    "contact": "door" and their own delay. Else one report for all of them (legacy_contact_payload).
+    """
+    windows, door_ids = windows_of(settings, room_id), doors_of(settings, room_id)
+    states = {e: hass.states.get(e) for e in windows + door_ids}
+    if not doors:
+        return [("window", legacy_contact_payload(settings, room_id, [states[e] for e in windows],
+                                                  [states[e] for e in door_ids]))]
+    out = []
+    if windows:
+        value = contacts_open([states[e] for e in windows])
+        out.append(("window", None if value is None else {
+            "kind": "contact", "room": room_id, "open": value, "delay_s": room_contact_delay(settings, room_id)}))
+    if door_ids:
+        value = contacts_open([states[e] for e in door_ids])
+        out.append(("door", None if value is None else {
+            "kind": "contact", "room": room_id, "open": value, "delay_s": room_door_delay(settings, room_id),
+            "contact": "door"}))
+    return out
+
+
+def legacy_contact_payload(settings, room_id, windows, doors):
+    """One report for firmware without door contacts (1.0.0): open while any contact is open (None: unknown,
+    as before); the window delay while a window is open, else the door delay while a door is open."""
+    value = contacts_open(windows + doors)
+    if value is None:
+        return None
+    delay = (room_door_delay(settings, room_id) if value and contacts_open(windows) is not True
+             else room_contact_delay(settings, room_id))
+    return {"kind": "contact", "room": room_id, "open": value, "delay_s": delay}
+
+
+def closed_payload(settings, room_id, kind):
+    """The report that one kind of contact of a room is closed (forgotten and stale contacts)."""
+    if kind == "door":
+        return {"kind": "contact", "room": room_id, "open": False, "delay_s": room_door_delay(settings, room_id),
+                "contact": "door"}
+    return {"kind": "contact", "room": room_id, "open": False, "delay_s": room_contact_delay(settings, room_id)}
+
+
+def comfort_payloads(hass, settings, room_ids, only=None, now=None, room_presence=False, doors=False):
     """The typed heating_input payloads (dicts) for the configured contacts and presence.
 
-    room_presence: the E32 understands persons per room (supports_room_presence).
+    room_presence: the E32 understands persons per room (supports_room_presence); doors: it keeps doors
+    apart (supports_door_contacts).
     """
     payloads = []
     for room_id, ids in sorted(settings["contacts"].items()):
         if room_id not in room_ids or not ids or (only is not None and only not in ids):
             continue
-        value = contacts_open([hass.states.get(e) for e in ids])
-        if value is not None:
-            payloads.append({"kind": "contact", "room": room_id, "open": value,
-                             "delay_s": room_contact_delay(settings, room_id)})
+        payloads.extend(payload for _kind, payload in contact_payloads(hass, settings, room_id, doors) if payload)
     people = settings["presence_entities"]
     if people and only in (None, *people):
         home, _wait = house_presence(hass, people, settings["away_delay_min"], now)
@@ -532,6 +657,9 @@ class ComfortForwarder:
         self._unsubscribe = None
         self._was_fresh = False
         self._away_timer = None  # sends "everyone away" once the away delay has passed
+        self._kinds = set()      # (room, kind) of the contacts last configured (forgotten(): closed once)
+        self._doors = None       # supports_door_contacts() at the last send (hub_changed: sent again when it changes)
+        self._closed = set()     # (room, kind) told closed while the E32 still reports it open (stale(): once)
 
     @property
     def settings(self):
@@ -552,10 +680,49 @@ class ComfortForwarder:
                 memory.observe(entity_id, self.hass.states.get(entity_id))
         if not self.hub.fresh:
             return
-        for payload in comfort_payloads(self.hass, settings, set(self.hub.rooms), only,
-                                        room_presence=supports_room_presence(self.hub)):
+        doors = self._doors = supports_door_contacts(self.hub)
+        for payload in self.forgotten(settings, doors) + comfort_payloads(
+                self.hass, settings, set(self.hub.rooms), only, room_presence=supports_room_presence(self.hub),
+                doors=doors):
             self.send(json.dumps(payload, separators=(",", ":")))
         self._schedule_away(settings)
+
+    def forgotten(self, settings, doors):
+        """A closed report, once, for a kind of contact a room no longer has (all its windows or doors removed,
+        or a sensor moved from window to door): the E32 would otherwise keep an open one for 15 minutes."""
+        rooms = set(self.hub.rooms)
+        kinds = {(room_id, kind) for room_id in settings["contacts"] if room_id in rooms
+                 for kind, _payload in contact_payloads(self.hass, settings, room_id, doors)}
+        gone, self._kinds = self._kinds - kinds, kinds
+        gone = {(room_id, kind) for room_id, kind in gone if room_id in rooms and (kind == "window" or doors)}
+        self._closed |= gone
+        return [closed_payload(settings, room_id, kind) for room_id, kind in sorted(gone)]
+
+    def stale(self, settings, doors):
+        """A closed report, once, for a kind of contact the E32 reports open (or its delay running) in a room that
+        has no contact of that kind in Home Assistant (any more).
+
+        Only Home Assistant reports contacts to the E32, so that state is a leftover: a contact removed or moved
+        while Home Assistant was not running, or while the E32 was offline and Home Assistant restarted before it
+        was back (forgotten() keeps that in memory only). It needs no stored memory: the E32's own room status says
+        it, after any restart. Sent again only once the E32 stopped reporting it or at the 5-minute refresh, so a
+        status that still shows it open right after the report sends nothing more.
+        """
+        wanted = set()
+        for room_id, room in self.hub.rooms.items():
+            comfort = room.get("comfort") if type(room) is dict else None
+            if type(comfort) is not dict or comfort.get("window") not in ("open", "pending"):
+                continue
+            if not doors:  # one report for all of the room's contacts (1.0.0)
+                if not settings["contacts"].get(room_id):
+                    wanted.add((room_id, "window"))
+                continue
+            opening = comfort.get("opening")
+            have = {"window": windows_of(settings, room_id), "door": doors_of(settings, room_id)}
+            wanted |= {(room_id, kind) for kind in ((opening,) if opening in have else tuple(have)) if not have[kind]}
+        self._closed &= wanted
+        new, self._closed = wanted - self._closed, self._closed | wanted
+        return [closed_payload(settings, room_id, kind) for room_id, kind in sorted(new)]
 
     @callback
     def _schedule_away(self, settings):
@@ -581,7 +748,15 @@ class ComfortForwarder:
         in a worker thread, where sending raises: the refresh never went out, and from 1.0.0rc5 on every
         refresh also kept a place in the sender until room values were dropped too (P22).
         """
+        self._closed.clear()  # a leftover the E32 still reports is told closed again (stale)
         self.publish()
+        self._close_stale()
+
+    @callback
+    def _close_stale(self):
+        if self.hub.fresh:
+            for payload in self.stale(self.settings, supports_door_contacts(self.hub)):
+                self.send(json.dumps(payload, separators=(",", ":")))
 
     @callback
     def _changed(self, event):
@@ -589,11 +764,19 @@ class ComfortForwarder:
 
     @callback
     def hub_changed(self):
-        """The E32 is (back) online: send everything at once."""
+        """The E32 is (back) online, or it now does or no longer announces door contacts: send everything at once.
+
+        After an update to or from 1.0.1 the first send can still follow the previous status (a quick restart
+        is told before the new status arrives): sent again as soon as the announcement changes, so 1.0.0
+        never keeps a door report as its only state, and 1.0.1 gets the doors apart without waiting for the
+        5-minute refresh.
+        """
         fresh = self.hub.fresh
-        if fresh and not self._was_fresh:
+        if fresh and (not self._was_fresh or (self._doors is not None
+                                              and supports_door_contacts(self.hub) != self._doors)):
             self.publish()
         self._was_fresh = fresh
+        self._close_stale()
 
     @callback
     def reconfigure(self):
@@ -914,10 +1097,18 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
     async def _change_plan(self, change, key=None):
         await self.link.async_change_room(self.room_id, change, key)
 
+    def _inactive(self):
+        return (self.room or {}).get("state") == "inactive" or (self.plan_room or {}).get("state") == "inactive"
+
     async def _ensure_active(self):
-        if (self.room or {}).get("state") == "inactive" or (self.plan_room or {}).get("state") == "inactive":
+        if self._inactive():
             from .room_plan import set_state
             await self._change_plan(set_state("active"))
+
+    def _one_sign_in(self):
+        """R4-27: switching an inactive room on and its new target share one E32 sign-in (RoomPlanLink.async_session)."""
+        session = getattr(self.link, "async_session", None) if self._inactive() else None
+        return session() if session is not None else nullcontext()
 
     async def async_hold(self, temperature):
         """A new target: until the next switch point, else for the configured time, else the plan's fixed target."""
@@ -945,7 +1136,7 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
             return
         if kwargs.get("hvac_mode") == HVACMode.OFF:
             return await self.async_set_hvac_mode(HVACMode.OFF)
-        async with self._target_pending(float(temperature)):
+        async with self._target_pending(float(temperature)), self._one_sign_in():
             await self._ensure_active()
             await self.async_hold(float(temperature))
 
@@ -977,7 +1168,7 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
             await self._command(override_command(self.room_id, "boost"))
         elif preset_mode in LEVEL_PRESETS:
             levels = program_levels(self.plan_room, comfort_options(self.entry))
-            async with self._target_pending(levels[LEVEL_PRESETS[preset_mode]]):
+            async with self._target_pending(levels[LEVEL_PRESETS[preset_mode]]), self._one_sign_in():
                 await self._ensure_active()
                 await self.async_hold(levels[LEVEL_PRESETS[preset_mode]])
         elif preset_mode == PRESET_NONE:
@@ -1152,9 +1343,10 @@ class ComfortOptionsSteps:
         errors = {}
         if user_input is not None:
             try:
-                minutes = user_input.get("contact_delay")
-                if type(minutes) in (int, float):  # the form shows minutes; the settings keep seconds
-                    user_input = {**user_input, "contact_delay": round(minutes * 60, 6)}
+                for field in ("contact_delay", "door_delay"):
+                    minutes = user_input.get(field)
+                    if type(minutes) in (int, float):  # the form shows minutes; the settings keep seconds
+                        user_input = {**user_input, field: round(minutes * 60, 6)}
                 settings = validate_settings(self.hass, user_input, current)
             except ComfortError as err:
                 errors[err.field] = err.code
@@ -1202,17 +1394,21 @@ class ComfortOptionsSteps:
         if room_id not in rooms:
             return self.async_abort(reason="comfort_no_rooms")
         current = comfort_options(self.config_entry)
-        known = current["contacts"].get(room_id, [])
+        known, windows, doors = current["contacts"].get(room_id, []), windows_of(current, room_id), doors_of(current, room_id)
         errors = {}
         if user_input is not None:
             try:
-                contacts = validate_contacts(self.hass, list(user_input.get("contacts") or []), known)
+                contacts, door_ids = validate_kinds(
+                    validate_contacts(self.hass, list(user_input.get("contacts") or []), known),
+                    validate_contacts(self.hass, list(user_input.get("door_contacts") or []), known))
             except ComfortError as err:
                 errors[err.field] = err.code
             else:
-                save_comfort(self.hass, self.config_entry, with_room_contacts(current, room_id, contacts))
+                save_comfort(self.hass, self.config_entry, with_room_contacts(current, room_id, contacts, doors=door_ids))
                 return self.async_abort(reason="comfort_saved")
+        if errors:
+            windows, doors = (user_input or {}).get("contacts", windows), (user_input or {}).get("door_contacts", doors)
         return self.async_show_form(
-            step_id="comfort_contacts_room", errors=errors,
-            data_schema=contacts_schema(vol, (user_input or {}).get("contacts", known) if errors else known),
-            description_placeholders={"room": rooms[room_id], "delay": contact_delay_text(current)})
+            step_id="comfort_contacts_room", errors=errors, data_schema=contacts_schema(vol, windows, doors),
+            description_placeholders={"room": rooms[room_id], "delay": contact_delay_text(current),
+                                      "door_delay": contact_delay_text(current, door=True)})

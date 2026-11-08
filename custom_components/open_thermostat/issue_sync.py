@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from homeassistant.helpers import issue_registry as ir
 
-from .const import DOMAIN
+from .const import DOMAIN, SHARED
 
 _KEY = "issue_sync"
 
 
 def sync_issues(hass, entry_id, group, wanted, *, severity=ir.IssueSeverity.WARNING):
     """``wanted``: {item id: (translation key, placeholders)}. Returns the issue ids that exist now."""
-    store = hass.data.setdefault(DOMAIN, {}).setdefault(_KEY, {})
+    store = hass.data.setdefault(SHARED, {}).setdefault(_KEY, {})
     key = (entry_id, group)
     current = {f"{group}_{item}_{entry_id}": value for item, value in wanted.items()}
     for issue_id, (translation_key, placeholders) in current.items():
@@ -25,10 +25,20 @@ def sync_issues(hass, entry_id, group, wanted, *, severity=ir.IssueSeverity.WARN
                               translation_placeholders={k: str(v) for k, v in (placeholders or {}).items()})
     for issue_id in store.get(key, set()) - set(current):
         ir.async_delete_issue(hass, DOMAIN, issue_id)
-    store[key] = set(current)
+    if current:
+        store[key] = set(current)
+    else:
+        store.pop(key, None)  # nothing raised: no key kept for an owner that is gone (R4-31)
     return set(current)
 
 
 def clear_issues(hass, entry_id, group):
     """Remove every issue of a group (the owner is unloaded)."""
     return sync_issues(hass, entry_id, group, {})
+
+
+def forget_entry(hass, entry_id):
+    """A removed installation: drop its bookkeeping (its issues are deleted by async_remove_entry)."""
+    store = hass.data.get(SHARED, {}).get(_KEY, {})
+    for key in [k for k in store if k[0] == entry_id]:
+        del store[key]

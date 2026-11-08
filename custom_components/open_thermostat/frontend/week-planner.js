@@ -169,7 +169,7 @@ Object.assign(TEXT.en,{
  comfortInvalid:'Check comfort targets, duration and presence. Targets must fit the room limits.',comfortUpdate:'Update the controller before enabling comfort modes. Nothing was saved.',
  comfortFrostProfile:'This controller uses a 5 °C frost target. Keep that target and allow 5 °C in the room limits; the source protection policy is unchanged.',
  comfortDraft:'Save to apply these comfort settings.',comfortDisabled:'Comfort modes are not enabled.',comfortConfigured:'Comfort modes configured; current operation is shown by the room climate control.',
- comfortUnavailable:'Current comfort status is unavailable.',comfortReasons:{presence_away:'Away target selected by presence.',presence_state_unknown:'Presence is unknown or stale; no automatic target is available.',window_open:'Room demand is paused by a window or door.',window_state_unknown:'Window or door status is unknown; room demand remains paused.'},comfortModes:{auto:'Automatic programme',temporary:'Temporary target',boost:'Boost',away:'Away',vacation:'Vacation',frost:'Frost mode',off:'Off'}
+ comfortUnavailable:'Current comfort status is unavailable.',comfortReasons:{presence_away:'Away target selected by presence.',presence_state_unknown:'Presence is unknown or stale; no automatic target is available.',window_open:'Room demand is paused by a window or door.',window_state_unknown:'Window or door status is unknown; room demand remains paused.'},comfortModes:{auto:'Automatic program',temporary:'Temporary target',boost:'Boost',away:'Away',vacation:'Vacation',frost:'Frost mode',off:'Off'}
 });
 Object.assign(TEXT.nl,{
  comfortTitle:'Comfort en aanwezigheid',comfortEnabled:'Comfortstanden gebruiken',comfortAway:'Afwezigheidsdoel (°C)',comfortFrost:'Vorstdoel (°C)',comfortDuration:'Standaard tijdelijke duur (minuten)',
@@ -181,7 +181,7 @@ Object.assign(TEXT.nl,{
  comfortUnavailable:'De huidige comfortstatus is niet beschikbaar.',comfortReasons:{presence_away:'Afwezigheidsdoel gekozen door de aanwezigheidsbron.',presence_state_unknown:'Aanwezigheid is onbekend of verlopen; er is geen automatisch doel beschikbaar.',window_open:'De kamervraag is gepauzeerd door een raam of deur.',window_state_unknown:'Raam- of deurstatus is onbekend; de kamervraag blijft gepauzeerd.'},comfortModes:{auto:'Automatisch programma',temporary:'Tijdelijk doel',boost:'Boost',away:'Afwezig',vacation:'Vakantie',frost:'Vorststand',off:'Uit'}
 });
 Object.assign(TEXT.en,{
- vacationTitle:'Vacation',vacationEnd:'End date and time',vacationStart:'Start or change vacation',vacationCancel:'Return to programme',vacationChoose:'Choose the first or second clock time',
+ vacationTitle:'Vacation',vacationEnd:'End date and time',vacationStart:'Start or change vacation',vacationCancel:'Return to program',vacationChoose:'Choose the first or second clock time',
  vacationHelp:'Uses the saved away target until this time in the Home Assistant time zone. This is a separate explicit action; saving room settings does not start vacation. Restart, reconnect or room reload clears this temporary selection.',
  vacationIdle:'Choose an end date and start vacation explicitly.',vacationSave:'Save room changes and wait for their confirmation before using vacation.',vacationUnavailable:'Current room control is unavailable. Reload when the controller is connected.',
  vacationChecking:'Checking the local end time…',vacationSending:'Requesting the comfort change…',vacationRequested:'Request accepted. Check the current room status.',

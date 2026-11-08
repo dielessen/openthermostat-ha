@@ -23,6 +23,16 @@ A valve Home Assistant controls (ZHA, Z-Wave, Shelly, a cloud integration) is mo
 Assistant drives it on the E32's rules and reports its health, battery and opening
 in the same entities (ha_valves.py).
 
+E32 1.1 (Shelly): a Shelly BLU TRV behind a BLU Gateway Gen3 that the E32 drives
+itself over local HTTP is model ``shelly_blu_trv`` named ``g<n>:<id>`` (gateway
+device n of the E32's Shelly record, component blutrv:<id>), with its role
+(``radiator``, or ``loop`` for a floor loop valve on the manifold) and, for a
+radiator, ``keep_open`` (kept open as the water's path). A room takes up to 8
+valves, more than 4 only through the gateway; 24 in all. Its room document adds
+``role`` and ``link`` (the route's problem: the gateway does not answer, the
+valve is silent, missing or not paired); the signal strength stays on the E32's
+own page. Repairs: the gateway does not answer, a valve the gateway does not know.
+
 Everything comes from ``fw/state/trv/<room>`` (HeatingHub.valves): without valves
 there is no entity and no issue, and an entity of a room whose valves were removed
 is removed again.
@@ -50,14 +60,25 @@ KEY = "e32_valves"
 # Our model ids (TrvConfig.h trvModels); what each can do is the E32's to know.
 ZIGBEE_MODELS = ("bosch_bth_ra", "sonoff_trvzb", "sonoff_trv_zbt", "tuya_tv02", "generic")
 HA_MODEL = "ha_climate"  # a climate entity Home Assistant drives (ha_valves.py)
-MODELS = (*ZIGBEE_MODELS, HA_MODEL)
+GATEWAY_MODEL = "shelly_blu_trv"  # E32 1.1: a Shelly BLU TRV through the BLU Gateway Gen3 (TrvConfig.h)
+MODELS = (*ZIGBEE_MODELS, HA_MODEL, GATEWAY_MODEL)
+# Models without a position readback (TrvConfig.h positionKey nullptr): the valve regulates itself to the target
+# the E32 sends, so it reports no opening (Sonoff confirmed it for the TRV Gen2 / TRV-ZBT).
+NO_POSITION_MODELS = ("sonoff_trvzb", "sonoff_trv_zbt", "tuya_tv02", "generic")
 CLIMATE_ID = re.compile(r"climate\.[a-z0-9_]+")
-MAX_VALVES_PER_ROOM = 4
-MAX_VALVES = 16
+# "g<gateway device number 1-99>:<blutrv component id 200-299>" (TrvConfig.h parseGatewayValveName).
+GATEWAY_NAME = re.compile(r"g([1-9][0-9]?):(2[0-9]{2})")
+ROLES = ("radiator", "loop")
+MAX_VALVES_PER_ROOM = 8  # E32 1.1; more than MAX_CLASSIC_VALVES_PER_ROOM only through the BLU Gateway
+MAX_CLASSIC_VALVES_PER_ROOM = 4
+MAX_VALVES = 24
+MAX_VALVES_WITHOUT_GATEWAY = 16  # an E32 without the BLU Gateway (before 1.1, or esp32dev)
 MAX_NAME = 64
 HEALTH = ("ok", "low_battery", "offline", "unknown")
+# A BLU Gateway valve's route problem in its room document (TrvControl.h "link").
+LINKS = ("gateway", "silent", "missing", "unpaired", "unknown")
 ENTITY_KEYS = ("valve_position", "valve_battery", "valve_problem", "valve_control")
-ISSUES = ("valve_battery_low", "valve_offline", "valve_single_source")
+ISSUES = ("valve_battery_low", "valve_offline", "valve_single_source", "valve_gateway_silent", "valve_not_found")
 # A switched control shows its new state until the E32's telemetry agrees (at most this long).
 PENDING_SECONDS = 30
 
@@ -89,8 +110,35 @@ def valid_entity(name):
     return type(name) is str and len(name) <= MAX_NAME and CLIMATE_ID.fullmatch(name) is not None
 
 
+def valid_gateway_name(name):
+    """A BLU Gateway valve's name the E32 takes ("g1:200")."""
+    return type(name) is str and GATEWAY_NAME.fullmatch(name) is not None
+
+
 def valid_valve(name, model):
-    return valid_entity(name) if model == HA_MODEL else valid_name(name)
+    if model == HA_MODEL:
+        return valid_entity(name)
+    return valid_gateway_name(name) if model == GATEWAY_MODEL else valid_name(name)
+
+
+def valve_record(valve):
+    """One valve as the E32 stores it: name and model, and for a BLU Gateway valve its role and keep_open."""
+    record = {"name": valve["name"], "model": valve["model"]}
+    if valve["model"] == GATEWAY_MODEL:
+        if valve.get("role") == "loop":
+            record["role"] = "loop"
+        if valve.get("keep_open") is True:
+            record["keep_open"] = True
+    return record
+
+
+def _valid_record(valve):
+    if type(valve) is not dict or valve.get("model") not in MODELS or not valid_valve(valve.get("name"), valve.get("model")):
+        return False
+    role, keep = valve.get("role"), valve.get("keep_open")
+    if valve["model"] != GATEWAY_MODEL:
+        return role is None and keep is None
+    return role in (None, *ROLES) and keep in (None, True, False) and not (keep is True and role == "loop")
 
 
 def decode_config(value):
@@ -105,11 +153,10 @@ def decode_config(value):
         valves = room.get("valves") if type(room) is dict else None
         if (type(room) is not dict or type(room.get("room")) is not str or type(room.get("control")) is not bool
                 or type(valves) is not list or len(valves) > MAX_VALVES_PER_ROOM
-                or any(type(v) is not dict or v.get("model") not in MODELS or not valid_valve(v.get("name"), v.get("model"))
-                       for v in valves)):
+                or not all(_valid_record(v) for v in valves)
+                or sum(v["model"] != GATEWAY_MODEL for v in valves) > MAX_CLASSIC_VALVES_PER_ROOM):
             return None
-        result.append({"room": room["room"], "control": room["control"],
-                       "valves": [{"name": v["name"], "model": v["model"]} for v in valves]})
+        result.append({"room": room["room"], "control": room["control"], "valves": [valve_record(v) for v in valves]})
     return {"schema": 1, "base_topic": value["base_topic"], "rooms": result}
 
 
@@ -121,7 +168,7 @@ def with_room(config, room_id, control=None, valves=None):
         room = {"room": room_id, "control": False, "valves": []}
         rooms.append(room)
     if valves is not None:
-        room["valves"] = [{"name": v["name"], "model": v["model"]} for v in valves]
+        room["valves"] = [valve_record(v) for v in valves]
     if control is not None:
         room["control"] = control
     if not room["valves"]:
@@ -193,6 +240,55 @@ class ValveLink:
         return answer
 
 
+    async def async_read_with_gateway(self):
+        """(the record, the BLU Gateway valves the E32 lists, or None) on one sign-in, for the room form.
+
+        The valves come from ``GET /status/shelly`` (E32 1.1): firmware without Shelly gives None.
+        """
+        from .controller_link import ControllerLinkError
+
+        async def read(client):
+            value = decode_config(await client.async_valves())
+            if value is None:
+                return None, None  # no valve record: no gateway valves either
+            try:
+                status = await client.async_shelly_status()
+            except ControllerLinkError:
+                status = None  # firmware without Shelly, or its status not readable now: no gateway valves
+            return value, status
+        try:
+            value, status = await self.plan.async_call(read)
+        except ControllerLinkError as err:
+            raise valve_error(err) from None
+        if value is None:
+            raise unreadable()
+        self.config = value
+        return value, gateway_valves(status) if status is not None else None
+
+
+def gateway_valves(status):
+    """[{"name": "g1:200", "label", "gateway", "health", "battery"?}] of the BLU Gateways in /status/shelly.
+
+    Only the valves the E32's Shelly record lists for each gateway (its own page adds them).
+    """
+    found = []
+    devices = status.get("devices") if type(status) is dict else None
+    for device in devices if type(devices) is list else []:
+        if type(device) is not dict or device.get("kind") != "gateway" or type(device.get("valves")) is not list:
+            continue
+        gateway = device.get("label") if type(device.get("label")) is str and device["label"].strip() else None
+        for valve in device["valves"]:
+            name = valve.get("trv") if type(valve) is dict else None
+            if not valid_gateway_name(name) or any(v["name"] == name for v in found):
+                continue
+            label = valve.get("name") if type(valve.get("name")) is str and valve["name"].strip() else None
+            item = {"name": name, "label": label, "gateway": gateway, "health": valve.get("health")}
+            if type(valve.get("battery")) in (int, float):
+                item["battery"] = valve["battery"]
+            found.append(item)
+    return found
+
+
 def unreadable():
     from .room_plan import link_error
     return link_error("controller_response_invalid")
@@ -230,9 +326,50 @@ def problems(room):
     return [(v["name"], v.get("health")) for v in room.get("valves", []) if v.get("health") in ("low_battery", "offline")]
 
 
+def link_problems(room):
+    """[(valve name, link)] of a room's BLU Gateway valves whose route has a problem (LINKS)."""
+    return [(v["name"], v["link"]) for v in room.get("valves", []) if v.get("link") in LINKS]
+
+
+# A BLU Gateway valve in a sentence: the E32 knows it as g<n>:<id> (the room's own name says where it is).
+GATEWAY_VALVE_TEXT = {"en": "valve {id} on BLU Gateway {n}", "nl": "kraan {id} aan BLU Gateway {n}",
+                      "pl": "zawór {id} na BLU Gateway {n}"}
+# The route's problem in plain words (the Valve problem attributes).
+LINK_TEXT = {
+    "en": {"gateway": "the BLU Gateway does not answer", "silent": "the valve has not reported to the gateway",
+           "missing": "the gateway does not know this valve", "unpaired": "the valve is not paired with the gateway",
+           "unknown": "the gateway is not on the E32's Shelly page"},
+    "nl": {"gateway": "de BLU Gateway antwoordt niet", "silent": "de kraan heeft zich niet bij de gateway gemeld",
+           "missing": "de gateway kent deze kraan niet", "unpaired": "de kraan is niet gekoppeld aan de gateway",
+           "unknown": "de gateway staat niet op de Shelly-pagina van de E32"},
+    "pl": {"gateway": "BLU Gateway nie odpowiada", "silent": "zawór nie zgłosił się do bramki",
+           "missing": "bramka nie zna tego zaworu", "unpaired": "zawór nie jest sparowany z bramką",
+           "unknown": "bramki nie ma na stronie Shelly w E32"},
+}
+
+
+# The Valves open sensor's note for such a valve.
+POSITION_NOTE = {"en": "Regulates itself to the target; the position cannot be read",
+                 "nl": "Regelt zelf naar het doel; de stand is niet uit te lezen",
+                 "pl": "Sam reguluje do temperatury docelowej; nie można odczytać położenia"}
+
+
+def language(hass):
+    value = str(getattr(getattr(hass, "config", None), "language", "en") or "en")[:2]
+    return value if value in LINK_TEXT else "en"
+
+
+def shown_name(name, lang="en"):
+    """A valve's name for a sentence: a BLU Gateway valve as "valve 200 on BLU Gateway 1"."""
+    match = GATEWAY_NAME.fullmatch(name) if type(name) is str else None
+    if match is None:
+        return name
+    return GATEWAY_VALVE_TEXT.get(lang, GATEWAY_VALVE_TEXT["en"]).format(n=match.group(1), id=match.group(2))
+
+
 def valve_attributes(room):
-    return {"valves": [{key: v.get(key) for key in ("name", "model", "health", "position_pct", "battery_pct",
-                                                    "battery_low", "setpoint_c") if v.get(key) is not None}
+    return {"valves": [{key: v.get(key) for key in ("name", "model", "role", "health", "link", "position_pct",
+                                                    "battery_pct", "battery_low", "setpoint_c") if v.get(key) is not None}
                        for v in room.get("valves", [])],
             "control": room.get("control"), "degraded": room.get("degraded"), "single_source": room.get("single_source")}
 
@@ -270,7 +407,14 @@ class ValvePositionSensor(ValveEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        return valve_attributes(self.valves or {})
+        attributes = valve_attributes(self.valves or {})
+        lang = language(getattr(self, "hass", None))
+        own = [shown_name(v["name"], lang) for v in (self.valves or {}).get("valves", [])
+               if v.get("model") in NO_POSITION_MODELS and type(v.get("position_pct")) not in (int, float)]
+        if own:  # these valves are not in the average: say why, in words
+            attributes["self_regulating"] = own
+            attributes["position_note"] = POSITION_NOTE[lang]
+        return attributes
 
 
 class ValveBatterySensor(ValveEntity, SensorEntity):
@@ -297,11 +441,14 @@ class ValveProblemBinarySensor(ValveEntity, BinarySensorEntity):
 
     @property
     def is_on(self):
-        return bool(problems(self.valves or {}))
+        return bool(problems(self.valves or {}) or link_problems(self.valves or {}))
 
     @property
     def extra_state_attributes(self):
-        return {"problems": [{"name": name, "health": health} for name, health in problems(self.valves or {})]}
+        found = [{"name": name, "health": health} for name, health in problems(self.valves or {})]
+        texts = LINK_TEXT[language(getattr(self, "hass", None))]
+        found += [{"name": name, "link": link, "problem": texts[link]} for name, link in link_problems(self.valves or {})]
+        return {"problems": found}
 
 
 class ValveControlSwitch(ValveEntity, SwitchEntity):
@@ -381,6 +528,8 @@ def sync_issues(hass, entry, hub, raised):
     wanted = {}
     from .insight import room_names  # the dashboard's names: a room renamed in Home Assistant keeps its name
     names = room_names(hub, hass, entry.entry_id) if hub.valves else {}
+    lang = language(hass)
+    silent_gateway = []
     for room_id in hub.valves:
         valves = room_valves(hub, room_id)
         room = hub.rooms.get(room_id) or {"id": room_id}
@@ -390,13 +539,26 @@ def sync_issues(hass, entry, hub, raised):
         gone = [n for n, h in found if h == "offline"]
         if low:
             wanted[issue_id("valve_battery_low", entry, room_id)] = ("valve_battery_low", ir.IssueSeverity.WARNING,
-                                                                     {"room": name, "valves": ", ".join(low)})
+                                                                     {"room": name, "valves": ", ".join(
+                                                                         shown_name(n, lang) for n in low)})
         if gone:
             wanted[issue_id("valve_offline", entry, room_id)] = ("valve_offline", ir.IssueSeverity.WARNING,
-                                                                 {"room": name, "valves": ", ".join(gone)})
+                                                                 {"room": name, "valves": ", ".join(
+                                                                     shown_name(n, lang) for n in gone)})
+        # BLU Gateway valves: a gateway that does not answer (one issue for the house, below), a valve the
+        # gateway does not know or that is not paired. A silent valve waits for "offline" (2 hours) above.
+        links = link_problems(valves)
+        silent_gateway += [f"{name}: {shown_name(n, lang)}" for n, link in links if link == "gateway"]
+        lost = [shown_name(n, lang) for n, link in links if link in ("missing", "unpaired", "unknown")]
+        if lost:
+            wanted[issue_id("valve_not_found", entry, room_id)] = ("valve_not_found", ir.IssueSeverity.WARNING,
+                                                                   {"room": name, "valves": ", ".join(lost)})
         if valves.get("control") is True and valves.get("single_source") is True:
             wanted[issue_id("valve_single_source", entry, room_id)] = ("valve_single_source", ir.IssueSeverity.WARNING,
                                                                        {"room": name})
+    if silent_gateway:
+        wanted[f"valve_gateway_silent_{entry.entry_id}"] = ("valve_gateway_silent", ir.IssueSeverity.WARNING,
+                                                            {"valves": ", ".join(silent_gateway)})
     for issue in [i for i in raised if i not in wanted]:
         ir.async_delete_issue(hass, DOMAIN, issue)
         raised.discard(issue)
@@ -410,12 +572,17 @@ def sync_issues(hass, entry, hub, raised):
 def remove_stale_entities(hass, entry, hub):
     """Remove the valve entities of rooms the E32 no longer lists with valves (fw/config/plan ``trv``).
 
-    Only while the E32 is online and its plan known: an offline E32 never removes anything.
+    Only while the E32 is online and its plan known: an offline E32 never removes anything. A plan
+    without a ``trv`` list says nothing about the valves (R4-04: the firmware leaves the key out while its
+    status has no valve block, for example during start-up), so it keeps every valve entity; only an
+    explicit list removes the rooms it leaves out, an empty one all of them.
     """
     if not hub.fresh or hub.config is None:
         return
     listed = hub.config.get("trv")
-    keep = set(listed) if type(listed) is list else set()
+    if type(listed) is not list:
+        return
+    keep = set(listed)
     head = f"{hub.prefix}_e32_room_"
     registry = er.async_get(hass)
     for record in er.async_entries_for_config_entry(registry, entry.entry_id):

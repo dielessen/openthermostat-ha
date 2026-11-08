@@ -29,6 +29,12 @@ Assistant does; the E32's valve record (e32_valves.ValveLink) is written after
 the plan, so a new room exists before its valves. "Choose the models myself"
 opens one more step with a model per Zigbee2MQTT valve. Firmware without valve
 records shows no section and leaves them alone.
+
+E32 1.1 (Shelly): the same section lists the BLU Gateway's valves the E32 reads
+(``GET /status/shelly``, on the same sign-in as the valve record): which belong
+to this room, which of them are floor loop valves on the manifold, and which
+radiator is kept open as the water's path. A room takes up to 8 valves, at most
+4 that are not on the gateway. Firmware without Shelly shows none of this.
 """
 from __future__ import annotations
 
@@ -47,8 +53,9 @@ from homeassistant.util import slugify
 
 from .const import CONF_TOPIC_PREFIX, DOMAIN
 from .e32_comfort import (DELAY_LIMITS, ComfortError, comfort_options, contact_delay_text, contact_selector,
-                          own_contact_delay, persons_selector, room_contact_delay, room_contacts, room_persons,
-                          save_comfort, validate_contacts, validate_room_persons, with_room_contacts, with_room_persons)
+                          own_contact_delay, persons_selector, room_contact_delay, room_contacts, room_door_delay,
+                          room_doors, room_persons, save_comfort, validate_contacts, validate_kinds,
+                          validate_room_persons, with_room_contacts, with_room_persons)
 from .heating_link import TEMPERATURE_UNITS, celsius, heating_hub, label, number
 from .native_form import retained_input_schema
 from .room_plan import LATEST_UNTIL, LINK_ERRORS, has_room_plan, plan_room, until_datetime
@@ -336,7 +343,9 @@ class E32RoomFlow:
         # The flow limits are for all rooms together: Configure → Heating and boiler (product_flow.py).
         options = (["e32_room_add"] if len(plan["rooms"]) < MAX_ROOMS else []) + (
             ["e32_room_pick"] if plan["rooms"] else [])
-        placeholders = {"rooms": self._e32_room_list(plan), "revision": str(plan["revision"])}
+        from .options_navigation import async_flow_texts
+        texts = await async_flow_texts(self.hass, "e32_room_list_text")
+        placeholders = {"rooms": self._e32_room_list(plan, texts), "revision": str(plan["revision"])}
         if done is not None:
             placeholders["name"] = name or ""
             placeholders["valves"] = valves or ""
@@ -361,16 +370,16 @@ class E32RoomFlow:
         name = state.attributes.get("friendly_name") if state is not None else None
         return name if type(name) is str and name.strip() else str(source.get("id"))
 
-    def _e32_room_list(self, plan):
-        dutch = self.hass.config.language == "nl"
+    def _e32_room_list(self, plan, texts):
+        """One line per room; ``texts``: selector.e32_room_list_text in the user's language (async_flow_texts)."""
         lines = []
         for room in plan["rooms"]:
-            inactive = "" if room.get("state") == "active" else (" (inactief)" if dutch else " (inactive)")
+            inactive = "" if room.get("state") == "active" else f" ({texts['inactive']})"
             sources = ", ".join(self._e32_source_label(s) for s in room.get("sources", []))
             contacts = len(room_contacts(self.config_entry, room["id"]))
-            window = (f"; raam-/deurcontacten: {contacts}" if dutch else f"; window/door contacts: {contacts}")                 if contacts else ""
+            window = "; " + texts["contacts"].replace("{count}", str(contacts)) if contacts else ""
             lines.append(f"- {room.get('name', room['id'])}{inactive}: {sources}{window}")
-        return "\n".join(lines) or ("Nog geen ruimtes." if dutch else "No rooms yet.")
+        return "\n".join(lines) or texts["none"]
 
     async def async_step_e32_room_add(self, user_input=None):
         self._e32_room_id = None
@@ -547,36 +556,66 @@ class E32RoomFlow:
     # -- radiator valves: a section of the room form (rc.3) ------------------------------------
 
     async def _e32_read_valves(self):
-        """The E32's valve record, or None: firmware without valves (or not readable now) leaves them alone."""
+        """(the E32's valve record, its BLU Gateway valves or None), or (None, None): firmware without valves
+        (or not readable now) leaves them alone."""
         from .e32_valves import valve_link
         link = valve_link(self.hass, self.config_entry)
         if link is None:
-            return None
+            return None, None
         try:
-            return await link.async_read()
+            return await link.async_read_with_gateway()
         except HomeAssistantError:
-            return None
+            return None, None
 
-    def _e32_valve_context(self, config, room_id, room):
-        """What the valves section needs: the record, this room's stored valves as routes, the exclusions."""
+    def _e32_valve_context(self, config, room_id, room, gateway=None):
+        """What the valves section needs: the record, this room's stored valves as routes, the exclusions,
+        and the BLU Gateway valves to choose from (E32 1.1; None without Shelly)."""
         from types import SimpleNamespace
-        from .e32_valves import HA_MODEL
-        from .valve_routes import RouteFinder, through_ha_choices
+        from .e32_valves import GATEWAY_MODEL, HA_MODEL
+        from .valve_routes import RouteFinder, gateway_route, through_ha_choices
         current = next((r for r in config["rooms"] if room_id and r["room"] == room_id), {"control": False, "valves": []})
         finder = RouteFinder(self.hass, config["base_topic"])
         pins = through_ha_choices(self.config_entry)
-        stored = finder.stored(current["valves"], pins)  # a Home Assistant valve the E32 can drive now: shown and saved so
+        classic = [v for v in current["valves"] if v["model"] != GATEWAY_MODEL]
+        # a Home Assistant valve the E32 can drive now: shown and saved so
+        stored = finder.stored(classic, pins)
         others = [v for r in config["rooms"] if r["room"] != room_id for v in r["valves"]]
         # Never a valve of this room: OpenThermostat's own thermostats, the room's thermostat sources
         # and the valves of the other rooms (Home Assistant ones by entity, Zigbee2MQTT ones by name).
         own = [e.entity_id for e in er.async_get(self.hass).entities.values() if e.platform == DOMAIN and e.domain == "climate"]
         sources = [s["id"] for s in (room or {}).get("sources", [])
                    if s.get("type") == "ha" and str(s.get("id", "")).startswith("climate.")]
-        taken = [v["name"] if v["model"] == HA_MODEL else finder.index().get(v["name"]) for v in others]
+        taken = [v["name"] if v["model"] == HA_MODEL else finder.index().get(v["name"])
+                 for v in others if v["model"] != GATEWAY_MODEL]
         mine = {r.entity_id for r in stored if r.entity_id}
         excluded = [e for e in dict.fromkeys(own + sources + taken) if e and e not in mine]
+        # The BLU Gateway valves: this room's stored ones (also when the gateway no longer lists them, so they
+        # can be kept or let go) and the gateway's valves no other room has.
+        labels = {v["name"]: v for v in gateway or []}
+        others_named = {v["name"] for v in others}
+        gateway_stored = [gateway_route(v["name"], (labels.get(v["name"]) or {}).get("label"), v.get("role"),
+                                        v.get("keep_open")) for v in current["valves"] if v["model"] == GATEWAY_MODEL]
+        options = [r.name for r in gateway_stored] + [v["name"] for v in gateway or []
+                                                      if v["name"] not in others_named
+                                                      and v["name"] not in {r.name for r in gateway_stored}]
+        # The order on the E32: each stored record's place (a route that moved to the E32 keeps its record's place).
+        places = [k for k, v in enumerate(current["valves"]) if v["model"] != GATEWAY_MODEL]
+        position = {route.name: places[k] for k, route in enumerate(stored)}
+        position.update({v["name"]: k for k, v in enumerate(current["valves"]) if v["model"] == GATEWAY_MODEL})
         return SimpleNamespace(config=config, room_id=room_id, finder=finder, stored=stored, control=current["control"],
-                               records=[dict(v) for v in current["valves"]], pins=pins, others=others, excluded=excluded)
+                               records=[dict(v) for v in current["valves"]], pins=pins, others=others, excluded=excluded,
+                               gateway=gateway, gateway_stored=gateway_stored, gateway_options=options,
+                               gateway_labels=labels, position=position)
+
+    def _e32_gateway_option(self, ctx, name):
+        """One BLU Gateway valve in the picker: its name on the gateway and which gateway, its battery."""
+        from .e32_valves import shown_name
+        from .valve_routes import language_of
+        valve = ctx.gateway_labels.get(name) or {}
+        stored = next((r for r in ctx.gateway_stored if r.name == name), None)
+        text = valve.get("label") or (stored.friendly if stored else None) or shown_name(name, language_of(self))
+        details = [d for d in (valve.get("gateway"), f"{valve['battery']:g} %" if "battery" in valve else None) if d]
+        return {"value": name, "label": f"{text} ({', '.join(details)})" if details else text}
 
     def _e32_valve_fields(self, ctx):
         """The valves section: just the climate entities; the route per valve is decided by valve_routes."""
@@ -591,6 +630,13 @@ class E32RoomFlow:
             fields[vol.Optional("kept", description={"suggested_value": [r.name for r in kept]})] = selector.SelectSelector({
                 "options": [{"value": r.name, "label": f"{r.name} ({MODEL_NAMES.get(r.model, r.model)})"} for r in kept],
                 "multiple": True})
+        if ctx.gateway_options:  # E32 1.1: the BLU Gateway's valves, their role and keep open
+            options = [self._e32_gateway_option(ctx, name) for name in ctx.gateway_options]
+            for field, chosen in (("gateway_valves", [r.name for r in ctx.gateway_stored]),
+                                  ("loop_valves", [r.name for r in ctx.gateway_stored if r.role == "loop"]),
+                                  ("keep_open", [r.name for r in ctx.gateway_stored if r.keep_open])):
+                fields[vol.Optional(field, description={"suggested_value": chosen or None})] = selector.SelectSelector(
+                    {"options": options, "multiple": True})
         fields[vol.Optional("control", default=ctx.control)] = bool
         fields[vol.Optional("choose_models", default=False)] = bool
         return fields
@@ -601,7 +647,9 @@ class E32RoomFlow:
         A valve stored before keeps its route and model; a new one gets the route its device
         allows; models: the Advanced choice per entity (HA_MODEL: through Home Assistant).
         """
-        from .e32_valves import MAX_VALVES, MAX_VALVES_PER_ROOM, valid_entity
+        from .e32_valves import (MAX_CLASSIC_VALVES_PER_ROOM, MAX_VALVES, MAX_VALVES_PER_ROOM,
+                                 MAX_VALVES_WITHOUT_GATEWAY, valid_entity)
+        from .valve_routes import gateway_route
         part = user_input.get("valves")
         if ctx is None or type(part) is not dict:
             return None
@@ -617,18 +665,32 @@ class E32RoomFlow:
                 raise FlowError("e32_valve_entity_invalid", "valves")
             routes.append(route)
         routes += [kept[name] for name in dict.fromkeys(part.get("kept") or []) if name in kept]
+        classic = len(routes)
+        offered = set(getattr(ctx, "gateway_options", None) or [])
+        chosen = [name for name in dict.fromkeys(part.get("gateway_valves") or []) if name in offered]
+        loops = {name for name in part.get("loop_valves") or [] if name in chosen}
+        keep = {name for name in part.get("keep_open") or [] if name in chosen}
+        if loops & keep:
+            raise FlowError("e32_valve_keep_open_loop", "valves")
+        labels = {r.name: r.friendly for r in getattr(ctx, "gateway_stored", [])}
+        labels.update({name: v.get("label") for name, v in (getattr(ctx, "gateway_labels", None) or {}).items()
+                       if v.get("label")})
+        routes += [gateway_route(name, labels.get(name), "loop" if name in loops else None, name in keep)
+                   for name in chosen]
         # The stored valves keep their order on the E32; new ones follow in the order chosen.
-        position = {r.name: k for k, r in enumerate(ctx.stored)}
+        position = getattr(ctx, "position", None) or {r.name: k for k, r in enumerate(ctx.stored)}
         routes = [r for _k, r in sorted(enumerate(routes), key=lambda item: (
-            position.get(item[1].name, len(position)), item[0]))]
+            position.get(item[1].name, len(ctx.records) + len(ctx.stored)), item[0]))]
         names, taken = set(), {v["name"] for v in ctx.others}
         for route in routes:
             if route.name in names or route.name in taken:
                 raise FlowError("e32_valve_duplicate", "valves")
             names.add(route.name)
-        if len(routes) > MAX_VALVES_PER_ROOM:
+        if len(routes) > MAX_VALVES_PER_ROOM or classic > MAX_CLASSIC_VALVES_PER_ROOM:
             raise FlowError("e32_valve_room_limit")
-        if len(ctx.others) + len(routes) > MAX_VALVES:
+        # 24 on an E32 with the BLU Gateway (it lists its gateway valves, E32 1.1), 16 before.
+        total = MAX_VALVES if getattr(ctx, "gateway", None) is not None else MAX_VALVES_WITHOUT_GATEWAY
+        if len(ctx.others) + len(routes) > total:
             raise FlowError("e32_valve_limit")
         return routes, bool(part.get("control", ctx.control)) and bool(routes)
 
@@ -778,12 +840,16 @@ class E32RoomFlow:
                 "%Y-%m-%d %H:%M:%S"),
             "ha_sources": [s["id"] for s in sources if s.get("type") == "ha"],
             "ble_sources": [s["id"] for s in sources if s.get("type") == "ble"],
-            "contacts": room_contacts(self.config_entry, room["id"]) if room.get("id") else [],
+            # Windows: every contact that is no door (also all contacts chosen before 1.0.1); doors their own.
+            "contacts": [e for e in room_contacts(self.config_entry, room["id"])
+                         if e not in room_doors(self.config_entry, room["id"])] if room.get("id") else [],
+            "door_contacts": room_doors(self.config_entry, room["id"]) if room.get("id") else [],
             "persons": room_persons(self.config_entry, room["id"]) if room.get("id") else [],
             # The room's own away temperature (plan.room_away.v1); None: the house value.
             "away_temperature": None if room_away.room_away(room) is None else shown(room_away.room_away(room), unit),
-            # The room's own pause delay in minutes (beta.23; default 2 min).
+            # The room's own pause delays in minutes: windows (beta.23; default 2 min), doors (1.0.1; default 5 min).
             "contact_delay": room_contact_delay(comfort_options(self.config_entry), room.get("id") or "") / 60,
+            "door_delay": room_door_delay(comfort_options(self.config_entry), room.get("id") or "") / 60,
             "bluetooth_first": bool(sources) and sources[0].get("type") == "ble",
             # The setting device as stored, never pre-selected: Home Assistant writes its
             # target at every switch point, so the user picks it (a climate source is only hinted).
@@ -923,11 +989,12 @@ class E32RoomFlow:
         return f"{shown(round(value * 100), unit):g} {unit}"
 
     def _e32_room_contacts(self, user_input, room):
-        """The submitted window/door contacts (the form's "window" section); raises FlowError."""
+        """The submitted contacts (the form's "window" section): (all of them, the doors); raises FlowError."""
         window = user_input.get("window") or {}
         known = room_contacts(self.config_entry, room["id"]) if room else []
         try:
-            return validate_contacts(self.hass, list(window.get("contacts") or []), known)
+            return validate_kinds(validate_contacts(self.hass, list(window.get("contacts") or []), known),
+                                  validate_contacts(self.hass, list(window.get("door_contacts") or []), known))
         except ComfortError as err:
             raise FlowError(err.code) from None
 
@@ -940,9 +1007,10 @@ class E32RoomFlow:
             raise FlowError(err.code, "persons") from None
 
     @staticmethod
-    def _e32_room_delay(user_input):
-        """The submitted pause delay in seconds (minutes in the form), or None when the form has none."""
-        minutes = (user_input.get("window") or {}).get("contact_delay")
+    def _e32_room_delay(user_input, field="contact_delay"):
+        """The submitted pause delay (field door_delay: the doors') in seconds (minutes in the form), or None
+        when the form has none."""
+        minutes = (user_input.get("window") or {}).get(field)
         if minutes is None:
             return None
         seconds = round(float(minutes) * 60)
@@ -951,9 +1019,14 @@ class E32RoomFlow:
         return seconds
 
     @staticmethod
-    def _same_delay(settings, room_id, delay):
+    def _same_delay(settings, room_id, delay, door=False):
         """The submitted delay is what the room stores already (its own delay, or none for the default)."""
-        return own_contact_delay(settings, delay) == settings.get("contact_delays", {}).get(room_id)
+        return own_contact_delay(settings, delay, door) == settings.get(
+            "door_delays" if door else "contact_delays", {}).get(room_id)
+
+    def _same_delays(self, settings, room_id, delay, door_delay):
+        return ((delay is None or self._same_delay(settings, room_id, delay))
+                and (door_delay is None or self._same_delay(settings, room_id, door_delay, True)))
 
     def _limit_range(self):
         unit = self._unit()
@@ -969,6 +1042,7 @@ class E32RoomFlow:
         errors = {}
         placeholders = {"source": "", "error": "", "line": "", "text": "", **self._limit_range(), **self._away_range(),
                         "delay": contact_delay_text(comfort_options(self.config_entry), room_id),
+                        "door_delay": contact_delay_text(comfort_options(self.config_entry), room_id, door=True),
                         "house_away": self._e32_house_away()}
         link = self._e32_link()
         if link is None:
@@ -976,17 +1050,20 @@ class E32RoomFlow:
         valve_state = getattr(self, "_e32_valve_state", None)
         if user_input is None or valve_state is None or valve_state[0] != room_id:
             # Read when the form opens: the valves section shows what the E32 stores now.
-            config = await self._e32_read_valves()
-            valve_state = self._e32_valve_state = (room_id, self._e32_valve_context(config, room_id, room) if config else None)
+            config, gateway = await self._e32_read_valves()
+            valve_state = self._e32_valve_state = (
+                room_id, self._e32_valve_context(config, room_id, room, gateway) if config else None)
             self._e32_valve_models = {}
         valve_ctx = valve_state[1]
-        placeholders["valve_routes"] = self._e32_valve_routes(valve_ctx.stored if valve_ctx else [])
+        placeholders["valve_routes"] = self._e32_valve_routes(
+            [*valve_ctx.stored, *valve_ctx.gateway_stored] if valve_ctx else [])
         if user_input is not None:
             try:
                 values = self._e32_room_values(user_input, room, ble_options)
-                contacts = self._e32_room_contacts(user_input, room)
+                contacts, doors = self._e32_room_contacts(user_input, room)
                 persons = self._e32_room_persons(user_input, room)
                 delay = self._e32_room_delay(user_input)
+                door_delay = self._e32_room_delay(user_input, "door_delay")
                 valves = self._e32_submitted_valves(user_input, valve_ctx, self._e32_valve_models)
                 if valves is not None:
                     placeholders["valve_routes"] = self._e32_valve_routes(valves[0])
@@ -997,11 +1074,12 @@ class E32RoomFlow:
                 valves_changed = valves is not None and ([r.record() for r in valves[0]] != valve_ctx.records
                                                          or valves[1] != valve_ctx.control or pins != valve_ctx.pins)
                 settings = comfort_options(self.config_entry)
-                same_delay = delay is None or not room or self._same_delay(settings, room_id, delay)
+                same_delay = not room or self._same_delays(settings, room_id, delay, door_delay)
                 if room is not None:
                     edits = {k: v for k, v in values.items()
                              if room.get(k, 0 if k == "inactive_until" else None) != v}
-                    if (not edits and not valves_changed and contacts == room_contacts(self.config_entry, room_id) and same_delay
+                    if (not edits and not valves_changed and contacts == room_contacts(self.config_entry, room_id)
+                            and doors == room_doors(self.config_entry, room_id) and same_delay
                             and persons == room_persons(self.config_entry, room_id)):
                         return self.async_abort(reason="e32_room_unchanged")
                     change, confirm = self._e32_edit(room_id, edits)
@@ -1016,10 +1094,11 @@ class E32RoomFlow:
                 if valves_changed:  # after the plan: a new room exists on the E32 before its valves
                     await self._e32_save_valves(saved, *valves, valve_ctx, pins)
                 settings = comfort_options(self.config_entry)
-                if contacts != room_contacts(self.config_entry, saved) or (
-                        contacts and delay is not None and not self._same_delay(settings, saved, delay)):
-                    # After the plan: only for a stored room; the delay only matters with contacts.
-                    save_comfort(self.hass, self.config_entry, with_room_contacts(settings, saved, contacts, delay))
+                if (contacts != room_contacts(self.config_entry, saved) or doors != room_doors(self.config_entry, saved)
+                        or (contacts and not self._same_delays(settings, saved, delay, door_delay))):
+                    # After the plan: only for a stored room; the delays only matter with contacts.
+                    save_comfort(self.hass, self.config_entry,
+                                 with_room_contacts(settings, saved, contacts, delay, doors, door_delay))
                 if persons != room_persons(self.config_entry, saved):
                     save_comfort(self.hass, self.config_entry,
                                  with_room_persons(comfort_options(self.config_entry), saved, persons))
@@ -1066,6 +1145,8 @@ class E32RoomFlow:
                                                "mode": "box", "unit_of_measurement": unit})
         sources = {"filter": [{"domain": "climate"}, {"domain": "sensor", "device_class": "temperature"}],
                    "multiple": True, "reorder": True}
+        delay_minutes = selector.NumberSelector({"min": DELAY_LIMITS[0] / 60, "max": DELAY_LIMITS[1] / 60, "step": 0.5,
+                                                 "mode": "box", "unit_of_measurement": "min"})
         persons = {vol.Optional("persons", description={"suggested_value": d["persons"] or None}): persons_selector()}
         if self._e32_away_supported():
             away_low, away_high = (shown(limit, unit) for limit in room_away.LIMITS_CENTI_C)
@@ -1096,11 +1177,13 @@ class E32RoomFlow:
             vol.Optional("program", description={"suggested_value": d["program"] or None}):
                 selector.TextSelector({"multiline": True}),
             # Open: easy to find in the room itself, not only under Comfort.
+            # Windows and doors (1.0.1): each kind with its own delay; a door usually waits longer.
             vol.Optional("window"): section(vol.Schema({
                 vol.Optional("contacts", description={"suggested_value": d["contacts"] or None}): contact_selector(),
-                vol.Optional("contact_delay", default=d["contact_delay"]): selector.NumberSelector(
-                    {"min": DELAY_LIMITS[0] / 60, "max": DELAY_LIMITS[1] / 60, "step": 0.5, "mode": "box",
-                     "unit_of_measurement": "min"}),
+                vol.Optional("contact_delay", default=d["contact_delay"]): delay_minutes,
+                vol.Optional("door_contacts", description={"suggested_value": d["door_contacts"] or None}):
+                    contact_selector(),
+                vol.Optional("door_delay", default=d["door_delay"]): delay_minutes,
             }), {"collapsed": False}),
             # Persons per room (beta.23): empty = the room follows the house's presence. With
             # plan.room_away.v1 also the room's own away temperature (empty = the house value).
@@ -1113,7 +1196,7 @@ class E32RoomFlow:
         })
         if valve_ctx is not None:  # rc.3: the room's radiator valves, in the room itself (open when it has some)
             fields[vol.Optional("valves")] = section(vol.Schema(self._e32_valve_fields(valve_ctx)),
-                                                     {"collapsed": not valve_ctx.stored})
+                                                     {"collapsed": not (valve_ctx.stored or valve_ctx.gateway_stored)})
         return vol.Schema(fields)
 
     @staticmethod
