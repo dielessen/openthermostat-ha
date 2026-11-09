@@ -5,7 +5,8 @@ advice" sensor carries it as the attribute ``weekly_summary`` (title,
 message and the figures), in the Home Assistant language (English, Dutch
 or Polish); the blueprint ``blueprints/weekly_summary.yaml`` sends it once a
 week when the owner creates that automation. Figures come from the day
-records of ``energy_use`` (gas meter or estimate) and the current advice.
+records of ``energy_use`` (gas meter or estimate) and the current advice, and the week's missed comfort from the
+daily summary where the E32 counts it itself (E32 SL-A; older firmware: no comfort line).
 """
 from datetime import date
 
@@ -36,6 +37,9 @@ TEXT = {
         "night_money": " That is about {money} {currency}.",
         "night_best": "Night setback: your week program's night temperature is already the most economical "
                       "choice.",
+        "comfort": "Comfort: together the rooms were more than 0.3 °C below their target for {hours} h this week "
+                   "while in use.",
+        "comfort_none": "Comfort: no room was more than 0.3 °C below its target this week while in use.",
         "advice": "Advice:",
         "no_advice": "No advice right now: the heating looks fine.",
         "gas_meter": "Measured with your gas meter; the split between heating and hot water follows what the "
@@ -65,6 +69,10 @@ TEXT = {
                         "kunnen besparen.",
         "night_money": " Dat is ongeveer {money} {currency}.",
         "night_best": "Nachtverlaging: de nachttemperatuur van je weekprogramma is al de zuinigste keuze.",
+        "comfort": "Comfort: samen waren de ruimtes deze week {hours} uur meer dan 0,3 °C onder hun "
+                   "streeftemperatuur terwijl ze in gebruik waren.",
+        "comfort_none": "Comfort: deze week was geen ruimte meer dan 0,3 °C onder haar streeftemperatuur terwijl ze "
+                        "in gebruik was.",
         "advice": "Advies:",
         "no_advice": "Op dit moment geen advies: de verwarming ziet er goed uit.",
         "gas_meter": "Gemeten met je gasmeter; de verdeling tussen verwarmen en warm water volgt wat de ketel "
@@ -95,6 +103,10 @@ TEXT = {
         "night_money": " To około {money} {currency}.",
         "night_best": "Nocne obniżenie: temperatura nocna z Twojego programu tygodniowego jest już najbardziej "
                       "oszczędnym wyborem.",
+        "comfort": "Komfort: łącznie pomieszczenia były w tym tygodniu przez {hours} godz. o ponad 0,3 °C poniżej "
+                   "temperatury docelowej, gdy były używane.",
+        "comfort_none": "Komfort: w tym tygodniu żadne używane pomieszczenie nie było o ponad 0,3 °C poniżej "
+                        "temperatury docelowej.",
         "advice": "Porady:",
         "no_advice": "Na razie brak porad: ogrzewanie wygląda dobrze.",
         "gas_meter": "Zmierzone licznikiem gazu; podział na ogrzewanie i ciepłą wodę wynika z tego, co robił "
@@ -123,8 +135,11 @@ def _sum(days, key):
     return sum(day.get(key, 0) for day in days)
 
 
-def figures(records, today, *, unit="m³", rough=False, price=None, currency="EUR"):
-    """The week's figures (no texts) from the energy day records ending today."""
+def figures(records, today, *, unit="m³", rough=False, price=None, currency="EUR", comfort=None):
+    """The week's figures (no texts) from the energy day records ending today.
+
+    comfort: {date: room-minutes} the E32 counted as missed comfort (daily_summary.comfort_of; days of older
+    firmware are absent): ``missed_comfort_hours`` of the week, None without any such day."""
     week, before = _days(records, today, WEEK_DAYS), _days(records, today, WEEK_DAYS, WEEK_DAYS)
     observed = _sum(week, "observed_s")
     result = {"period_start": date.fromordinal(today.toordinal() - WEEK_DAYS + 1).isoformat(),
@@ -157,6 +172,9 @@ def figures(records, today, *, unit="m³", rough=False, price=None, currency="EU
     else:
         result["night_saving_money"] = None
     result["currency"] = currency
+    keys = {date.fromordinal(today.toordinal() - i).isoformat() for i in range(WEEK_DAYS)}
+    minutes = [value for key, value in (comfort or {}).items() if key in keys]
+    result["missed_comfort_hours"] = _round(sum(minutes) / 60, 1) if minutes else None
     return result
 
 
@@ -194,6 +212,9 @@ def message(result, advice_titles, lang):
             lines.append(line)
         else:
             lines.append(t["night_best"])
+    if result.get("missed_comfort_hours") is not None:
+        hours = result["missed_comfort_hours"]
+        lines.append(t["comfort"].format(hours=n(hours)) if hours > 0 else t["comfort_none"])
     if advice_titles:
         lines.append(t["advice"] + "\n" + "\n".join(f"- {title}" for title in advice_titles[:TOP_ADVICE]))
     else:

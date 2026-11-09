@@ -15,11 +15,20 @@ change), the same login and lock as the room plan:
   its unique ID (and entity ID) of "Use learned flow and optimum start": the
   meaning is the same, only the name and the default changed;
 - number "Flow at −10 °C" (``curve_design_flow_c``): 0 is automatic (floor
-  heating 40 °C, radiators 55 °C), else 25–80 °C.
+  heating 40 °C, radiators 55 °C), else 25–80 °C;
+- select "Comfort style" (``comfort_style``: ``comfort``, ``balanced`` or ``save``; 1.1.1 stage B, the owner's
+  decision D2): comfort first, balanced (the default) or save most, what the E32's heating plan weighs (comfort
+  against burner starts and gas). Only for firmware that reports it. The plan mode is no flow option: it has its
+  own route, written only by the owner's one confirmation (heating_plan.py).
 
-The options are static: they are read when the E32 is (back) online, every
-five minutes while it is, and come back with every write. The controls appear
-once the E32 answered (firmware without the options never shows them).
+The options are static: they are read when the E32 is (back) online and come
+back with every write. Since 1.1.1 (P1 HA-1) Home Assistant no longer signs in
+every five minutes to look whether they changed: the E32's flow telemetry
+(``fw/telemetry/flow``, ``flow.settings``) carries them, so a change made on the
+E32's own page is read once when the telemetry shows it. Only firmware whose
+telemetry lacks them is still read periodically, once an hour (FALLBACK_REFRESH).
+A Configure form reads them when it opens. The controls appear once the E32
+answered (firmware without the options never shows them).
 
 Sensors from the E32 summary (``fw/telemetry/summary`` with ``flow`` and
 ``night_gas`` from ``fw/telemetry/flow``, assembled by the HeatingHub), each
@@ -71,16 +80,24 @@ from .heating_link import HubEntity, add_options, heating_hub, number, track_ent
 _LOGGER = logging.getLogger(__name__)
 
 KEY = "e32_flow"
-REFRESH = timedelta(minutes=5)
+REFRESH = timedelta(minutes=5)  # the check whether a periodic read is due (no sign-in by itself)
+# Only for firmware whose flow telemetry does not carry the options (1.1.1, P1 HA-1: was every 5 minutes).
+FALLBACK_REFRESH = timedelta(hours=1)
 OPTIONS = ("weather_curve", "apply_learned")
 DESIGN_FLOW_KEY = "curve_design_flow_c"
 DESIGN_FLOW_AUTOMATIC = "automatic"  # the select option for the stored 0
 DESIGN_FLOW_LIMITS = (25, 80)  # the E32's own bound (WeatherCurve::min/maxDesignFlowC); 0 is automatic
-SOURCES = ["rule", "curve", "learned", "optimum_start"]
+# 1.1.1 stage B (SL-B3 item 5, FlowSettings "comfort_style"): an optional key, kept only when the firmware sends a
+# value it knows (comfort first, balanced, save most).
+COMFORT_STYLE_KEY = "comfort_style"
+COMFORT_STYLES = ("comfort", "balanced", "save")
+COMFORT_STYLE_DEFAULT = "balanced"
+OPTIONAL = {COMFORT_STYLE_KEY: COMFORT_STYLES}
+SOURCES = ["rule", "curve", "learned", "optimum_start", "plan"]  # "plan": the E32's heating plan (1.1.1 stage B)
 GAS_STATUSES = ["no_meter", "collecting", "calibrated", "meter_stale"]
 # The Learning view's cards (E32 rc.5), the sixth card module (week_planner.card_modules), versioned with the
 # manifest like the other card URLs: "Water temperature by outdoor temperature" and what the E32 knows (a ring).
-CURVE_CARD_URL = "/open_thermostat/heating-curve-card-1.1.0.js"
+CURVE_CARD_URL = "/open_thermostat/heating-curve-card-1.2.0.js"
 CURVE_CARD_TYPE = "custom:openthermostat-heating-curve"
 KNOWLEDGE_CARD_TYPE = "custom:openthermostat-knowledge"
 # WeatherCurve (src/control/WeatherCurve.h): the standard slope follows the water temperature in hard frost
@@ -110,7 +127,8 @@ def decode_settings(value):
             or design != 0 and not DESIGN_FLOW_LIMITS[0] <= design <= DESIGN_FLOW_LIMITS[1]):
         return None
     from .e32_care import decode_tuning
-    return {**{key: value[key] for key in OPTIONS}, DESIGN_FLOW_KEY: design, **decode_tuning(value)}
+    optional = {key: value[key] for key, known in OPTIONAL.items() if value.get(key) in known}
+    return {**{key: value[key] for key in OPTIONS}, DESIGN_FLOW_KEY: design, **optional, **decode_tuning(value)}
 
 
 def flow_error(err):
@@ -144,6 +162,8 @@ class FlowSettingsLink:
         self.unsupported = False  # firmware without the options: not asked again until the E32 is back
         self._task = None
         self._was_fresh = False
+        self._read_at = None      # monotonic time of the last read (a sign-in)
+        self._seen = None         # the options as the telemetry last showed them
         self._listeners = []
         self._trackers = []
 
@@ -171,22 +191,52 @@ class FlowSettingsLink:
         for listener in list(self._listeners):
             listener()
 
+    def telemetry_options(self):
+        """The options as the E32's flow telemetry shows them ({weather_curve, apply_learned, design}), or None."""
+        summary = getattr(self.hub, "summary", None)
+        flow = summary.get("flow") if type(summary) is dict else None
+        settings = flow.get("settings") if type(flow) is dict else None
+        if type(settings) is not dict:
+            return None
+        values = {key: settings.get(key) for key in (*OPTIONS, DESIGN_FLOW_KEY)}
+        if any(type(values[key]) is not bool for key in OPTIONS) or type(values[DESIGN_FLOW_KEY]) not in (int, float):
+            return None
+        optional = {key: settings[key] for key, known in OPTIONAL.items() if settings.get(key) in known}
+        return {**values, DESIGN_FLOW_KEY: int(values[DESIGN_FLOW_KEY]), **optional}
+
     @callback
     def poll(self, _now=None):
-        """Read again (every five minutes) while the E32 is online; never with a refused password."""
+        """The periodic check: a read only for firmware without the options in its telemetry, once an hour."""
+        if self.telemetry_options() is not None and self.settings is not None:
+            return  # the telemetry tells a change (hub_changed); no sign-in needed
+        loop = self.hass.loop.time()
+        if self._read_at is not None and loop - self._read_at < FALLBACK_REFRESH.total_seconds():
+            return
+        self.read()
+
+    @callback
+    def read(self):
+        """Read the options once (one sign-in) while the E32 is online; never with a refused password."""
         if (not self.hub.fresh or self.unsupported or self.plan.login_rejected
                 or (self._task is not None and not self._task.done())):
             return
+        self._read_at = self.hass.loop.time()
         self._task = self.hass.async_create_task(self.async_refresh(), "OpenThermostat E32 flow options read")
 
     @callback
     def hub_changed(self):
-        """The E32 is (back) online, perhaps after a firmware update: read at once."""
+        """The E32 is (back) online, perhaps after a firmware update, or its telemetry shows other options: read."""
         fresh = self.hub.fresh
         if fresh and not self._was_fresh:
             self.unsupported = False
-            self.poll()
+            self.read()
         self._was_fresh = fresh
+        seen = self.telemetry_options() if fresh else None
+        if seen is not None and seen != self._seen:
+            known = self.settings is not None and all(self.settings.get(k) == v for k, v in seen.items())
+            self._seen = seen
+            if not known:
+                self.read()  # changed on the E32's own page (or not read yet): one read brings the rest along
 
     async def _call(self, change=None):
         # A change waits for a free E32 web session; a read does not.
@@ -256,6 +306,7 @@ def flow_link(hass, entry):
         entry.async_on_unload(link.stop)
         entry.async_on_unload(hub.add_listener(link.hub_changed))
         entry.async_on_unload(async_track_time_interval(hass, link.poll, REFRESH))
+        link.add_listener(lambda: remove_stale_controls(hass, entry, link))
         link.hub_changed()
     return link
 
@@ -339,6 +390,38 @@ class FlowDesignSelect(FlowOptionEntity, SelectEntity):
         await self._change(0 if option == DESIGN_FLOW_AUTOMATIC else int(option))
 
 
+class FlowComfortSelect(FlowOptionEntity, SelectEntity):
+    """The comfort style of the E32's heating plan (comfort first / balanced / save most; default balanced)."""
+
+    _attr_options = list(COMFORT_STYLES)
+    _attr_icon = "mdi:tune-variant"
+
+    def __init__(self, link):
+        self._attach_link(link, COMFORT_STYLE_KEY)  # unique id <prefix>_flow_comfort_style (select)
+
+    @property
+    def current_option(self):
+        return self.stored if self.stored in COMFORT_STYLES else None
+
+    async def async_select_option(self, option):
+        if option not in COMFORT_STYLES:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="comfort_style_invalid")
+        await self._change(option)
+
+
+@callback
+def remove_stale_controls(hass, entry, link):
+    """Firmware whose options lack the comfort style (older, or a downgrade): its select goes."""
+    if link.settings is None or COMFORT_STYLE_KEY in link.settings or not link.hub.fresh:
+        return
+    from homeassistant.helpers import entity_registry as er
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("select", DOMAIN, f"{link.hub.prefix}_flow_{COMFORT_STYLE_KEY}")
+    record = registry.async_get(entity_id) if entity_id else None
+    if record is not None and record.config_entry_id == entry.entry_id:
+        registry.async_remove(entity_id)
+
+
 def _wanted_switches(link):
     if link.settings is not None:
         for key in OPTIONS:
@@ -348,6 +431,8 @@ def _wanted_switches(link):
 def _wanted_selects(link):
     if link.settings is not None:
         yield DESIGN_FLOW_KEY, lambda: FlowDesignSelect(link)
+        if COMFORT_STYLE_KEY in link.settings:
+            yield COMFORT_STYLE_KEY, lambda: FlowComfortSelect(link)
 
 
 async def _async_setup_controls(hass, entry, async_add_entities, wanted):

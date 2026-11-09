@@ -9,9 +9,13 @@ Per calendar day (Home Assistant's time zone):
   from the day records of ``energy_use`` (gas meter or estimate), read back, never counted twice;
 * per room: how long it asked for heat, every "time to target" after its target rose by at least
   SUMMARY_TARGET_STEP_C (minutes until it was within SUMMARY_TARGET_REACHED_C; late after
-  SUMMARY_TARGET_ON_TIME_MINUTES, or not reached before the next change), and the missed comfort
-  minutes: asking for heat, more than SUMMARY_MISSED_MARGIN_C below the target, for longer than
-  SUMMARY_TARGET_ON_TIME_MINUTES;
+  SUMMARY_TARGET_ON_TIME_MINUTES, or not reached before the next change);
+* the missed comfort minutes. From the E32's own count where it reports one (E32 SL-A: the scoreboard's
+  ``comfort`` of today, [K·h below target - 0.3 K, room-minutes below it], over the occupied rooms: active, no
+  away, holiday or open-window pause; a late morning counts too): the room-minutes below it, this day. The E32
+  counts per boot, so a fall of its figure is a restart and what it had counted before stays. Older firmware (no
+  ``comfort`` key): per room, asking for heat, more than SUMMARY_MISSED_MARGIN_C below the target, for longer than
+  SUMMARY_TARGET_ON_TIME_MINUTES (which stayed 0 all week in the owner's house while mornings were late);
 * the outdoor temperature (lowest, highest, mean) when one is set in the energy options.
 
 Only what was observed counts: without fresh E32 data (``hub.fresh``) the rooms are not followed
@@ -20,7 +24,8 @@ SUMMARY_COMPLETE_DAY_HOURS observed is marked ``complete: false``.
 
 Entities on the product device: "Daily summary" (state: the last finished day; the days as
 attributes) and three running totals with long-term statistics, whose change per day is the daily
-figure: burner time (h), burner starts and missed comfort time (min). Nothing here writes a setting.
+figure: burner time (h), burner starts and missed comfort time (min; its attributes ``basis`` and
+``counts`` say in words what it counts now). Nothing here writes a setting.
 """
 from __future__ import annotations
 
@@ -54,6 +59,52 @@ ROOM_MEASURED = ("ok", "fallback")
 # Gas posts read from the energy_use day records, in this order when present.
 GAS_POSTS = ("heating", "hot_water", "tapping", "keep_warm")
 TOTALS = ("burner_s", "starts", "missed_s")
+
+
+# What "Missed comfort time" counts, in the Home Assistant language: the attribute ``counts`` of the total.
+COUNTS_TEXT = {
+    "en": {"e32": "Minutes, added up over the rooms, that a room was more than 0.3 °C below its target while it was "
+                  "in use (not paused for away, a holiday or an open window), counted by the E32. A late morning "
+                  "counts too.",
+           "rooms": "Minutes that a room asked for heat while more than 0.5 °C below its target, after the first 2 "
+                    "hours. Update the E32 for its own, stricter count."},
+    "nl": {"e32": "Minuten, opgeteld over de ruimtes, dat een ruimte meer dan 0,3 °C onder haar streeftemperatuur was "
+                  "terwijl ze in gebruik was (niet gepauzeerd door afwezigheid, een vakantie of een open raam), "
+                  "geteld door de E32. Een te late ochtend telt ook mee.",
+           "rooms": "Minuten dat een ruimte om warmte vroeg terwijl ze meer dan 0,5 °C onder haar streeftemperatuur was, "
+                    "na de eerste 2 uur. Werk de E32 bij voor zijn eigen, strengere telling."},
+    "pl": {"e32": "Minuty, zsumowane dla pomieszczeń, w których pomieszczenie było o ponad 0,3 °C poniżej temperatury "
+                  "docelowej, gdy było używane (bez pauzy z powodu nieobecności, urlopu lub otwartego okna), "
+                  "liczone przez E32. Spóźniony poranek też się liczy.",
+           "rooms": "Minuty, w których pomieszczenie żądało ciepła, będąc o ponad 0,5 °C poniżej temperatury "
+                    "docelowej, po pierwszych 2 godzinach. Zaktualizuj E32, aby mieć jego własne, dokładniejsze "
+                    "liczenie."},
+}
+
+
+def e32_comfort(summary):
+    """(day, room-minutes, K·h) of the E32's comfort deficit today (the scoreboard's ``comfort``, E32 SL-A); (day, 0,
+    0) while it observed no occupied room this boot (``null``); None on firmware without it or for a malformed one."""
+    from .scoreboard import day_name, scoreboard, scoreboard_day
+    today = scoreboard_day(scoreboard(summary), "today")
+    if today is None or "comfort" not in today or day_name(today) is None:
+        return None
+    value = today["comfort"]
+    if value is None:
+        return day_name(today), 0.0, 0.0
+    if (type(value) is not list or len(value) != 2 or any(type(v) not in (int, float) or not math.isfinite(v)
+                                                          or not 0 <= v <= 1e6 for v in value)):
+        return None
+    return day_name(today), float(value[1]), float(value[0])
+
+
+def comfort_of(day):
+    """(room-minutes, K·h) the E32 counted that day (``e32_comfort``), or None (older firmware: the rooms' count)."""
+    kept = day.get("e32_comfort") if type(day) is dict else None
+    if type(kept) is not dict or not all(type(kept.get(k)) in (int, float) and math.isfinite(kept[k])
+                                         for k in ("base_min", "base_kh", "last_min", "last_kh")):
+        return None
+    return kept["base_min"] + kept["last_min"], kept["base_kh"] + kept["last_kh"]
 
 
 def _round(value, digits):
@@ -208,17 +259,47 @@ class DailySummary:
             if running is not None and temperature >= running[1] - SUMMARY_TARGET_REACHED_C:
                 self._close_step(record, (now - running[0]) / 60)
                 state["step"] = None
-            # Missed comfort: asking for heat, well below the target, for longer than a warm-up may take.
+            # Missed comfort: asking for heat, well below the target, for longer than a warm-up may take (the E32's
+            # own count is the total instead once it reported one this day, _follow_e32_comfort).
             if demand and temperature < target - SUMMARY_MISSED_MARGIN_C:
                 state["below"] = state["below"] if state["below"] is not None else now
                 if step and now - state["below"] > SUMMARY_TARGET_ON_TIME_MINUTES * 60:
                     record["missed_s"] += step
-                    self.data["totals"]["missed_s"] += step
+                    if comfort_of(day) is None:
+                        self.data["totals"]["missed_s"] += step
                     self._dirty = True
             else:
                 state["below"] = None
         for room_id in set(self._room_state) - seen:
             del self._room_state[room_id]
+        self._follow_e32_comfort(now)
+
+    def _follow_e32_comfort(self, now):
+        """The E32's comfort deficit of today (e32_comfort) into the day and the missed comfort total.
+
+        The day keeps ``e32_comfort``: ``base_min``/``base_kh`` what earlier E32 boots of the day counted and
+        ``last_min``/``last_kh`` the latest figure of this boot; the day's figure is their sum. A figure below the
+        last one is a restart (the E32 counts per boot). Only the E32's day that is Home Assistant's today counts.
+        """
+        if self.hub is None or not self.hub.fresh:
+            return
+        value = e32_comfort(self.hub.summary)
+        if value is None or value[0] != self.today(now).isoformat():
+            return
+        _, minutes, kh = value
+        day = self.day(now)
+        kept = day.get("e32_comfort")
+        if comfort_of(day) is None:
+            kept = day["e32_comfort"] = {"base_min": 0.0, "base_kh": 0.0, "last_min": 0.0, "last_kh": 0.0}
+            self._dirty = True
+        if minutes < kept["last_min"] or kh < kept["last_kh"] - 0.005:  # a new E32 boot counts from 0 again
+            kept["base_min"] += kept["last_min"]
+            kept["base_kh"] += kept["last_kh"]
+            kept["last_min"] = kept["last_kh"] = 0.0
+        if minutes != kept["last_min"] or kh != kept["last_kh"]:
+            self.data["totals"]["missed_s"] += max(0.0, minutes - kept["last_min"]) * 60
+            kept["last_min"], kept["last_kh"] = minutes, kh
+            self._dirty = True
 
     def _close_step(self, record, minutes):
         if minutes is None:
@@ -300,11 +381,13 @@ class DailySummary:
         if day is None:
             return None
         rooms = []
+        e32 = comfort_of(day)
         for room_id, room in sorted(day["rooms"].items()):
             steps = room["steps"]
+            # The E32 counts the house, not each room: then no room figure of the older count beside it.
             rooms.append({"room": room_id, "name": room["name"],
                           "heat_hours": _round(room["demand_s"] / 3600, 1),
-                          "missed_minutes": round(room["missed_s"] / 60),
+                          "missed_minutes": None if e32 is not None else round(room["missed_s"] / 60),
                           "time_to_target_minutes": _round(statistics.median(steps), 0) if steps else None,
                           "targets_reached": len(steps), "late": room["late"], "not_reached": room["not_reached"]})
         outdoor = day["outdoor"]
@@ -312,7 +395,10 @@ class DailySummary:
                 "observed_hours": _round(day["observed_s"] / 3600, 1),
                 "burner_hours": _round(day["burner_s"] / 3600, 1), "burner_starts": day["starts"],
                 "short_runs": day["short_runs"], "gas": self._gas(key),
-                "missed_comfort_minutes": round(sum(room["missed_s"] for room in day["rooms"].values()) / 60),
+                "missed_comfort_minutes": (round(e32[0]) if e32 is not None
+                                           else round(sum(room["missed_s"] for room in day["rooms"].values()) / 60)),
+                "missed_comfort_basis": "e32" if e32 is not None else "rooms",
+                "below_target_kh": _round(e32[1], 2) if e32 is not None else None,
                 "rooms": rooms,
                 "outdoor": ({"min": _round(outdoor["min"], 1), "max": _round(outdoor["max"], 1),
                              "mean": _round(outdoor["sum"] / outdoor["n"], 1)} if outdoor["n"] else None)}
@@ -413,6 +499,17 @@ class SummaryTotalSensor(RestoreEntity, _SummaryEntity):
     def native_value(self):
         value = self.summary_owner.data["totals"][self.key]
         return {"burner_s": round(value / 3600, 3), "missed_s": round(value / 60, 1)}.get(self.key, int(value))
+
+    @property
+    def extra_state_attributes(self):
+        """Missed comfort time: what it counts now (``basis``: the E32's own count or the older one), in words."""
+        if self.key != "missed_s":
+            return None
+        from .learned_overview import language
+        owner = self.summary_owner
+        today = owner.data["days"].get(owner.today().isoformat())
+        basis = "e32" if comfort_of(today) is not None else "rooms"
+        return {"basis": basis, "counts": COUNTS_TEXT[language(getattr(self, "hass", None))][basis]}
 
     async def async_added_to_hass(self):
         """A total never goes down (Home Assistant would count a decrease as a new meter): at least the last state."""

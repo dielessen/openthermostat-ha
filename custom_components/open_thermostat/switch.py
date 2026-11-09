@@ -7,6 +7,11 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN
 
+# Home Assistant may run this platform's actions in parallel (R4-15): every E32 request goes through the
+# entry's RoomPlanLink, which signs in once at a time and lets a newer write supersede one that waits for
+# a free E32 web session (R4-02). A limit of 1 here would hold every other write behind such a wait.
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,

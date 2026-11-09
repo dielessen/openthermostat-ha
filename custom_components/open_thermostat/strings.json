@@ -1,24 +1,6 @@
 {
   "config": {
     "step": {
-      "user": {
-        "title": "Set up OpenThermostat",
-        "menu_options": {
-          "legacy": "Older OpenThermostat (before the E32)",
-          "shadow": "OpenThermostat E32 (recommended)"
-        },
-        "description": "Connect your E32. It shows you what to do next. It only starts controlling your boiler after you say so."
-      },
-      "confirm": {
-        "title": "OpenThermostat detected",
-        "description": "Add climate entities for rooms from MQTT prefix {prefix}?",
-        "data": {
-          "create_dashboard": "Create an OpenThermostat dashboard"
-        },
-        "data_description": {
-          "create_dashboard": "Adds an OpenThermostat dashboard to the sidebar with your rooms, the boiler and the sensors."
-        }
-      },
       "legacy": {
         "title": "OpenThermostat",
         "description": "Enter the MQTT topic prefix configured in the thermostat.",
@@ -29,18 +11,6 @@
         "data_description": {
           "topic_prefix": "The MQTT prefix set on the thermostat, for example ib-therm.",
           "create_dashboard": "Adds an OpenThermostat dashboard to the sidebar with your rooms, the boiler and the sensors."
-        }
-      },
-      "shadow": {
-        "title": "Connect an OpenThermostat E32",
-        "description": "The E32 sends nothing to the boiler until you say so on its Rooms page, best through the boiler test there. If an old thermostat is still on the boiler, the E32 first runs a trial run beside it. Home Assistant sets the target temperature on each room's setting device (radiator valve, tado or number helper) following that room's week program. Normally you connect the E32 later with Configure → E32 connection. That fills in the connection ID for you.",
-        "data": {
-          "topic_prefix": "MQTT prefix of the E32",
-          "adapter_id": "Connection ID (filled in for you)"
-        },
-        "data_description": {
-          "topic_prefix": "The MQTT prefix of the E32, as shown on its network page.",
-          "adapter_id": "Keep the suggested value; Connect E32 copies it to the E32 for you."
         }
       },
       "installation": {
@@ -96,27 +66,17 @@
       "reauth_try_again_later": "Too many sign-in attempts on the E32. Wait 30 seconds, then try again."
     },
     "create_entry": {
-      "e32_next_steps": "Next: choose Configure on this integration and then E32 connection. Before that, switch on MQTT on the E32 web page (System → Network and Home Assistant → MQTT). After connecting, Home Assistant goes straight on to your first room."
+      "e32_next_steps": "Next: choose Configure on this integration and then E32 connection. Before that, connect the E32 to your MQTT broker on its web page (System → Settings → Home Assistant → MQTT broker). After connecting, Home Assistant goes straight on to your first room."
     }
   },
   "options": {
     "step": {
-      "comfort": {
-        "title": "Comfort",
-        "description": "Window and door sensors pause a room while they are open; presets, away and presence set temperatures for the thermostats of your E32 rooms. Everything here is optional.",
-        "menu_options": {
-          "comfort_settings": "Levels without a week program, and timing",
-          "comfort_contacts": "Window and door contacts per room",
-          "back": "← Back",
-          "done": "Done"
-        }
-      },
       "house": {
         "title": "House",
-        "description": "{saved}Settings for the whole house: who is home, the house mode and holiday, and the standard temperatures for rooms.",
+        "description": "{saved}Settings for the whole house: who is home, the house mode and holiday, and the defaults for rooms.",
         "menu_options": {
           "house_presence": "Presence and away temperature",
-          "comfort_settings": "Comfort defaults for rooms",
+          "comfort_settings": "Room defaults",
           "back": "← Back",
           "done": "Done",
           "house_mode": "House mode and holiday",
@@ -138,8 +98,8 @@
         }
       },
       "comfort_settings": {
-        "title": "Defaults for rooms and timing",
-        "description": "The thermostat of each E32 room offers the presets Comfort, Eco, Night and Boost: the levels of the room's week program, as in the week planner. A room without a week program starts from the two temperatures below. Away and holiday are the house mode (Configure → House and the House mode control), not a preset of one room.",
+        "title": "Room defaults",
+        "description": "For every room: the temperatures of a room without a week program, how long a window or door may be open before the room pauses, and how long a change on a thermostat lasts. A room's own settings (Configure → Rooms) take precedence.",
         "data": {
           "comfort_temperature": "Comfort without a week program",
           "eco_temperature": "Night without a week program",
@@ -148,8 +108,8 @@
           "override_minutes": "Length of a manual change"
         },
         "data_description": {
-          "comfort_temperature": "The Comfort preset of a room without a week program. With a week program, Comfort is its warmest temperature.",
-          "eco_temperature": "The Night preset of a room without a week program. With a week program, Night is its coolest temperature.",
+          "comfort_temperature": "Comfort for a room without a week program. With a week program, Comfort is its warmest temperature.",
+          "eco_temperature": "Night for a room without a week program. With a week program, Night is its coolest temperature.",
           "contact_delay": "Minutes a window must stay open before a room pauses, so airing briefly does not stop the heating. A room's own \"Pause after (windows)\" (Configure → Rooms) takes precedence. A paused room still protects against frost.",
           "door_delay": "The same for doors, usually longer, so letting the dog out or walking through the front door does not stop the heating. Default 5 minutes. A room's own \"Pause after (doors)\" takes precedence.",
           "override_minutes": "A new temperature on the thermostat lasts until the next switch point of the room's week program. A room without a week program keeps it this many minutes, then follows its plan again."
@@ -179,12 +139,13 @@
       },
       "init": {
         "title": "OpenThermostat",
-        "description": "{saved}Rooms first, then the house, heating, energy and the E32 connection. New here? Start with E32 connection; after it you add your rooms.",
+        "description": "{saved}Choose what you want to set up. The E32 keeps these settings and runs the heating, also without Home Assistant.",
         "menu_options": {
           "e32_rooms": "Rooms",
           "house": "House",
           "heating_boiler": "Heating and boiler",
           "energy": "Energy and outdoor temperature",
+          "notifications": "Notifications",
           "controller_connection": "E32 connection",
           "advanced_settings": "Advanced and diagnostics",
           "room_settings": "Manage rooms",
@@ -192,7 +153,8 @@
           "configuration_status": "Is everything connected?",
           "graph_prepare": "Repair room plan",
           "back": "← Back",
-          "done": "Done"
+          "done": "Done",
+          "general": "Dashboard and name"
         }
       },
       "graph_review": {
@@ -473,7 +435,7 @@
       },
       "advanced_settings": {
         "title": "Advanced and diagnostics",
-        "description": "{saved}Dashboard and name, the E32 time zone and system log, Bluetooth sensor names, restoring a backup, tidying entity IDs and checks. Everyday settings are in the main menu.",
+        "description": "{saved}The E32 time zone and system log, Bluetooth sensor names, restoring a backup, tidying entity IDs and checks. Everyday settings, also Dashboard and name, are in the main menu.",
         "menu_options": {
           "configuration_status": "Is everything connected?",
           "installation_source": "Check the E32 room setup",
@@ -515,8 +477,8 @@
         }
       },
       "controller_connection": {
-        "title": "Connect E32",
-        "description": "Connect this installation to your E32. You need two things first:\n\n1. A broker login for the E32. With the Mosquitto broker add-on any Home Assistant user works: create one under Settings → People → Users → Add user (Users is shown when Advanced mode is on in your user profile), for example openthermostat with its own password.\n2. MQTT on the E32: on its web page open System → Network and Home Assistant → MQTT, tick Enabled, enter the broker address (usually the address of Home Assistant), port 1883 and that user name and password, save and let the E32 restart.\n\nNo room is needed in Home Assistant: after connecting you add the rooms under Configure → Rooms, starting right here with the first one. The first connection may restart the E32 once.\n\nThe E32 password is stored with this Home Assistant integration. If you change it on the E32 later, Home Assistant asks for the new one. Connecting does not switch on heating control.",
+        "title": "E32 connection",
+        "description": "Connect this installation to your E32. You need two things first:\n\n1. A broker login for the E32. With the Mosquitto broker add-on any Home Assistant user works: create one under Settings → People → Users → Add user (Users is shown when Advanced mode is on in your user profile), for example openthermostat with its own password.\n2. The E32 on the broker: on its web page open System → Settings → Home Assistant → MQTT broker, tick “Connect to the MQTT broker”, enter the broker address (usually the address of Home Assistant), port 1883 and that user name and password, save and let the E32 restart.\n\nNo room is needed in Home Assistant: after connecting you add the rooms under Configure → Rooms, starting right here with the first one. The first connection may restart the E32 once.\n\nThe E32 password is stored with this Home Assistant integration. If you change it on the E32 later, Home Assistant asks for the new one. Connecting does not switch on heating control.",
         "data": {
           "address": "E32 web address",
           "password": "E32 password"
@@ -562,7 +524,7 @@
       },
       "e32_rooms": {
         "title": "Rooms",
-        "description": "{saved}Set up your rooms here. The E32 stores them and keeps heating them, also without Home Assistant (revision {revision}).\n\n{rooms}",
+        "description": "{saved}Set up your rooms here. The E32 stores them and keeps heating them, also without Home Assistant.\n\n{rooms}",
         "menu_options": {
           "e32_room_add": "Add a room",
           "e32_room_pick": "Edit or remove a room",
@@ -571,7 +533,7 @@
         }
       },
       "e32_room_pick": {
-        "title": "Choose an E32 room",
+        "title": "Choose a room",
         "data": {
           "room": "Room",
           "action": "What would you like to do?"
@@ -683,11 +645,11 @@
         },
         "data_description": {
           "minimum_flow_temperature": "The lowest water temperature the E32 asks for while it heats ({minimum_range}).",
-          "maximum_flow_temperature": "The highest water temperature the E32 ever asks for ({maximum_range}, above the lowest). Floor heating fed without a mixing valve: usually at most 45–50 °C. Radiators: often 60–75 °C on cold days. The maximum heating temperature set on your boiler always stays the ceiling; the E32 never asks for more."
+          "maximum_flow_temperature": "The highest water temperature the E32 ever asks for ({maximum_range}, above the lowest). Floor heating fed without a mixing valve: usually at most 45–50 °C. Radiators: often 60–75 °C on cold days."
         }
       },
       "e32_room_remove": {
-        "title": "Remove E32 room",
+        "title": "Remove {name}?",
         "description": "Remove {name} from the E32 room plan? The E32 stops asking heat for this room. Its Bluetooth sensors stay paired.",
         "data": {
           "confirm_remove": "Remove this room"
@@ -706,7 +668,8 @@
           "gas_kwh_per_m3": "Calorific value of the gas",
           "outdoor_entity": "Outdoor temperature",
           "boiler_kw": "Boiler heating power",
-          "water_meter": "Water meter"
+          "water_meter": "Water meter",
+          "forecast_entity": "Weather forecast"
         },
         "data_description": {
           "gas_meter": "A gas meter reading in m³ or kWh that only goes up (not a usage per hour), for example from a smart meter or a gas pulse counter. A reading in kWh is converted to m³ with the calorific value. It also splits your gas into heating and hot water for the Energy dashboard.",
@@ -715,7 +678,8 @@
           "gas_kwh_per_m3": "Energy per m³ of gas; your gas bill or supplier states it. Empty: 9.77 kWh/m³ (Dutch gas). Elsewhere it differs, for example about 11 kWh/m³ in the UK; natural gas is usually between 8 and 12 kWh/m³.",
           "outdoor_entity": "A temperature sensor outside (°C or °F) or a weather entity. It helps the E32 learn how fast rooms cool down.",
           "boiler_kw": "The boiler's nominal heating power in kW (type plate or manual), 3–60 kW. Suggested: {boiler_kw_suggested} kW ({boiler_kw_basis}); empty keeps that suggestion.",
-          "water_meter": "Optional: a water flow (L/min) or a water meter reading (m³ or L) that only goes up. With it, a hot-water round with water flowing is counted as tapping and one without as keeping warm, more reliably than from the boiler's temperatures alone. It stays in Home Assistant."
+          "water_meter": "Optional: a water flow (L/min) or a water meter reading (m³ or L) that only goes up. With it, a hot-water round with water flowing is counted as tapping and one without as keeping warm, more reliably than from the boiler's temperatures alone. It stays in Home Assistant.",
+          "forecast_entity": "A weather entity with an hourly forecast. Every hour Home Assistant sends the outdoor temperature of the next 24 hours to the E32, so it can plan the heating ahead. When your outdoor temperature comes from a weather entity, that one is already filled in. Leave it empty for no forecast: the E32 then uses its own daily pattern of the outdoor temperature."
         }
       },
       "e32_rooms_saved": {
@@ -752,7 +716,7 @@
       },
       "general": {
         "title": "Dashboard and name",
-        "description": "The name of this installation in Home Assistant and whether it shows the OpenThermostat dashboard. The rooms, the heating and the boiler are elsewhere in this menu.",
+        "description": "The name of this installation in Home Assistant and whether it shows the OpenThermostat dashboard.",
         "data": {
           "name": "Installation name",
           "create_dashboard": "Show the OpenThermostat dashboard"
@@ -809,7 +773,7 @@
       },
       "e32_restore_confirm": {
         "title": "Restore these settings?",
-        "description": "Backup of {created}, as the E32 checked it:\n\n{summary}\n\nThe rooms keep the mode of the backup. The takeover of the boiler is not part of a backup: a new or reset E32 sends nothing to the boiler until you confirm the takeover on its page (Rooms → Boiler test and takeover). Before the restore Home Assistant also saves a backup of the E32 as it is now.",
+        "description": "Backup of {created}, as the E32 checked it:\n\n{summary}\n\nThe rooms keep the mode of the backup. The takeover of the boiler is not part of a backup: a new or reset E32 sends nothing to the boiler until you confirm the takeover on its page (Rooms → Active control). Before the restore Home Assistant also saves a backup of the E32 as it is now.",
         "data": {
           "confirm": "Restore these settings on this E32"
         },
@@ -833,7 +797,7 @@
       },
       "e32_room_valve_models": {
         "title": "Radiator valve models in {name}",
-        "description": "OpenThermostat normally recognises a valve's model by itself. Choose a model here only when it does not, or to change how a valve is driven. With a model the E32 drives the valve over Zigbee2MQTT itself, so it works without Home Assistant. Through Home Assistant always works, with any valve. Other (setpoint only): the E32 sends just the target temperature.",
+        "description": "OpenThermostat normally recognises a valve's model by itself. Choose a model here only when it does not, or to change how a valve is driven. With a model the E32 drives the valve over Zigbee2MQTT itself, so it works without Home Assistant. Through Home Assistant always works, with any valve. Other (target temperature only): the E32 sends just the target temperature.",
         "data": {
           "model_1": "Valve 1",
           "model_2": "Valve 2",
@@ -849,7 +813,7 @@
       },
       "comfort_care": {
         "title": "Comfort and boiler care",
-        "description": "{saved}The thermostat sets these itself and keeps adjusting them as it learns your house. Change one only if you want it differently. The same settings as on the E32's Home page.\n\nNow:\n{settings}",
+        "description": "{saved}The E32 sets these itself and keeps adjusting them as it learns your house. Change one only if you want it differently. The same settings as on the E32's Home page.\n\nNow:\n{settings}",
         "menu_options": {
           "comfort_care_knob": "Change a setting",
           "comfort_care_auto_all": "Back to automatic for all",
@@ -870,13 +834,13 @@
       },
       "comfort_care_auto_value": {
         "title": "Change: {name}",
-        "description": "Now: {current} {mode}. Standard value: {standard}.\n\nAutomatic: the thermostat sets it itself and keeps adjusting it, at most one small step a day. Switch Automatic off to use your own value ({range}).",
+        "description": "Now: {current} {mode}. Standard value: {standard}.\n\nAutomatic: the E32 sets it itself and keeps adjusting it, at most one small step a day. Switch Automatic off to use your own value ({range}).",
         "data": {
           "automatic": "Automatic",
           "value": "Your value"
         },
         "data_description": {
-          "automatic": "On: the thermostat sets this itself (your value below is not used).",
+          "automatic": "On: the E32 sets this itself (your value below is not used).",
           "value": "Used when Automatic is off. Possible: {range}."
         }
       },
@@ -902,7 +866,7 @@
       },
       "comfort_care_reset": {
         "title": "Back to start values",
-        "description": "All these settings go back to their start values and the thermostat starts learning them again. What it learned about your rooms stays.",
+        "description": "All these settings go back to their start values and the E32 starts learning them again. What it learned about your rooms stays.",
         "data": {
           "confirm": "Yes, back to the start values"
         },
@@ -953,10 +917,9 @@
           "boiler_model": "Boiler model",
           "back": "← Back",
           "done": "Done",
-          "heating_warm_up": "Smart warm-up",
-          "heating_weather": "Weather compensation",
           "comfort_care": "Comfort and boiler care",
-          "boiler_settings": "Boiler settings"
+          "boiler_settings": "Boiler settings",
+          "heating_flow": "Smart warm-up and weather compensation"
         }
       },
       "boiler_model": {
@@ -966,7 +929,7 @@
           "model": "Boiler model"
         },
         "data_description": {
-          "model": "The models are listed from EMS-ESP. A listing does not confirm support in OpenThermostat."
+          "model": "Choosing a model only names your boiler; whether the E32 may control it is shown under Boiler recognition."
         }
       },
       "ble_sensors": {
@@ -1028,10 +991,12 @@
         "title": "Smart warm-up",
         "description": "The E32 starts heating early, so a room is warm at the time in its week program, with the coolest water that still does it. Off: heating starts at the program time, so a room can stay cool for a while (floor heating an hour or more).",
         "data": {
-          "smart_warm_up": "Smart warm-up"
+          "smart_warm_up": "Smart warm-up",
+          "comfort_style": "Comfort style"
         },
         "data_description": {
-          "smart_warm_up": "The same switch as on the E32 device."
+          "smart_warm_up": "The same switch as on the E32 device.",
+          "comfort_style": "What the E32 weighs when it plans the heating: comfort against burner starts and gas. The same choice as on the E32 device."
         }
       },
       "heating_weather": {
@@ -1243,6 +1208,100 @@
           "back": "← Back",
           "done": "Done"
         }
+      },
+      "notifications": {
+        "title": "Notifications",
+        "description": "{saved}Messages on your phone. About a room (a window open while the room heats, a room that stays cold, a sensor or battery that needs attention): to the people of that room, or everyone with a phone when the room has none. About the house (problems and maintenance of the boiler and the E32): only to the people with the tick \"Also messages about the house\". Nothing is on until you switch it on.\n\nOn now: {on}\n\nPhones:\n{people}",
+        "menu_options": {
+          "notify_people": "People and phones",
+          "notify_house": "The house",
+          "notify_rooms": "Rooms",
+          "back": "← Back",
+          "done": "Done"
+        }
+      },
+      "notify_people": {
+        "title": "People and phones",
+        "description": "Choose a person to set the phone or app that gets their messages, and whether they also get the messages about the house. Someone without a phone sees the messages in Home Assistant instead.",
+        "data": {
+          "person": "Person"
+        },
+        "data_description": {
+          "person": "Everyone in Home Assistant, and the people you chose for the house and the rooms."
+        }
+      },
+      "notify_person": {
+        "title": "Phone or app",
+        "description": "Where {person} gets messages. Usually that is the Home Assistant app on their own phone; other notify services (Telegram, e-mail …) work too.",
+        "data": {
+          "phone": "Phone or app",
+          "house": "Also messages about the house"
+        },
+        "data_description": {
+          "phone": "Choose No phone to stop messages to a phone; they then show in Home Assistant.",
+          "house": "Problems and maintenance of the boiler and the E32 (Notifications → The house). Off by default: only the people with this tick get them."
+        }
+      },
+      "notify_house": {
+        "title": "The house",
+        "description": "Messages about the whole house, day and night, also when nobody is home. {who} Each problem has to last a while first, so a short hiccup never sends one; a maintenance message comes once (per code, per version).",
+        "data": {
+          "on": "Notify about the house",
+          "kinds": "Problems",
+          "maintenance": "Maintenance"
+        },
+        "data_description": {
+          "on": "Off: no messages about the house.",
+          "kinds": "Choose which problems you want to hear about.",
+          "maintenance": "The boiler asking for maintenance, a new version of the E32 firmware or of this integration, and the daily backup of the E32 settings that keeps failing."
+        }
+      },
+      "notify_rooms": {
+        "title": "Rooms",
+        "description": "Choose the room whose notifications you want to set.",
+        "data": {
+          "room": "Room"
+        },
+        "data_description": {
+          "room": "One of the rooms on your E32."
+        }
+      },
+      "notify_room": {
+        "title": "Notifications for {room}",
+        "description": "Messages about this room go to: {people}. Messages about an open window or a cold room go only to those of them who are home. Between 23:00 and 07:00 room messages wait until the morning, and the same message comes at most once every 2 hours.",
+        "data": {
+          "on": "Notify about this room",
+          "kinds": "Messages"
+        },
+        "data_description": {
+          "on": "Off: no messages about this room.",
+          "kinds": "Choose which messages you want."
+        }
+      },
+      "heating_flow": {
+        "title": "Smart warm-up and weather compensation",
+        "description": "The E32 starts heating early, so a room is warm at the time in its week program, with the coolest water that still does it. Off: heating starts at the program time, so a room can stay cool for a while (floor heating an hour or more).\n\nThe colder it is outside, the warmer the water to your heating gets, before the rooms cool down. The room temperature still corrects it. Without an outdoor temperature the normal room control is used.",
+        "data": {
+          "smart_warm_up": "Smart warm-up",
+          "weather_compensation": "Weather compensation",
+          "comfort_style": "Comfort style"
+        },
+        "data_description": {
+          "smart_warm_up": "The same switch as on the E32 device.",
+          "weather_compensation": "The same switch as on the E32 device. It starts with a standard setting and learns your house.",
+          "comfort_style": "What the E32 weighs when it plans the heating: comfort against burner starts and gas. The same choice as on the E32 device."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced",
+            "data": {
+              "hard_frost_water_temperature": "Water temperature in hard frost (−10 °C)"
+            },
+            "data_description": {
+              "hard_frost_water_temperature": "How warm the water to your heating gets when it is −10 °C outside. In milder weather the E32 picks less. Not sure? Leave it on Automatic: the E32 learns this for your house."
+            }
+          }
+        }
       }
     },
     "error": {
@@ -1252,7 +1311,7 @@
       "contacts_invalid": "Choose at most eight different sensors.",
       "not_contact_sensor": "Choose window, door or opening sensors only.",
       "contact_window_and_door": "A sensor is a window or a door, not both: choose it in one of the two fields.",
-      "room_invalid": "Choose one of the E32 rooms.",
+      "room_invalid": "Choose one of the rooms.",
       "invalid_adapter_id": "Use the same explicit owner ID as provisioned on the E32 (1–32 letters, digits, _ or -).",
       "graph_room_contract_unavailable": "These rooms do not fit the saved setup of the E32. Saving or ticking this box starts no heating.",
       "graph_control_source_review_required": "The selected SOURCE contract does not match the current owner or reviewed graph, or changed during verification. Nothing was enabled. Review the saved DATA and SOURCE contract; reconnect alone cannot approve changes.",
@@ -1312,9 +1371,9 @@
       "controller_unreachable": "The E32 could not be reached. Check its address and network connection.",
       "controller_update_required": "The firmware on this E32 is too old for this version of the integration. Update the E32 first: on its web page open System → Firmware update and install the latest release, then connect again.",
       "controller_busy_or_conflict": "The E32 is updating or restarting, or it waits for a restart. Wait until its web page opens normally (restart it there under System → Restart device if it asks for that), then try again.",
-      "controller_legacy_rooms_present": "The E32 still has rooms of its own from its older stand-alone setup (on its web page: System → Rooms and programs). Home Assistant does not take these over. Remove those rooms there and save, then connect again; afterwards you add your rooms under Configure → Rooms.",
-      "controller_broker_setup_required": "The E32 needs its own MQTT login first. On the E32, open System → Network and Home Assistant → MQTT, tick Enabled, enter the broker address and port and a broker user name and password, save and let the E32 restart. The E32 does not connect to Home Assistant through a broker without a login.",
-      "controller_source_conflict": "This E32 is already linked to another OpenThermostat installation, or this installation was linked to a different E32 before. First check that the address belongs to the right E32. To move this E32 to this installation: on its web page open System → Network and Home Assistant, section Home Assistant: untick “Home Assistant link in trial run (no boiler control)”, empty the installation profile under “Installation identity and limits (advanced)” if one is shown, choose Save settings and let the E32 restart; then connect again.",
+      "controller_legacy_rooms_present": "The E32 still has rooms from its older stand-alone setup. Update the E32 to the newest firmware (Settings → Updates → OpenThermostat E32 Firmware), which clears them, then connect again.",
+      "controller_broker_setup_required": "The E32 needs its own MQTT login first. On the E32, open System → Settings → Home Assistant → MQTT broker, tick “Connect to the MQTT broker”, enter the broker address and port and a broker user name and password, save and let the E32 restart. The E32 does not connect to Home Assistant through a broker without a login.",
+      "controller_source_conflict": "This E32 is already linked to another OpenThermostat installation, or this installation was linked to a different E32 before. First check that the address belongs to the right E32. To move this E32 to this installation: on its web page open System → Settings, panel Home Assistant: untick “Home Assistant link”, empty the installation profile under “Installation identity and limits (advanced)” if one is shown, choose Save settings and let the E32 restart; then connect again.",
       "controller_settings_too_large": "The configuration exceeds the E32 storage limit. No automatic retry is performed.",
       "controller_response_invalid": "The E32 returned an unexpected response. Check its firmware and connection.",
       "controller_response_too_large": "The E32 response exceeds the supported limit. Check its firmware.",
@@ -1326,8 +1385,8 @@
       "controller_runtime_off_required": "The previous connection is still stopping. Wait a minute and submit again.",
       "controller_boot_unconfirmed": "The E32 did not come back in time after its restart. Wait until its web page opens again, then submit again.",
       "controller_connection_failed": "The connection could not be completed. Check that the E32 is on and its web page opens, wait a minute and submit again. If it keeps failing, the E32 web page shows the reason under System → Diagnostics and system log.",
-      "controller_connection_unconfirmed": "Home Assistant did not hear back from the E32 in time. On the E32 web page, check under System → Network and Home Assistant → MQTT that it uses the same broker as Home Assistant and that its user name and password are accepted; then submit again.",
-      "controller_connection_changed": "The E32 connection changed while the room plan was being saved, for example by a restart or a second Connect E32. Wait a minute and submit again.",
+      "controller_connection_unconfirmed": "Home Assistant did not hear back from the E32 in time. On the E32 web page, check under System → Settings → Home Assistant → MQTT broker that it uses the same broker as Home Assistant and that its user name and password are accepted; then submit again.",
+      "controller_connection_changed": "The E32 connection changed while the room plan was being saved, for example by a restart or connecting it a second time. Wait a minute and submit again.",
       "controller_plan_pending": "An earlier room plan change is not finished yet. Check on the E32 what it has saved before you change anything else.",
       "controller_plan_unconfirmed": "The E32 did not confirm the room plan in time. Wait until the E32 is back after its restart (its web page opens again), then submit again.",
       "controller_partial_connection": "Connecting stopped halfway: some settings may already be saved on the E32. Submit again to finish the connection; Home Assistant checks what is already there.",
@@ -1371,16 +1430,15 @@
       "e32_flow_limits_floor_warning": "A room has floor heating. Above {floor_maximum} floor heating without a mixing valve can get too hot. Save again to keep this maximum.",
       "e32_flow_limits_above_boiler": "This maximum is above your boiler's own maximum; the boiler does not go higher anyway. Save again to keep it, or lower it.",
       "controller_ha_version_unsupported": "This integration needs Home Assistant 2026.10.0 or newer (tested with 2026.10.2 to 2026.11.0). Update Home Assistant; if yours is newer, check for an integration update. Nothing has been changed.",
-      "controller_mqtt_unconfirmed": "The E32 restarted with the Home Assistant settings, but Home Assistant received nothing from it over MQTT within 90 seconds. On the E32, check System → Network and Home Assistant → MQTT: the same broker as the MQTT integration in Home Assistant, and a user name and password that the broker accepts.",
+      "controller_mqtt_unconfirmed": "The E32 restarted with the Home Assistant settings, but Home Assistant received nothing from it over MQTT within 90 seconds. On the E32, check System → Settings → Home Assistant → MQTT broker: the same broker as the MQTT integration in Home Assistant, and a user name and password that the broker accepts.",
       "legacy_rooms_plan_changed": "The E32 room plan changed since this list was made (on the E32 page or elsewhere). Nothing has been removed. Check the updated list and submit again.",
       "legacy_rooms_plan_failed": "The E32 did not save the updated room plan, so nothing has been removed. Check that the E32 is ready and try again.",
       "legacy_rooms_plan_unreadable": "The E32 room plan could not be read, so nothing has been removed. Check that the E32 is on and connected, then try again.",
-      "controller_room_plan_update_required": "The E32 runs firmware that is too old for this. Update the E32 to beta.19 or newer first (the E32's Firmware update under Settings → Updates in Home Assistant, or System → Firmware update on the E32's web page), then try again. Nothing has been changed.",
+      "controller_room_plan_update_required": "This needs newer E32 firmware. Update the E32 first (Settings → Updates → OpenThermostat E32 Firmware), then try again. Nothing has been changed.",
       "controller_session_capacity": "The E32 has too many open sign-ins. Sign out on the E32 web page (or sign in there with “End previous web sessions and sign in”) or restart the E32, then try again.",
       "controller_try_again_later": "Too many sign-in attempts on the E32. Wait 30 seconds, then try again.",
       "controller_readback_unconfirmed": "The E32 did not send back its current room settings within 90 seconds, so this save is not confirmed. Check that the E32 is online and connected to the MQTT broker, then try again.",
       "contact_delay_invalid": "The pause delay lies between 0 and 30 minutes.",
-      "e32_valve_name_invalid": "Use the valve's Zigbee2MQTT friendly name: up to 64 characters, no # + \" \\ and no leading or trailing / or space.",
       "e32_valve_duplicate": "This valve is already used (here or in another room).",
       "e32_valve_model_missing": "Choose the valve's model.",
       "e32_valve_limit": "The E32 drives at most 16 radiator valves, 24 with the BLU Gateway (E32 1.1).",
@@ -1409,7 +1467,7 @@
       "e32_away_invalid": "Choose a temperature between {away_range}, or leave it empty for the house away temperature.",
       "comfort_away_temperature_invalid": "Choose an away temperature between 5 and 25 °C.",
       "away_temperature_not_saved": "The E32 did not save the away temperature ({error}), so nothing was saved. Check that the E32 is online and try again.",
-      "away_temperature_update_required": "Changing the away temperature here needs E32 firmware beta.23 or newer. Update the E32 with its Firmware entity.",
+      "away_temperature_update_required": "This needs newer E32 firmware. Update the E32 first (Settings → Updates → OpenThermostat E32 Firmware), then try again.",
       "care_value_invalid": "This value is not possible. Use a value within {range}.",
       "care_knob_invalid": "Choose one of the settings.",
       "care_confirm": "Tick the box to confirm.",
@@ -1455,7 +1513,8 @@
       "boiler_setting_advanced": "This value is outside the everyday range: use Advanced (installer settings).",
       "boiler_setting_writes_off": "Changing boiler settings is off: choose “Allow the E32 to change boiler settings” first.",
       "boiler_setting_unavailable": "This E32 cannot change boiler settings.",
-      "boiler_setting_not_now": "The E32 cannot change boiler settings right now: the boiler test, an update or active heating is busy, or the boiler has not answered yet. Try again later.",
+      "boiler_setting_not_now": "The E32 cannot change boiler settings right now: the boiler test, a reading or an update is busy, or the boiler has not answered yet. Try again later.",
+      "boiler_setting_restarting": "The E32 is about to restart or update; try again in a minute.",
       "boiler_setting_unsupported": "Your boiler does not support this setting.",
       "boiler_setting_check_boiler": "A setting could not be put back: check the boiler and confirm it under Settings → Repairs first.",
       "boiler_setting_too_soon": "Wait half a minute before changing this setting again.",
@@ -1464,7 +1523,13 @@
       "boiler_setting_store_failed": "The E32 could not store this. Try again.",
       "boiler_setting_refused": "The E32 refused the change ({error}).",
       "heating_circuit_failed": "The E32 did not store the change ({error}). Try again in a minute.",
-      "e32_valve_keep_open_loop": "A floor loop valve cannot be kept open as the water's path: choose it in one of the two lists only."
+      "e32_valve_keep_open_loop": "A floor loop valve cannot be kept open as the water's path: choose it in one of the two lists only.",
+      "notification_person_invalid": "Choose one of the people in the list.",
+      "notification_phone_invalid": "Choose one of the phones in the list.",
+      "notification_invalid": "Something in the form was not valid. Please try again.",
+      "notification_kinds_needed": "Choose at least one message, or switch notifications off.",
+      "forecast_not_weather": "Choose a weather entity (weather.…) for the forecast.",
+      "forecast_no_hourly": "This weather entity gives no hourly forecast. Choose another one, or leave the field empty."
     },
     "abort": {
       "comfort_saved": "The comfort settings are saved and apply at once.",
@@ -1514,7 +1579,6 @@
       "e32_unconfirmed": "The E32 could not confirm that the room plan was saved. Check the room before trying again.",
       "e32_room_missing": "Room {room} is no longer in the E32 room plan.",
       "e32_room_saved": "{name} is saved in the E32 room plan.",
-      "e32_room_removed": "{name} is removed from the E32 room plan.",
       "e32_room_unchanged": "Nothing changed; the E32 room plan was not written.",
       "e32_flow_limits_saved": "The E32 now asks for a water temperature between {minimum} and {maximum} {unit}.",
       "energy_saved": "Energy settings saved. Nothing is required; the E32 receives the values within a few minutes.",
@@ -1522,7 +1586,6 @@
       "legacy_rooms_removed": "The old Home Assistant rooms have been removed. The E32 stays connected with {rooms} room(s) in its plan.",
       "legacy_rooms_none": "There are no old Home Assistant rooms to remove.",
       "legacy_rooms_cancelled": "Cancelled. Choose Configure → E32 connection to check the connection; some settings may already be saved on the E32.",
-      "e32_valves_update_required": "This E32 firmware has no radiator valve control yet. Update the E32 first.",
       "entity_ids_nothing": "All OpenThermostat entity IDs already match what Home Assistant would give them.",
       "entity_ids_done": "{count} entity IDs renamed. Update these places yourself:\n\n{todo}",
       "entity_ids_undone": "{count} entity IDs are back to their old names.",
@@ -1540,7 +1603,7 @@
       "care_unconfirmed": "The E32 did not answer as expected. Try again later.",
       "care_update_required": "This E32 firmware shows these settings but cannot change them from Home Assistant. Update the E32 (Firmware update) first.",
       "care_unchanged": "Nothing changed; the E32 was not written.",
-      "care_saved": "Saved on the E32. The thermostat watches a whole day before it adjusts anything again.",
+      "care_saved": "Saved on the E32. The E32 watches a whole day before it adjusts anything again.",
       "e32_settings_unreachable": "The E32 could not be reached ({error}). Try again later.",
       "e32_settings_update_required": "This E32 firmware does not offer this setting. Update the E32 (Firmware update) first.",
       "e32_settings_password_default": "The E32 still uses its default password and accepts no changes until you choose a new one: Settings → Repairs → “E32 still uses the default password”.",
@@ -1578,7 +1641,11 @@
       "tester_shared": "Ready: open the notification. It lists what is in the files, has the links to download them and the GitHub form. Nothing was sent.",
       "tester_switched_off": "The tester program is off. Files you already wrote stay in www/open_thermostat until you delete them.",
       "tester_recording_unavailable": "This E32 has no room in its memory for a bus recording. Restart the E32 and try again. You can still share the result without one.",
-      "tester_share_not_written": "Home Assistant could not write the files to its www/open_thermostat folder. Check that the configuration folder has free space, then try again."
+      "tester_share_not_written": "Home Assistant could not write the files to its www/open_thermostat folder. Check that the configuration folder has free space, then try again.",
+      "notifications_saved": "Notifications saved.",
+      "notifications_unchanged": "Nothing changed.",
+      "notifications_no_people": "There are no people in Home Assistant yet. Add a person under Settings → People, then choose their phone here.",
+      "notifications_no_rooms": "The E32 has not reported any rooms yet. Add rooms under Configure → Rooms, wait a moment and try again."
     },
     "progress": {
       "controller_connect": "Connecting to the E32…",
@@ -1660,7 +1727,7 @@
         "name": "Estimated radiator power"
       },
       "controller_requested_flow_temperature": {
-        "name": "Boiler test: requested water temperature"
+        "name": "Water temperature sent to the boiler"
       },
       "room_temperature": {
         "name": "Temperature"
@@ -1688,7 +1755,7 @@
           "window_pending": "Window or door open, pausing soon",
           "no_measurement": "No measurement",
           "hot_water": "Waiting: the boiler is making hot water",
-          "boiler_pause": "Waiting: minimum boiler pause",
+          "boiler_pause": "Burner resting before the next start",
           "away_return": "Warming up for your return",
           "holiday": "Holiday",
           "away": "Away",
@@ -1716,7 +1783,7 @@
               "window_pending_door": "A door is open: the room pauses soon",
               "no_measurement": "No measurement: this room does not ask for heat",
               "hot_water": "Waiting: the boiler is making hot water",
-              "boiler_pause": "Waiting: minimum boiler pause",
+              "boiler_pause": "Burner resting before the next start",
               "away_return": "Warming up for your return",
               "holiday": "Holiday until {until} ({target} °C)",
               "away": "Away: the house is set to away ({target} °C)",
@@ -1902,7 +1969,7 @@
               "early_hours": "{h} h {m} min early",
               "not_warm": "not warm within 3 h",
               "yesterday_starts": "Burner starts per heating hour",
-              "yesterday_heating": "Heating energy (estimate)",
+              "yesterday_heating": "Gas for heating (estimate)",
               "warm_on_time": "{room}: warm on time",
               "late_h": "{h} h late",
               "early_h": "{h} h early"
@@ -1940,10 +2007,10 @@
         "name": "Water temperature target (boiler)"
       },
       "field_measured_flow_temperature": {
-        "name": "Water temperature to heating (flow)"
+        "name": "Water to heating (flow)"
       },
       "field_measured_return_temperature": {
-        "name": "Water temperature back (return)"
+        "name": "Water back (return)"
       },
       "field_outdoor_temperature": {
         "name": "Outdoor temperature"
@@ -2105,10 +2172,10 @@
         "name": "Maximum burner power"
       },
       "field_pump_run_on": {
-        "name": "Pump keeps running after heating"
+        "name": "Pump run-on"
       },
       "field_configured_heating_temperature": {
-        "name": "Heating temperature setting"
+        "name": "Boiler maximum"
       },
       "field_reported_dhw_target": {
         "name": "Hot water target temperature"
@@ -2351,7 +2418,7 @@
         "name": "Water temperature target (EMS+)"
       },
       "field_plus_flow_temperature": {
-        "name": "Water temperature to heating (EMS+)"
+        "name": "Water to heating (EMS+)"
       },
       "field_plus_requested_burner_power": {
         "name": "Requested burner power (EMS+)"
@@ -2374,7 +2441,7 @@
         }
       },
       "field_plus_return_temperature": {
-        "name": "Water temperature back (EMS+)"
+        "name": "Water back (EMS+)"
       },
       "field_plus_flame_current": {
         "name": "Flame signal (EMS+)"
@@ -2535,7 +2602,7 @@
         "name": "Heating advice"
       },
       "learned_overview": {
-        "name": "What the thermostat learned"
+        "name": "What the E32 learned"
       },
       "knowledge": {
         "name": "Known about your house",
@@ -2567,7 +2634,11 @@
               "curve": "It is still learning how much warmer the water must be when it gets colder outside.",
               "boiler_minimum": "It is still finding out from which water temperature your boiler starts heating.",
               "boiler_response": "It is still listening to how your boiler holds its temperature.",
-              "house": "It is still working out how fast your house loses heat."
+              "house": "It is still working out how fast your house loses heat.",
+              "model": "It is still checking its model of {room}.",
+              "plant": "It is still finding out your boiler's lowest flame and the water temperature at which it burns steadily.",
+              "outlook": "It still needs a weather forecast or a few days of outdoor temperatures.",
+              "track": "Its predictions for {room} still have to be good for a few days."
             }
           }
         }
@@ -2622,7 +2693,8 @@
           "rule": "Room control",
           "curve": "Weather compensation",
           "learned": "Learned water temperature",
-          "optimum_start": "Warm on time (early start)"
+          "optimum_start": "Warm on time (early start)",
+          "plan": "The heating plan"
         }
       },
       "flow_curve": {
@@ -2840,6 +2912,7 @@
               "no": "no",
               "flow": "Water to heating",
               "asked": "asked {flow} °C",
+              "asked_sent": "asked {flow} °C, sent {sent} °C",
               "would_ask": "E32 would ask {flow} °C",
               "no_request": "no request",
               "ceiling": "at most {flow} °C",
@@ -2884,17 +2957,17 @@
         "name": "Short burner runs yesterday"
       },
       "heating_gas_yesterday": {
-        "name": "Heating energy yesterday (estimate)"
+        "name": "Gas for heating yesterday (boiler's estimate)"
       },
       "gas_per_degree_day": {
         "name": "Heating energy per degree-day (yesterday)"
       },
       "boiler_settings_writes": {
-        "name": "Boiler settings writes",
+        "name": "Changing boiler settings",
         "state": {
           "off": "Off",
-          "ready": "Ready",
-          "watching": "Watching a change",
+          "ready": "Allowed",
+          "watching": "Waiting for you: keep or put back",
           "failed": "Check the boiler"
         },
         "state_attributes": {
@@ -3137,6 +3210,24 @@
           "on": "On",
           "off": "Off"
         }
+      },
+      "last_restart": {
+        "name": "Last restart",
+        "state_attributes": {
+          "reason": {
+            "name": "Why",
+            "state": {
+              "power": "Power on or a power dip",
+              "restart": "Install or restart request",
+              "automatic": "Automatic restart by the E32",
+              "crash": "Crash",
+              "unknown": "Unknown"
+            }
+          }
+        }
+      },
+      "heating_plan": {
+        "name": "Heating plan"
       }
     },
     "select": {
@@ -3236,6 +3327,14 @@
           "on": "On for 1 hour",
           "off": "Off for 1 hour"
         }
+      },
+      "flow_comfort_style": {
+        "name": "Comfort style",
+        "state": {
+          "comfort": "Comfort first",
+          "balanced": "Balanced",
+          "save": "Save most"
+        }
       }
     },
     "datetime": {
@@ -3243,7 +3342,7 @@
         "name": "Off until"
       },
       "holiday_until": {
-        "name": "Holiday until"
+        "name": "Holiday ends"
       }
     },
     "switch": {
@@ -3271,6 +3370,9 @@
       },
       "e32_restart": {
         "name": "Restart E32"
+      },
+      "plan_confirm": {
+        "name": "Let the E32 plan the heating"
       }
     }
   },
@@ -4062,7 +4164,7 @@
       }
     },
     "installation": {
-      "entry_type": "Installation overview"
+      "entry_type": "E32 and boiler"
     },
     "e32_room": {
       "entry_type": "Room"
@@ -4206,8 +4308,8 @@
         "bosch_bth_ra": "Bosch BTH-RA (position, external temperature)",
         "sonoff_trvzb": "Sonoff TRVZB (external temperature)",
         "sonoff_trv_zbt": "Sonoff TRV Gen2 / TRV-ZBT (external temperature)",
-        "tuya_tv02": "Tuya TV02 (setpoint only)",
-        "generic": "Other (setpoint only)",
+        "tuya_tv02": "Tuya TV02 (target temperature only)",
+        "generic": "Other (target temperature only)",
         "ha_climate": "Through Home Assistant (any valve)"
       }
     },
@@ -4220,7 +4322,7 @@
     "comfort_care_knob": {
       "options": {
         "min_off_s": "Burner rest between starts",
-        "min_on_s": "Burner run time",
+        "min_on_s": "Shortest burner run",
         "heat_start_c": "Start heating when the room is this much below its target",
         "heat_stop_c": "Stop heating when the room is this much above its target",
         "flow_per_degree_c": "How strongly the water temperature reacts to a cold room",
@@ -4337,7 +4439,7 @@
     "boiler_settings_text": {
       "options": {
         "name_heatingactivated": "Heating on the boiler",
-        "name_heatingtemp": "Maximum heating temperature (boiler)",
+        "name_heatingtemp": "Boiler maximum",
         "name_burnmaxpower": "Maximum burner power",
         "name_boilhystoff": "Switching margin off (hysteresis)",
         "name_boilhyston": "Switching margin on (hysteresis)",
@@ -4347,7 +4449,7 @@
         "name_pumpmodmin": "Lowest pump speed",
         "name_pumpmode": "Pump mode",
         "name_dhw_activated": "Hot water on the boiler",
-        "name_dhw_seltemp": "Hot water temperature",
+        "name_dhw_seltemp": "Selected hot water temperature",
         "name_dhw_hyston": "Hot water switching margin (hysteresis)",
         "name_dhw_chargeoptimization": "Hot water charge optimisation",
         "name_dhw_flowtempoffset": "Extra water temperature for hot water",
@@ -4376,7 +4478,7 @@
         "state_on": "**on**: {used} of {cap} changes used today.",
         "state_busy": "a change of {setting} is running.",
         "state_blocked": "**blocked**: a setting could not be put back. Check the boiler (Settings → Repairs).",
-        "state_not_now": "on, but not possible right now (the boiler test, an update or active heating is busy).",
+        "state_not_now": "on, but not possible right now (the boiler test, a reading or an update is busy).",
         "state_unavailable": "not possible on this E32.",
         "off_heating": "the heating: radiators and floor get no heat",
         "off_dhw": "the hot water: the taps stay cold",
@@ -4410,7 +4512,8 @@
         "refusal_daily_limit_reached": "the E32 changes at most 12 boiler settings a day",
         "refusal_check_boiler_first": "a setting could not be put back: check the boiler first (Settings → Repairs)",
         "refusal_settings_busy": "another change is running",
-        "refusal_boiler_not_available": "not possible right now (the boiler test, an update or active heating is busy)",
+        "refusal_boiler_not_available": "not possible right now (the boiler test, a reading or an update is busy)",
+        "refusal_active_heat_owns_boiler": "the E32 is about to restart or update; try again in a minute",
         "refusal_value_out_of_range": "the boiler does not accept this value",
         "refusal_other": "the E32 refused it ({error})",
         "cause_not_sent": "The E32 could not reach the boiler for 10 minutes to put {setting} back.",
@@ -4429,6 +4532,49 @@
         "not_supported": "This E32 firmware cannot make a bus recording yet. Update the E32 first, or share the result without one.",
         "unreachable": "The E32 could not be reached just now."
       }
+    },
+    "notification_room_kind": {
+      "options": {
+        "window": "Window or door open while the room heats",
+        "cold": "Room stays cold (more than 1 °C below its target for over an hour)",
+        "sensor": "Temperature sensor silent for 30 minutes",
+        "battery": "Battery of a thermometer or valve low"
+      }
+    },
+    "notification_house_kind": {
+      "options": {
+        "boiler_fault": "Boiler fault",
+        "e32_offline": "E32 not reporting for 10 minutes, and when it is back",
+        "awaiting_confirmation": "E32 waits for your confirmation to control the boiler",
+        "frost": "Frost protection on",
+        "pressure_low": "Water pressure low",
+        "maintenance": "Boiler asks for maintenance (H code)",
+        "update": "New version of the E32 firmware or of this integration",
+        "backup": "Daily backup of the E32 settings keeps failing",
+        "plan_ready": "E32 ready to plan the heating (asks for your confirmation once)"
+      }
+    },
+    "notification_text": {
+      "options": {
+        "house": "the house",
+        "nothing_on": "nothing yet",
+        "no_people": "No people in Home Assistant yet.",
+        "no_phone": "No phone",
+        "phone_gone": "{service} (not found)",
+        "on": "on",
+        "off": "off",
+        "everyone": "everyone with a phone (this room has no people of its own)",
+        "with_house": " (also the house)",
+        "house_people": "They go to: {people}.",
+        "house_nobody": "Nobody receives these yet: tick a person under People and phones. Until then they show in Home Assistant."
+      }
+    },
+    "comfort_style_choice": {
+      "options": {
+        "comfort": "Comfort first: warm on time above all; it may use a little more gas.",
+        "balanced": "Balanced: warm on time with as few burner starts and as little gas as fit.",
+        "save": "Save most: as little gas and as few burner starts as possible; a room may be a little cooler for a moment."
+      }
     }
   },
   "issues": {
@@ -4443,7 +4589,7 @@
         },
         "abort": {
           "room_programs_done": "Every room already has a week program.",
-          "e32_rooms_unavailable": "The E32 rooms cannot be read right now. Try again in a moment."
+          "e32_rooms_unavailable": "The rooms cannot be read from the E32 right now. Try again in a moment."
         }
       },
       "description": "These rooms have no week program yet: {rooms}. Choose Fix to give them the standard program. You can change it in the week planner."
@@ -4466,7 +4612,7 @@
         "abort": {
           "reconfirm_done": "The E32 no longer waits for a confirmation.",
           "reconfirm_plan_not_active": "The room plan is no longer active, so there is nothing to confirm.",
-          "e32_rooms_unavailable": "The E32 rooms cannot be read right now. Try again in a moment."
+          "e32_rooms_unavailable": "The rooms cannot be read from the E32 right now. Try again in a moment."
         }
       },
       "description": "The E32 controlled your boiler before its firmware was updated. It waits for you before it takes over again, so two thermostats never control the boiler at once. Until then it only keeps frost protection. Choose Fix and confirm that no other thermostat is connected to the boiler."
@@ -4489,7 +4635,7 @@
         "abort": {
           "reconfirm_done": "The E32 no longer waits for a confirmation.",
           "reconfirm_plan_not_active": "The room plan is no longer active, so there is nothing to confirm.",
-          "e32_rooms_unavailable": "The E32 rooms cannot be read right now. Try again in a moment."
+          "e32_rooms_unavailable": "The rooms cannot be read from the E32 right now. Try again in a moment."
         }
       },
       "description": "The E32 controlled your boiler before its firmware was updated. It waits for you before it takes over again, so two thermostats never control the boiler at once. Until then it only keeps frost protection. Choose Fix and confirm that your old thermostat is still disconnected from the boiler."
@@ -4579,15 +4725,15 @@
         "error": {
           "e32_password": "The E32 did not accept the saved password. Enter the current E32 password under Configure → E32 connection, then try again.",
           "e32_unreachable": "The E32 could not be reached. Check that it is on and connected to your network, then try again.",
-          "broker_login": "The E32 needs its own MQTT login first. On the E32, open System → Network and Home Assistant → MQTT, tick Enabled, enter the broker address and port and a broker user name and password, save and let the E32 restart. The E32 does not connect to Home Assistant through a broker without a login.",
-          "mqtt_unconfirmed": "The E32 restarted with the Home Assistant settings, but Home Assistant received nothing from it over MQTT within 90 seconds. On the E32, check System → Network and Home Assistant → MQTT: the same broker as the MQTT integration in Home Assistant, and a user name and password that the broker accepts.",
+          "broker_login": "The E32 needs its own MQTT login first. On the E32, open System → Settings → Home Assistant → MQTT broker, tick “Connect to the MQTT broker”, enter the broker address and port and a broker user name and password, save and let the E32 restart. The E32 does not connect to Home Assistant through a broker without a login.",
+          "mqtt_unconfirmed": "The E32 restarted with the Home Assistant settings, but Home Assistant received nothing from it over MQTT within 90 seconds. On the E32, check System → Settings → Home Assistant → MQTT broker: the same broker as the MQTT integration in Home Assistant, and a user name and password that the broker accepts.",
           "e32_busy": "The E32 is updating or restarting. Wait until it is ready and try again.",
           "ha_version_unsupported": "This integration needs Home Assistant 2026.10.0 or newer (tested with 2026.10.2 to 2026.11.0). Update Home Assistant; if yours is newer, check for an integration update. Nothing has been changed.",
           "connection_failed": "The E32 connection could not be confirmed. Open Configure → E32 connection for details, then try again here.",
           "legacy_rooms_plan_changed": "The E32 room plan changed since this list was made (on the E32 page or elsewhere). Nothing has been removed. Check the updated list and submit again.",
           "legacy_rooms_plan_failed": "The E32 did not save the updated room plan, so nothing has been removed. Check that the E32 is ready and try again.",
           "legacy_rooms_plan_unreadable": "The E32 room plan could not be read, so nothing has been removed. Check that the E32 is on and connected, then try again.",
-          "e32_update_required": "The E32 runs firmware that is too old for this. Update the E32 to beta.19 or newer first (Home Assistant: Settings → Updates → OpenThermostat E32 Firmware → Install), then try again. Nothing has been changed.",
+          "e32_update_required": "This needs newer E32 firmware. Update the E32 first (Settings → Updates → OpenThermostat E32 Firmware), then try again. Nothing has been changed.",
           "e32_session_capacity": "The E32 has too many open sign-ins. Sign out on the E32 web page (or sign in there with “End previous web sessions and sign in”) or restart the E32, then try again.",
           "e32_try_again_later": "Too many sign-in attempts on the E32. Wait 30 seconds, then try again.",
           "e32_password_change_required": "The E32 still uses its default password and accepts no changes until you choose a new one. Open Settings → Repairs → “E32 still uses the default password” to choose it. Nothing was saved."
@@ -4622,15 +4768,15 @@
         "error": {
           "e32_password": "The E32 did not accept the saved password. Enter the current E32 password under Configure → E32 connection, then try again.",
           "e32_unreachable": "The E32 could not be reached. Check that it is on and connected to your network, then try again.",
-          "broker_login": "The E32 needs its own MQTT login first. On the E32, open System → Network and Home Assistant → MQTT, tick Enabled, enter the broker address and port and a broker user name and password, save and let the E32 restart. The E32 does not connect to Home Assistant through a broker without a login.",
-          "mqtt_unconfirmed": "The E32 restarted with the Home Assistant settings, but Home Assistant received nothing from it over MQTT within 90 seconds. On the E32, check System → Network and Home Assistant → MQTT: the same broker as the MQTT integration in Home Assistant, and a user name and password that the broker accepts.",
+          "broker_login": "The E32 needs its own MQTT login first. On the E32, open System → Settings → Home Assistant → MQTT broker, tick “Connect to the MQTT broker”, enter the broker address and port and a broker user name and password, save and let the E32 restart. The E32 does not connect to Home Assistant through a broker without a login.",
+          "mqtt_unconfirmed": "The E32 restarted with the Home Assistant settings, but Home Assistant received nothing from it over MQTT within 90 seconds. On the E32, check System → Settings → Home Assistant → MQTT broker: the same broker as the MQTT integration in Home Assistant, and a user name and password that the broker accepts.",
           "e32_busy": "The E32 is updating or restarting. Wait until it is ready and try again.",
           "ha_version_unsupported": "This integration needs Home Assistant 2026.10.0 or newer (tested with 2026.10.2 to 2026.11.0). Update Home Assistant; if yours is newer, check for an integration update. Nothing has been changed.",
           "connection_failed": "The E32 connection could not be confirmed. Open Configure → E32 connection for details, then try again here.",
           "legacy_rooms_plan_changed": "The E32 room plan changed since this list was made (on the E32 page or elsewhere). Nothing has been removed. Check the updated list and submit again.",
           "legacy_rooms_plan_failed": "The E32 did not save the updated room plan, so nothing has been removed. Check that the E32 is ready and try again.",
           "legacy_rooms_plan_unreadable": "The E32 room plan could not be read, so nothing has been removed. Check that the E32 is on and connected, then try again.",
-          "e32_update_required": "The E32 runs firmware that is too old for this. Update the E32 to beta.19 or newer first (Home Assistant: Settings → Updates → OpenThermostat E32 Firmware → Install), then try again. Nothing has been changed.",
+          "e32_update_required": "This needs newer E32 firmware. Update the E32 first (Settings → Updates → OpenThermostat E32 Firmware), then try again. Nothing has been changed.",
           "e32_session_capacity": "The E32 has too many open sign-ins. Sign out on the E32 web page (or sign in there with “End previous web sessions and sign in”) or restart the E32, then try again.",
           "e32_try_again_later": "Too many sign-in attempts on the E32. Wait 30 seconds, then try again.",
           "e32_password_change_required": "The E32 still uses its default password and accepts no changes until you choose a new one. Open Settings → Repairs → “E32 still uses the default password” to choose it. Nothing was saved."
@@ -4683,7 +4829,7 @@
     },
     "valve_offline": {
       "title": "Radiator valve not reporting in {room}",
-      "description": "Not reporting for more than two hours in {room}: {valves}. Check the battery and the valve's connection (Zigbee or the BLU Gateway). The room keeps heating on its other temperature sources; a valve keeps regulating on its last setpoint by itself."
+      "description": "Not reporting for more than two hours in {room}: {valves}. Check the battery and the valve's connection (Zigbee or the BLU Gateway). The room keeps heating on its other temperature sources; a valve keeps regulating to the last target temperature it got."
     },
     "valve_single_source": {
       "title": "{room} relies on a single temperature source",
@@ -4858,12 +5004,43 @@
     "tester_recording_update": {
       "title": "Update the E32 for the bus recording",
       "description": "{name}: the tester program is on, but this E32 firmware cannot make a bus recording yet. Update the E32 (Firmware update). You can still share the result without one, or switch the tester program off: Configure → Advanced and diagnostics → Tester program."
+    },
+    "learned_not_saved": {
+      "title": "The E32 could not save what it learned",
+      "description": "{name}: the E32 could not save what it learned for {missing} of its {of} rooms. It keeps it in memory until there is room again, but a restart before that loses it. Nothing to do now; if this stays for days, open the E32's System → Diagnostics and share the diagnostics. This message disappears after the next complete save."
+    },
+    "learned_not_saved_part": {
+      "title": "The E32 could not save everything it learned",
+      "description": "{name}: the E32 saved what it learned about every room, but not everything it learned about the house and the boiler. It keeps it in memory until there is room again, but a restart before that loses it. Nothing to do now; if this stays for days, open the E32's System → Diagnostics and share the diagnostics. This message disappears after the next complete save."
+    },
+    "learned_lost_at_restart": {
+      "title": "The E32 lost part of what it learned",
+      "description": "{name}: the E32 lost part of what it learned at its last restart: what it knows about your house fell from {before} % to {after} %. It learns it again over the next days; the heating keeps working meanwhile. If this happens again, share the E32's diagnostics (System → Diagnostics). This message disappears once the figure is back."
+    },
+    "plan_ready": {
+      "title": "The E32 is ready to plan the heating",
+      "description": "The E32's predictions for {room} have been good for a week. Let it plan the heating? It then chooses when to start and how warm the water gets, so the rooms are warm on time with as few burner starts and as little gas as it can. Your week program, temperatures and Smart warm-up stay as they are. If its predictions get worse, it goes back to heating as before by itself and asks you again later.\n\nChoose Fix to confirm, or ignore this to leave the heating as it is.",
+      "fix_flow": {
+        "step": {
+          "plan_ready": {
+            "title": "Let the E32 plan the heating",
+            "description": "Confirm that the E32 may plan the heating from now on, starting with {room}. You see the plan on the dashboard (Learning and settings → Today's plan) and on the E32's House page. The comfort style (Configure → Heating and boiler) says what it weighs: comfort first, balanced or save most."
+          }
+        },
+        "error": {
+          "plan_confirm_failed": "The E32 did not take the confirmation. Check that it is reachable and try again in a moment."
+        },
+        "abort": {
+          "plan_confirm_done": "The E32 no longer waits for this confirmation.",
+          "e32_rooms_unavailable": "The E32 cannot be reached right now. Try again in a moment."
+        }
+      }
     }
   },
   "services": {
     "set_room_override": {
-      "name": "Set a temporary room override",
-      "description": "A temporary target for an E32 room. Boost heats to the room's maximum (one hour unless you choose a duration). The E32 ends the override itself, also after a restart, and the room returns to its week program. Only the room's target changes; the flow limits and frost protection stay.",
+      "name": "Temporary temperature for a room",
+      "description": "A temporary target temperature for a room. Boost heats to the room's maximum (one hour unless you choose a duration). The E32 ends the temporary temperature itself, also after a restart, and the room returns to its week program. Only the room's target temperature changes; the water temperature limits and frost protection stay.",
       "fields": {
         "mode": {
           "name": "Kind",
@@ -4871,7 +5048,7 @@
         },
         "temperature": {
           "name": "Temperature",
-          "description": "The room's target meanwhile. Empty: the current target."
+          "description": "The room's target temperature meanwhile. Empty: the current target temperature."
         },
         "duration_minutes": {
           "name": "Duration",
@@ -4880,7 +5057,7 @@
       }
     },
     "clear_room_override": {
-      "name": "End the room override",
+      "name": "End the temporary temperature",
       "description": "The room follows its week program again."
     },
     "set_away": {
@@ -5018,7 +5195,7 @@
       "message": "To go on holiday, set \"Holiday until\" to the day you are back; the house mode then becomes Holiday by itself."
     },
     "house_mode_update_required": {
-      "message": "This needs E32 firmware beta.23 or newer. Update the E32 with its Firmware entity."
+      "message": "This needs newer E32 firmware. Update the E32 first (Settings → Updates → OpenThermostat E32 Firmware), then try again."
     },
     "valves_unconfirmed": {
       "message": "The E32 did not confirm the radiator valves were saved. Try again in a minute."
@@ -5054,7 +5231,7 @@
       "message": "The E32 restart was not confirmed ({error}). Check the connection and try again."
     },
     "set_comfort_unsupported": {
-      "message": "{entity} is an E32 room: use Set a temporary room override, End the room override or Away instead."
+      "message": "{entity} follows the room plan on the E32: use Temporary temperature for a room, End the temporary temperature or Away instead."
     },
     "holiday_temperature_invalid": {
       "message": "Choose a temperature on holiday between 5 and 25 °C."
@@ -5106,26 +5283,38 @@
     },
     "shelly_unreachable": {
       "message": "The E32 could not be reached to change the pump ({error})."
+    },
+    "plan_confirm_unavailable": {
+      "message": "Home Assistant has no connection to the E32's settings, so it cannot confirm the plan. Connect the E32 in Configure first."
+    },
+    "plan_confirm_unconfirmed": {
+      "message": "The E32 did not confirm that it plans the heating. Try again in a moment."
+    },
+    "comfort_style_invalid": {
+      "message": "Choose comfort first, balanced or save most."
+    },
+    "plan_confirm_refused": {
+      "message": "The E32 refused the confirmation ({error}). Look at its House page, or try again in a moment."
     }
   },
   "device": {
     "ems_boiler": {
-      "name": "EMS boiler {address} (product {product})"
+      "name": "Boiler"
     },
     "ems_thermostat": {
-      "name": "EMS thermostat {address} (product {product})"
+      "name": "Thermostat on the boiler bus"
     },
     "ems_device": {
       "name": "EMS device {address} (product {product})"
-    },
-    "ems_boiler_brand": {
-      "name": "{brand} boiler (product {product}) ({address})"
     },
     "circuit_floor": {
       "name": "Floor circuit"
     },
     "circuit_radiators": {
       "name": "Radiator circuit"
+    },
+    "ems_thermostat_address": {
+      "name": "Thermostat on the boiler bus ({address})"
     }
   }
 }

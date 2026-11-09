@@ -9,6 +9,10 @@ shows the number only); it matches that number with any display code. A code the
 does not list stays the raw code with "unknown code, see your boiler manual": never a
 guess from another boiler family.
 
+A service number of 0 is no service number: adapters such as the Bosch EasyControl Adapter pass
+none, so it reads as "not available". A code whose code-only row may not fit every cause
+(UNCONFIRMED_WITHOUT_CAUSE) then reads as unconfirmed instead of a fault (R-L-01).
+
 Presentation only: the code sensor's state stays the raw code (history and automations keep
 their meaning); the words are its attributes, in the Home Assistant language.
 """
@@ -17,6 +21,13 @@ import re
 from .display_code_table import ADVICE, FALLBACK, GENERIC, LANGUAGES, MODELS, SEVERITIES, TABLES, UNKNOWN
 
 FAULTS = frozenset({"blocking", "locking", "fault"})
+# R-L-01: on the owner's HRC 22 behind the EasyControl Adapter 0P shows for 10-20 s before every burner start, with
+# no service number; the tables' code-only row calls it a fault. Until the Nefit manual settles its meaning for that
+# case, a code listed here without a service number reads as unconfirmed (the rows themselves stay as they are).
+UNCONFIRMED_WITHOUT_CAUSE = frozenset({"0P"})
+UNCONFIRMED = ("Code {code} (meaning not confirmed for this boiler)",
+               "Code {code} (betekenis voor deze ketel niet bevestigd)",
+               "Kod {code} (znaczenie dla tego kotła niepotwierdzone)")
 CODE = re.compile(r"[-=0-9A-Za-z]{1,2}")
 # A text code field and the number field that goes with it (boiler_fields.py names).
 CODE_FIELDS = {"display_code": "service_number",
@@ -49,6 +60,10 @@ def describe(code, cause=None, model=None, language="en"):
     while table is not None:
         rows = TABLES[table]
         hit = ((rows.get((raw, number)) or rows.get((None, number))) if number is not None else None)             or rows.get((raw, None))
+        if hit and number is None and raw in UNCONFIRMED_WITHOUT_CAUSE:
+            return {"code": raw, "cause": None, "known": True, "table": table, "severity": "unknown", "fault": False,
+                    "meaning": UNCONFIRMED[i].format(code=raw), "advice": None,
+                    "severity_text": SEVERITIES["unknown"][i]}
         if hit:
             severity, advice, text = hit
             return {"code": raw, "cause": number, "known": True, "table": table, "severity": severity,

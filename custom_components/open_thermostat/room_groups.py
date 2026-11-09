@@ -486,11 +486,12 @@ class RoomGroups:
             target = self._ble_group(sensor_id)
             if device.config_subentry_id != target:
                 self._move(device, target)
-        plan_known = self._plan() is not None
         for room_id, group_id in room_group_ids(self.entry).items():
-            if room_id in rooms and (plan_known or room_id in room_devices):
+            if room_id in rooms or room_id in room_devices:
                 continue
-            # The room left the plan (its device is gone already), or nothing of it is left.
+            # The room left the plan and its device is gone too. The device has its own rules (two plan
+            # reads at least 60 s apart, never on a plan without rooms, or the Remove-room flow): removing
+            # the group earlier would make Core delete the device and its entities after one read.
             for device in dr.async_entries_for_config_entry(dr.async_get(self.hass), self.entry.entry_id):
                 if device.config_subentry_id == group_id and self._own(device.identifiers, self._room_head()) is None:
                     self._move(device, self.installation_id)

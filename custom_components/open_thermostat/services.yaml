@@ -98,7 +98,7 @@ export_metrics_csv:
 
 set_comfort:
   name: Set the comfort mode of an older room
-  description: Only for rooms that were set up in Home Assistant before the rooms moved to the E32. E32 rooms use Set a temporary room override, End the room override and Away instead. Temporary and boost last the room's own duration unless you choose one. Vacation needs a future date and time with a time zone.
+  description: Only for rooms that were set up in Home Assistant before the rooms moved to the E32. Rooms on the E32 use Temporary temperature for a room, End the temporary temperature and Away instead. Temporary and boost last the room's own duration unless you choose one. Vacation needs a future date and time with a time zone.
   target:
     entity:
       domain: climate
@@ -128,8 +128,8 @@ set_comfort:
       selector:
         text:
 set_room_override:
-  name: Set a temporary room override
-  description: A temporary target for an E32 room. Boost heats to the room's maximum (one hour unless you choose a duration). The E32 ends the override itself, also after a restart, and the room returns to its week program. Only the room's target changes; the flow limits and frost protection stay.
+  name: Temporary temperature for a room
+  description: A temporary target temperature for a room. Boost heats to the room's maximum (one hour unless you choose a duration). The E32 ends the temporary temperature itself, also after a restart, and the room returns to its week program. Only the room's target temperature changes; the water temperature limits and frost protection stay.
   target:
     entity:
       domain: climate
@@ -156,7 +156,7 @@ set_room_override:
           mode: box
           unit_of_measurement: min
 clear_room_override:
-  name: End the room override
+  name: End the temporary temperature
   description: The room follows its week program again.
   target:
     entity:

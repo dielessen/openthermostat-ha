@@ -154,7 +154,7 @@
         "program_export_failed": "Een begrensd 15-daags programma kan niet worden samengesteld: controleer tijdzone, ruimtegrenzen en maximaal 128 overgangen.",
         "room_mode_actuator_conflict": "Climate-TRV-ruimtes vereisen radiatorkranen; ruimtes met alleen een verwarmingsschema mogen geen climate-radiatorkranen hebben.",
         "unsupported_room_binding_mode": "Niet-ondersteunde uitgangsconfiguratie van de ruimte.",
-        "graph_room_runtime_off_required": "Zet eerst de proefrun uit en wijzig daarna deze ruimte.",
+        "graph_room_runtime_off_required": "Zet eerst de proefperiode uit en wijzig daarna deze ruimte.",
         "confirm_room_mode_change": "Expliciete bevestiging is vereist om de uitgangsconfiguratie van de ruimte te wijzigen.",
         "invalid_name": "Gebruik een ruimtenaam van 1 tot en met 80 tekens.",
         "select_radiators": "Kies één tot en met acht radiatorkranen.",
@@ -173,12 +173,12 @@
       },
       "abort": {
         "room_limit": "Er kunnen maximaal acht ruimtes worden ingesteld.",
-        "shadow_mode_required": "Kies eerst de proefrun-modus.",
+        "shadow_mode_required": "Kies eerst de proefperiode.",
         "program_cancelled": "Programma bewerken geannuleerd; niets opgeslagen.",
         "program_changed": "De ruimte is tijdens bewerken gewijzigd of verwijderd; open opnieuw.",
         "program_not_started": "Open eerst de weekeditor via de ruimtekoppelingen.",
         "room_changed": "De ruimte is tijdens bewerken gewijzigd. Open opnieuw voordat je opslaat.",
-        "setup_runtime_off": "Zet de proefrun uit in de instellingen van de integratie voordat je ruimtes wijzigt. Er is niets gewijzigd.",
+        "setup_runtime_off": "Zet de proefperiode uit in de instellingen van de integratie voordat je ruimtes wijzigt. Er is niets gewijzigd.",
         "setup_changed": "De installatie is tijdens het bewerken gewijzigd. Open de ruimte-instelling opnieuw.",
         "advanced_room_required": "Deze ruimte heeft geavanceerde comfort-, vloer-, meng- of groepsinstellingen. Gebruik Geavanceerde ruimte-instellingen om die te behouden. Er is niets aangepast.",
         "room_saved": "Ruimte en radiatorgroep opgeslagen. De regeling blijft uit.",
@@ -486,7 +486,7 @@
         "program_export_failed": "Een begrensd 15-daags programma kan niet worden samengesteld: controleer tijdzone, ruimtegrenzen en maximaal 128 overgangen.",
         "room_mode_actuator_conflict": "Climate-TRV-ruimtes vereisen radiatorkranen; ruimtes met alleen een verwarmingsschema mogen geen climate-radiatorkranen hebben.",
         "unsupported_room_binding_mode": "Niet-ondersteunde uitgangsconfiguratie van de ruimte.",
-        "graph_room_runtime_off_required": "Zet eerst de proefrun uit en wijzig daarna deze ruimte.",
+        "graph_room_runtime_off_required": "Zet eerst de proefperiode uit en wijzig daarna deze ruimte.",
         "confirm_room_mode_change": "Expliciete bevestiging is vereist om de uitgangsconfiguratie van de ruimte te wijzigen.",
         "invalid_name": "Gebruik een ruimtenaam van 1 tot en met 80 tekens.",
         "select_radiators": "Kies één tot en met acht radiatorkranen.",
@@ -500,12 +500,12 @@
       },
       "abort": {
         "room_limit": "Er kunnen maximaal acht ruimtes worden ingesteld.",
-        "shadow_mode_required": "Kies eerst de proefrun-modus.",
+        "shadow_mode_required": "Kies eerst de proefperiode.",
         "program_cancelled": "Programma bewerken geannuleerd; niets opgeslagen.",
         "program_changed": "De ruimte is tijdens bewerken gewijzigd of verwijderd; open opnieuw.",
         "program_not_started": "Open eerst de weekeditor via de ruimtekoppelingen.",
         "room_changed": "De ruimte is tijdens bewerken gewijzigd. Open opnieuw voordat je opslaat.",
-        "setup_runtime_off": "Zet de proefrun uit in de instellingen van de integratie voordat je ruimtes wijzigt. Er is niets gewijzigd.",
+        "setup_runtime_off": "Zet de proefperiode uit in de instellingen van de integratie voordat je ruimtes wijzigt. Er is niets gewijzigd.",
         "setup_changed": "De inrichting is intussen gewijzigd. Sluit dit formulier en open de ruimte opnieuw.",
         "advanced_room_required": "Deze ruimte heeft aanvullende regelinstellingen die deze eenvoudige route nog niet kan aanpassen. De bestaande inrichting is behouden.",
         "room_saved": "Ruimte en koppelingen opgeslagen. De regeling is niet ingeschakeld.",
@@ -778,8 +778,8 @@
         "room_required": "Stel een ruimte in voordat je actuatorverklaringen toevoegt."
       },
       "abort": {
-        "shadow_mode_required": "Dit concept werkt alleen in de proefrun-modus.",
-        "disable_runtime_before_draft": "Zet de proefrun uit om dit concept te bewerken.",
+        "shadow_mode_required": "Dit concept werkt alleen in de proefperiode.",
+        "disable_runtime_before_draft": "Zet de proefperiode uit om dit concept te bewerken.",
         "single_central_owner": "Deze E32 heeft al een concept voor de centrale verwarming. Wijzig dat concept.",
         "graph_not_started": "Open het verwarmingsschema via de centrale verwarmingsinstellingen.",
         "graph_changed": "Het centrale concept of de ruimtelijst is tijdens bewerken gewijzigd. Open het concept opnieuw; niets opgeslagen.",
@@ -787,7 +787,7 @@
       }
     },
     "installation": {
-      "entry_type": "Installatiegegevens"
+      "entry_type": "E32 en ketel"
     },
     "e32_room": {
       "entry_type": "Ruimte"
@@ -931,8 +931,8 @@
         "bosch_bth_ra": "Bosch BTH-RA (stand, externe temperatuur)",
         "sonoff_trvzb": "Sonoff TRVZB (externe temperatuur)",
         "sonoff_trv_zbt": "Sonoff TRV Gen2 / TRV-ZBT (externe temperatuur)",
-        "tuya_tv02": "Tuya TV02 (alleen setpoint)",
-        "generic": "Anders (alleen setpoint)",
+        "tuya_tv02": "Tuya TV02 (alleen gewenste temperatuur)",
+        "generic": "Anders (alleen gewenste temperatuur)",
         "ha_climate": "Via Home Assistant (elke kraan)"
       }
     },
@@ -944,8 +944,8 @@
     },
     "comfort_care_knob": {
       "options": {
-        "min_off_s": "Rust van de brander tussen starts",
-        "min_on_s": "Brandtijd",
+        "min_off_s": "Rusttijd brander tussen starts",
+        "min_on_s": "Kortste brandtijd",
         "heat_start_c": "Begin met verwarmen als de ruimte zoveel onder de gewenste temperatuur is",
         "heat_stop_c": "Stop met verwarmen als de ruimte zoveel boven de gewenste temperatuur is",
         "flow_per_degree_c": "Hoe sterk de watertemperatuur reageert op een koude ruimte",
@@ -1062,7 +1062,7 @@
     "boiler_settings_text": {
       "options": {
         "name_heatingactivated": "Verwarming op de ketel",
-        "name_heatingtemp": "Maximale cv-temperatuur",
+        "name_heatingtemp": "Maximum van de ketel",
         "name_burnmaxpower": "Maximaal brandervermogen",
         "name_boilhystoff": "Schakelmarge uit (hysterese)",
         "name_boilhyston": "Schakelmarge aan (hysterese)",
@@ -1072,7 +1072,7 @@
         "name_pumpmodmin": "Laagste pompsnelheid",
         "name_pumpmode": "Pompmodus",
         "name_dhw_activated": "Warm water op de ketel",
-        "name_dhw_seltemp": "Warmwatertemperatuur",
+        "name_dhw_seltemp": "Ingestelde tapwatertemperatuur",
         "name_dhw_hyston": "Schakelmarge warm water (hysterese)",
         "name_dhw_chargeoptimization": "Laadoptimalisatie warm water",
         "name_dhw_flowtempoffset": "Extra watertemperatuur voor warm water",
@@ -1101,7 +1101,7 @@
         "state_on": "**aan**: {used} van {cap} wijzigingen gebruikt vandaag.",
         "state_busy": "een wijziging van {setting} loopt.",
         "state_blocked": "**geblokkeerd**: een instelling kon niet worden teruggezet. Controleer de ketel (Instellingen → Reparaties).",
-        "state_not_now": "aan, maar nu niet mogelijk (de keteltest, een update of actieve verwarming is bezig).",
+        "state_not_now": "aan, maar nu niet mogelijk (de keteltest, een uitlezing of een update is bezig).",
         "state_unavailable": "niet mogelijk op deze E32.",
         "off_heating": "de verwarming: radiatoren en vloer krijgen geen warmte",
         "off_dhw": "het warme water: de kranen blijven koud",
@@ -1135,7 +1135,8 @@
         "refusal_daily_limit_reached": "de E32 wijzigt hoogstens 12 ketelinstellingen per dag",
         "refusal_check_boiler_first": "een instelling kon niet worden teruggezet: controleer eerst de ketel (Instellingen → Reparaties)",
         "refusal_settings_busy": "er loopt al een andere wijziging",
-        "refusal_boiler_not_available": "nu niet mogelijk (de keteltest, een update of actieve verwarming is bezig)",
+        "refusal_boiler_not_available": "nu niet mogelijk (de keteltest, een uitlezing of een update is bezig)",
+        "refusal_active_heat_owns_boiler": "de E32 gaat zo herstarten of bijwerken; probeer het over een minuut opnieuw",
         "refusal_value_out_of_range": "de ketel accepteert deze waarde niet",
         "refusal_other": "de E32 weigerde het ({error})",
         "cause_not_sent": "De E32 kon de ketel 10 minuten niet bereiken om {setting} terug te zetten.",
@@ -1154,28 +1155,53 @@
         "not_supported": "Deze E32-firmware kan nog geen busopname maken. Werk de E32 eerst bij, of deel het resultaat zonder opname.",
         "unreachable": "De E32 was net niet bereikbaar."
       }
+    },
+    "notification_room_kind": {
+      "options": {
+        "window": "Raam of deur open terwijl de ruimte verwarmt",
+        "cold": "Ruimte blijft koud (meer dan 1 °C onder de gewenste temperatuur, langer dan een uur)",
+        "sensor": "Temperatuursensor 30 minuten stil",
+        "battery": "Batterij van een thermometer of kraan bijna leeg"
+      }
+    },
+    "notification_house_kind": {
+      "options": {
+        "boiler_fault": "Ketelstoring",
+        "e32_offline": "E32 meldt zich 10 minuten niet, en als hij er weer is",
+        "awaiting_confirmation": "E32 wacht op je bevestiging om de ketel te regelen",
+        "frost": "Vorstbeveiliging aan",
+        "pressure_low": "Waterdruk te laag",
+        "maintenance": "Ketel vraagt om onderhoud (H-code)",
+        "update": "Nieuwe versie van de E32-firmware of van deze integratie",
+        "backup": "Dagelijkse back-up van de E32-instellingen mislukt steeds",
+        "plan_ready": "E32 klaar om de verwarming te plannen (vraagt één keer je bevestiging)"
+      }
+    },
+    "notification_text": {
+      "options": {
+        "house": "het huis",
+        "nothing_on": "nog niets",
+        "no_people": "Nog geen personen in Home Assistant.",
+        "no_phone": "Geen telefoon",
+        "phone_gone": "{service} (niet gevonden)",
+        "on": "aan",
+        "off": "uit",
+        "everyone": "iedereen met een telefoon (deze ruimte heeft geen eigen personen)",
+        "with_house": " (ook het huis)",
+        "house_people": "Ze gaan naar: {people}.",
+        "house_nobody": "Nog niemand krijgt deze: zet bij Personen en telefoons een vinkje bij een persoon. Tot dan verschijnen ze in Home Assistant."
+      }
+    },
+    "comfort_style_choice": {
+      "options": {
+        "comfort": "Comfort eerst: vooral op tijd warm; dat mag iets meer gas kosten.",
+        "balanced": "In balans: op tijd warm met zo weinig branderstarts en gas als past.",
+        "save": "Zuinigst: zo weinig gas en branderstarts als kan; een ruimte kan even iets koeler zijn."
+      }
     }
   },
   "config": {
     "step": {
-      "user": {
-        "title": "OpenThermostat instellen",
-        "menu_options": {
-          "legacy": "Oudere OpenThermostat (van vóór de E32)",
-          "shadow": "OpenThermostat E32 (aanbevolen)"
-        },
-        "description": "Verbind je E32. Die laat je zien wat je daarna doet. De E32 gaat de ketel pas aansturen als jij dat aangeeft."
-      },
-      "confirm": {
-        "title": "OpenThermostat gevonden",
-        "description": "Climate-entiteiten toevoegen voor ruimtes van MQTT-prefix {prefix}?",
-        "data": {
-          "create_dashboard": "Een OpenThermostat-dashboard maken"
-        },
-        "data_description": {
-          "create_dashboard": "Voegt een OpenThermostat-dashboard aan de zijbalk toe met je ruimtes, de ketel en de sensoren."
-        }
-      },
       "legacy": {
         "title": "OpenThermostat",
         "description": "Vul de MQTT-topicprefix uit de thermostaatconfiguratie in.",
@@ -1186,18 +1212,6 @@
         "data_description": {
           "topic_prefix": "Het MQTT-voorvoegsel dat op de thermostaat is ingesteld, bijvoorbeeld ib-therm.",
           "create_dashboard": "Voegt een OpenThermostat-dashboard aan de zijbalk toe met je ruimtes, de ketel en de sensoren."
-        }
-      },
-      "shadow": {
-        "title": "Een OpenThermostat E32 koppelen",
-        "description": "De E32 stuurt niets naar de ketel totdat jij dat op de pagina Ruimtes van de E32 aangeeft, het best via de keteltest daar. Zit er nog een oude thermostaat op de ketel, dan doet de E32 eerst een proefrun ernaast. Home Assistant zet de streeftemperatuur op het instelapparaat van elke ruimte (radiatorkraan, tado of nummerhelper) volgens het weekprogramma van die ruimte. Meestal verbind je de E32 later via Configureren → E32-verbinding. Die vult het verbindings-ID voor je in.",
-        "data": {
-          "topic_prefix": "MQTT-prefix van de E32",
-          "adapter_id": "Verbindings-ID (al ingevuld)"
-        },
-        "data_description": {
-          "topic_prefix": "Het MQTT-voorvoegsel van de E32, zoals op zijn netwerkpagina staat.",
-          "adapter_id": "Laat de voorgestelde waarde staan; E32 verbinden zet hem voor je op de E32."
         }
       },
       "installation": {
@@ -1253,27 +1267,17 @@
       "reauth_try_again_later": "Te veel aanmeldpogingen op de E32. Wacht 30 seconden en probeer het daarna opnieuw."
     },
     "create_entry": {
-      "e32_next_steps": "Volgende stap: kies bij deze integratie Configureren en daarna E32-verbinding. Zet vooraf MQTT aan op de webpagina van de E32 (Systeem → Netwerk en Home Assistant → MQTT). Na het koppelen gaat Home Assistant meteen verder met je eerste ruimte."
+      "e32_next_steps": "Volgende stap: kies bij deze integratie Configureren en daarna E32-verbinding. Verbind de E32 vooraf met je MQTT-broker op zijn webpagina (Systeem → Instellingen → Home Assistant → MQTT-broker). Na het koppelen gaat Home Assistant meteen verder met je eerste ruimte."
     }
   },
   "options": {
     "step": {
-      "comfort": {
-        "title": "Comfortinstellingen",
-        "description": "Raam- en deursensoren pauzeren een ruimte zolang ze open staan; voorinstellingen, afwezig en aanwezigheid bepalen temperaturen voor de thermostaten van je E32-ruimtes. Alles hier is optioneel.",
-        "menu_options": {
-          "comfort_settings": "Niveaus zonder weekprogramma, en tijden",
-          "comfort_contacts": "Raam- en deurcontacten per ruimte",
-          "back": "← Terug",
-          "done": "Klaar"
-        }
-      },
       "house": {
         "title": "Huis",
-        "description": "{saved}Instellingen voor het hele huis: wie thuis is, de huismodus en vakantie, en de standaardtemperaturen voor ruimtes.",
+        "description": "{saved}Instellingen voor het hele huis: wie thuis is, de huismodus en vakantie, en de standaardwaarden voor ruimtes.",
         "menu_options": {
           "house_presence": "Aanwezigheid en afwezigheidstemperatuur",
-          "comfort_settings": "Standaardtemperaturen voor ruimtes",
+          "comfort_settings": "Standaardwaarden voor ruimtes",
           "back": "← Terug",
           "done": "Klaar",
           "house_mode": "Huismodus en vakantie",
@@ -1295,8 +1299,8 @@
         }
       },
       "comfort_settings": {
-        "title": "Standaarden voor ruimtes en tijden",
-        "description": "De thermostaat van elke E32-ruimte heeft de presets Comfort, Eco, Nacht en Boost: de niveaus van het weekprogramma van de ruimte, net als in de weekplanner. Een ruimte zonder weekprogramma begint met de twee temperaturen hieronder. Afwezig en vakantie zijn de huismodus (Configureren → Huis en de bediening Huismodus), geen preset van één ruimte.",
+        "title": "Standaardwaarden voor ruimtes",
+        "description": "Voor elke ruimte: de temperaturen van een ruimte zonder weekprogramma, hoe lang een raam of deur open mag staan voordat de ruimte pauzeert, en hoe lang een wijziging op een thermostaat geldt. De eigen instellingen van een ruimte (Configureren → Ruimtes) gaan voor.",
         "data": {
           "comfort_temperature": "Comfort zonder weekprogramma",
           "eco_temperature": "Nacht zonder weekprogramma",
@@ -1305,8 +1309,8 @@
           "override_minutes": "Duur van een handmatige wijziging"
         },
         "data_description": {
-          "comfort_temperature": "De voorinstelling Comfort van een ruimte zonder weekprogramma. Met een weekprogramma is Comfort de warmste temperatuur daarvan.",
-          "eco_temperature": "De voorinstelling Nacht van een ruimte zonder weekprogramma. Met een weekprogramma is Nacht de koelste temperatuur daarvan.",
+          "comfort_temperature": "Comfort van een ruimte zonder weekprogramma. Met een weekprogramma is Comfort de warmste temperatuur daarvan.",
+          "eco_temperature": "Nacht van een ruimte zonder weekprogramma. Met een weekprogramma is Nacht de koelste temperatuur daarvan.",
           "contact_delay": "Minuten dat een raam open moet blijven voordat een ruimte pauzeert, zodat kort luchten de verwarming niet stopt. De eigen \"Pauze na (ramen)\" van een ruimte (Configureren → Ruimtes) gaat voor. Een gepauzeerde ruimte blijft beschermd tegen vorst.",
           "door_delay": "Hetzelfde voor deuren, meestal langer, zodat de hond uitlaten of door de voordeur lopen de verwarming niet stopt. Standaard 5 minuten. De eigen \"Pauze na (deuren)\" van een ruimte gaat voor.",
           "override_minutes": "Een nieuwe temperatuur op de thermostaat geldt tot het volgende schakelpunt van het weekprogramma van de ruimte. Een ruimte zonder weekprogramma houdt hem zoveel minuten vast en volgt daarna weer haar plan."
@@ -1336,12 +1340,13 @@
       },
       "init": {
         "title": "OpenThermostat",
-        "description": "{saved}Eerst je ruimtes, dan het huis, de verwarming, energie en de E32-verbinding. Nieuw? Begin met E32-verbinding; daarna voeg je je ruimtes toe.",
+        "description": "{saved}Kies wat je wilt instellen. De E32 bewaart deze instellingen en regelt de verwarming, ook zonder Home Assistant.",
         "menu_options": {
           "e32_rooms": "Ruimtes",
           "house": "Huis",
           "heating_boiler": "Verwarming en ketel",
           "energy": "Energie en buitentemperatuur",
+          "notifications": "Meldingen",
           "controller_connection": "E32-verbinding",
           "advanced_settings": "Geavanceerd en diagnose",
           "room_settings": "Ruimtes beheren",
@@ -1349,7 +1354,8 @@
           "configuration_status": "Is alles verbonden?",
           "graph_prepare": "Ruimteplan herstellen",
           "back": "← Terug",
-          "done": "Klaar"
+          "done": "Klaar",
+          "general": "Dashboard en naam"
         }
       },
       "graph_review": {
@@ -1630,7 +1636,7 @@
       },
       "advanced_settings": {
         "title": "Geavanceerd en diagnose",
-        "description": "{saved}Dashboard en naam, de tijdzone en het systeemlogboek van de E32, namen van Bluetooth-sensoren, een back-up terugzetten, entiteits-ID's opruimen en controles. Dagelijkse instellingen staan in het hoofdmenu.",
+        "description": "{saved}De tijdzone en het systeemlogboek van de E32, namen van Bluetooth-sensoren, een back-up terugzetten, entiteits-ID's opruimen en controles. Dagelijkse instellingen, ook Dashboard en naam, staan in het hoofdmenu.",
         "menu_options": {
           "configuration_status": "Is alles verbonden?",
           "installation_source": "Ruimte-instellingen van de E32 controleren",
@@ -1672,8 +1678,8 @@
         }
       },
       "controller_connection": {
-        "title": "E32 verbinden",
-        "description": "Koppel deze installatie aan je E32. Je hebt eerst twee dingen nodig:\n\n1. Een brokerlogin voor de E32. Met de Mosquitto broker-add-on werkt elke Home Assistant-gebruiker: maak er een aan via Instellingen → Personen → Gebruikers → Gebruiker toevoegen (Gebruikers zie je als Geavanceerde modus aan staat in je gebruikersprofiel), bijvoorbeeld openthermostat met een eigen wachtwoord.\n2. MQTT op de E32: open op de webpagina van de E32 Systeem → Netwerk en Home Assistant → MQTT, vink Ingeschakeld aan, vul het brokeradres in (meestal het adres van Home Assistant), poort 1883 en die gebruikersnaam en dat wachtwoord, sla op en laat de E32 herstarten.\n\nIn Home Assistant is geen ruimte nodig: na het koppelen voeg je de ruimtes toe onder Configureren → Ruimtes, de eerste meteen hier. Een eerste koppeling kan de E32 eenmaal herstarten.\n\nHet E32-wachtwoord wordt bij deze Home Assistant-integratie bewaard. Wijzig je het later op de E32, dan vraagt Home Assistant om het nieuwe. Koppelen schakelt de verwarmingsaansturing niet in.",
+        "title": "E32-verbinding",
+        "description": "Koppel deze installatie aan je E32. Je hebt eerst twee dingen nodig:\n\n1. Een brokerlogin voor de E32. Met de Mosquitto broker-add-on werkt elke Home Assistant-gebruiker: maak er een aan via Instellingen → Personen → Gebruikers → Gebruiker toevoegen (Gebruikers zie je als Geavanceerde modus aan staat in je gebruikersprofiel), bijvoorbeeld openthermostat met een eigen wachtwoord.\n2. De E32 op de broker: open op de webpagina van de E32 Systeem → Instellingen → Home Assistant → MQTT-broker, vink “Verbinding met de MQTT-broker” aan, vul het brokeradres in (meestal het adres van Home Assistant), poort 1883 en die gebruikersnaam en dat wachtwoord, sla op en laat de E32 herstarten.\n\nIn Home Assistant is geen ruimte nodig: na het koppelen voeg je de ruimtes toe onder Configureren → Ruimtes, de eerste meteen hier. Een eerste koppeling kan de E32 eenmaal herstarten.\n\nHet E32-wachtwoord wordt bij deze Home Assistant-integratie bewaard. Wijzig je het later op de E32, dan vraagt Home Assistant om het nieuwe. Koppelen schakelt de verwarmingsaansturing niet in.",
         "data": {
           "address": "Webadres van de E32",
           "password": "E32-wachtwoord"
@@ -1684,7 +1690,7 @@
         }
       },
       "controller_connecting": {
-        "title": "E32 en ruimteprogramma controleren",
+        "title": "E32 en ruimteplan controleren",
         "description": "De E32 wordt gecontroleerd en Home Assistant wacht op het eerste bericht via MQTT. Dit kan tot twee minuten duren."
       },
       "controller_connected": {
@@ -1719,7 +1725,7 @@
       },
       "e32_rooms": {
         "title": "Ruimtes",
-        "description": "{saved}Hier stel je de ruimtes in. De E32 bewaart ze en blijft ze verwarmen, ook zonder Home Assistant (revisie {revision}).\n\n{rooms}",
+        "description": "{saved}Hier stel je de ruimtes in. De E32 bewaart ze en blijft ze verwarmen, ook zonder Home Assistant.\n\n{rooms}",
         "menu_options": {
           "e32_room_add": "Ruimte toevoegen",
           "e32_room_pick": "Ruimte bewerken of verwijderen",
@@ -1728,7 +1734,7 @@
         }
       },
       "e32_room_pick": {
-        "title": "Kies een E32-ruimte",
+        "title": "Kies een ruimte",
         "data": {
           "room": "Ruimte",
           "action": "Wat wil je doen?"
@@ -1840,11 +1846,11 @@
         },
         "data_description": {
           "minimum_flow_temperature": "De laagste watertemperatuur die de E32 vraagt zolang hij verwarmt ({minimum_range}).",
-          "maximum_flow_temperature": "De hoogste watertemperatuur die de E32 ooit vraagt ({maximum_range}, boven de laagste). Vloerverwarming zonder mengklep: meestal hoogstens 45–50 °C. Radiatoren: op koude dagen vaak 60–75 °C. De maximale cv-temperatuur die op je ketel staat, blijft altijd de bovengrens; de E32 vraagt nooit meer."
+          "maximum_flow_temperature": "De hoogste watertemperatuur die de E32 ooit vraagt ({maximum_range}, boven de laagste). Vloerverwarming zonder mengklep: meestal hoogstens 45–50 °C. Radiatoren: op koude dagen vaak 60–75 °C."
         }
       },
       "e32_room_remove": {
-        "title": "E32-ruimte verwijderen",
+        "title": "{name} verwijderen?",
         "description": "{name} verwijderen uit het ruimteplan van de E32? De E32 vraagt dan geen warmte meer voor deze ruimte. De Bluetooth-sensoren blijven gekoppeld.",
         "data": {
           "confirm_remove": "Deze ruimte verwijderen"
@@ -1855,7 +1861,7 @@
       },
       "energy": {
         "title": "Energie en buitentemperatuur",
-        "description": "Optioneel. Met je gasmeter, gasprijs, een buitentemperatuur en het vermogen van je ketel kalibreert de E32 zijn warmte- en gasschattingen, en toont het cv-advies besparingen in m³ en in je eigen valuta. Zonder werkt alles gewoon: schattingen gebruiken dan het brandervermogen dat de ketel meldt en een standaard ketelvermogen, en het advies zegt wat er ontbreekt. Laat een veld leeg om het niet te gebruiken.",
+        "description": "Optioneel. Met je gasmeter, gasprijs, een buitentemperatuur en het vermogen van je ketel kalibreert de E32 zijn warmte- en gasschattingen, en toont het verwarmingsadvies besparingen in m³ en in je eigen valuta. Zonder werkt alles gewoon: schattingen gebruiken dan het brandervermogen dat de ketel meldt en een standaard ketelvermogen, en het advies zegt wat er ontbreekt. Laat een veld leeg om het niet te gebruiken.",
         "data": {
           "gas_meter": "Gasmeter",
           "gas_price_entity": "Gasprijssensor",
@@ -1863,7 +1869,8 @@
           "gas_kwh_per_m3": "Calorische waarde van het gas",
           "outdoor_entity": "Buitentemperatuur",
           "boiler_kw": "Verwarmingsvermogen ketel",
-          "water_meter": "Watermeter"
+          "water_meter": "Watermeter",
+          "forecast_entity": "Weersverwachting"
         },
         "data_description": {
           "gas_meter": "Een gasmeterstand in m³ of kWh die alleen oploopt (geen verbruik per uur), bijvoorbeeld van een slimme meter of een gaspulsteller. Een stand in kWh wordt met de calorische waarde omgerekend naar m³. Hij verdeelt ook je gas over verwarmen en warm water voor het energiedashboard.",
@@ -1872,7 +1879,8 @@
           "gas_kwh_per_m3": "Energie per m³ gas; die staat op je jaarafrekening of vraag je aan je leverancier. Leeg: 9,77 kWh/m³ (Nederlands gas). Elders is het anders, bijvoorbeeld ongeveer 11 kWh/m³ in het Verenigd Koninkrijk; aardgas zit meestal tussen 8 en 12 kWh/m³.",
           "outdoor_entity": "Een temperatuursensor buiten (°C of °F) of een weerentiteit. Daarmee leert de E32 hoe snel ruimtes afkoelen.",
           "boiler_kw": "Het nominale verwarmingsvermogen van de ketel in kW (typeplaatje of handleiding), 3–60 kW. Voorgesteld: {boiler_kw_suggested} kW ({boiler_kw_basis}); leeg houdt dat voorstel.",
-          "water_meter": "Optioneel: een waterdebiet (L/min) of een watermeterstand (m³ of L) die alleen oploopt. Daarmee telt een warmwaterronde met stromend water als tappen en een zonder als warmhouden, betrouwbaarder dan alleen uit de temperaturen van de ketel. Hij blijft in Home Assistant."
+          "water_meter": "Optioneel: een waterdebiet (L/min) of een watermeterstand (m³ of L) die alleen oploopt. Daarmee telt een warmwaterronde met stromend water als tappen en een zonder als warmhouden, betrouwbaarder dan alleen uit de temperaturen van de ketel. Hij blijft in Home Assistant.",
+          "forecast_entity": "Een weerentiteit met een verwachting per uur. Elk uur stuurt Home Assistant de buitentemperatuur van de komende 24 uur naar de E32, zodat die de verwarming vooruit kan plannen. Komt je buitentemperatuur van een weerentiteit, dan staat die hier al ingevuld. Laat het leeg voor geen verwachting: de E32 gebruikt dan zijn eigen dagpatroon van de buitentemperatuur."
         }
       },
       "e32_rooms_saved": {
@@ -1909,7 +1917,7 @@
       },
       "general": {
         "title": "Dashboard en naam",
-        "description": "De naam van deze installatie in Home Assistant en of het OpenThermostat-dashboard getoond wordt. De ruimtes, de verwarming en de ketel staan elders in dit menu.",
+        "description": "De naam van deze installatie in Home Assistant en of het OpenThermostat-dashboard getoond wordt.",
         "data": {
           "name": "Naam installatie",
           "create_dashboard": "OpenThermostat-dashboard tonen"
@@ -1966,7 +1974,7 @@
       },
       "e32_restore_confirm": {
         "title": "Deze instellingen terugzetten?",
-        "description": "Back-up van {created}, zoals de E32 hem heeft gecontroleerd:\n\n{summary}\n\nDe ruimtes houden de modus uit de back-up. De overname van de ketel zit niet in een back-up: een nieuwe of gewiste E32 stuurt niets naar de ketel tot je de overname bevestigt op zijn pagina (Ruimtes → Keteltest en overname). Vóór het terugzetten bewaart Home Assistant ook een back-up van de E32 zoals hij nu is.",
+        "description": "Back-up van {created}, zoals de E32 hem heeft gecontroleerd:\n\n{summary}\n\nDe ruimtes houden de modus uit de back-up. De overname van de ketel zit niet in een back-up: een nieuwe of gewiste E32 stuurt niets naar de ketel tot je de overname bevestigt op zijn pagina (Ruimtes → Actieve regeling). Vóór het terugzetten bewaart Home Assistant ook een back-up van de E32 zoals hij nu is.",
         "data": {
           "confirm": "Deze instellingen op deze E32 terugzetten"
         },
@@ -1990,7 +1998,7 @@
       },
       "e32_room_valve_models": {
         "title": "Modellen van de radiatorkranen in {name}",
-        "description": "OpenThermostat herkent het model van een kraan normaal zelf. Kies hier alleen een model als dat niet lukt, of om te wijzigen hoe een kraan aangestuurd wordt. Met een model stuurt de E32 de kraan zelf aan via Zigbee2MQTT, dus werkt hij zonder Home Assistant. Via Home Assistant werkt altijd, met elke kraan. Anders (alleen setpoint): de E32 stuurt alleen de gewenste temperatuur.",
+        "description": "OpenThermostat herkent het model van een kraan normaal zelf. Kies hier alleen een model als dat niet lukt, of om te wijzigen hoe een kraan aangestuurd wordt. Met een model stuurt de E32 de kraan zelf aan via Zigbee2MQTT, dus werkt hij zonder Home Assistant. Via Home Assistant werkt altijd, met elke kraan. Anders (alleen gewenste temperatuur): de E32 stuurt alleen de gewenste temperatuur.",
         "data": {
           "model_1": "Kraan 1",
           "model_2": "Kraan 2",
@@ -2006,7 +2014,7 @@
       },
       "comfort_care": {
         "title": "Comfort en zorg voor de ketel",
-        "description": "{saved}De thermostaat stelt deze zelf in en past ze aan terwijl hij je huis leert kennen. Wijzig er alleen een als je het anders wilt. Dezelfde instellingen als op de pagina Huis van de E32.\n\nNu:\n{settings}",
+        "description": "{saved}De E32 stelt deze zelf in en past ze aan terwijl hij je huis leert kennen. Wijzig er alleen een als je het anders wilt. Dezelfde instellingen als op de pagina Huis van de E32.\n\nNu:\n{settings}",
         "menu_options": {
           "comfort_care_knob": "Een instelling wijzigen",
           "comfort_care_auto_all": "Alles terug naar automatisch",
@@ -2027,13 +2035,13 @@
       },
       "comfort_care_auto_value": {
         "title": "Wijzigen: {name}",
-        "description": "Nu: {current} {mode}. Standaardwaarde: {standard}.\n\nAutomatisch: de thermostaat stelt dit zelf in en past het aan, hoogstens één kleine stap per dag. Zet Automatisch uit om je eigen waarde te gebruiken ({range}).",
+        "description": "Nu: {current} {mode}. Standaardwaarde: {standard}.\n\nAutomatisch: de E32 stelt dit zelf in en past het aan, hoogstens één kleine stap per dag. Zet Automatisch uit om je eigen waarde te gebruiken ({range}).",
         "data": {
           "automatic": "Automatisch",
           "value": "Jouw waarde"
         },
         "data_description": {
-          "automatic": "Aan: de thermostaat stelt dit zelf in (je waarde hieronder wordt niet gebruikt).",
+          "automatic": "Aan: de E32 stelt dit zelf in (je waarde hieronder wordt niet gebruikt).",
           "value": "Gebruikt als Automatisch uit staat. Mogelijk: {range}."
         }
       },
@@ -2049,7 +2057,7 @@
       },
       "comfort_care_auto_all": {
         "title": "Alles terug naar automatisch",
-        "description": "Elke instelling die je zelf hebt ingesteld gaat terug naar de thermostaat, die haar weer zelf instelt. De vaste instellingen houden hun waarde.",
+        "description": "Elke instelling die je zelf hebt ingesteld gaat terug naar automatisch: de E32 stelt haar weer zelf in. De vaste instellingen houden hun waarde.",
         "data": {
           "confirm": "Ja, terug naar automatisch"
         },
@@ -2059,7 +2067,7 @@
       },
       "comfort_care_reset": {
         "title": "Terug naar de startwaarden",
-        "description": "Al deze instellingen gaan terug naar hun startwaarden en de thermostaat begint ze opnieuw te leren. Wat hij over je ruimtes heeft geleerd blijft.",
+        "description": "Al deze instellingen gaan terug naar hun startwaarden en de E32 begint ze opnieuw te leren. Wat hij over je ruimtes heeft geleerd blijft.",
         "data": {
           "confirm": "Ja, terug naar de startwaarden"
         },
@@ -2110,10 +2118,9 @@
           "boiler_model": "Ketelmodel",
           "back": "← Terug",
           "done": "Klaar",
-          "heating_warm_up": "Slim opwarmen",
-          "heating_weather": "Weerafhankelijke regeling",
           "comfort_care": "Comfort en zorg voor de ketel",
-          "boiler_settings": "Ketelinstellingen"
+          "boiler_settings": "Ketelinstellingen",
+          "heating_flow": "Slim opwarmen en weerafhankelijke regeling"
         }
       },
       "boiler_model": {
@@ -2123,7 +2130,7 @@
           "model": "Ketelmodel"
         },
         "data_description": {
-          "model": "De modellen komen uit EMS-ESP. Een vermelding betekent niet dat OpenThermostat het model ondersteunt."
+          "model": "Een model kiezen geeft je ketel alleen een naam; of de E32 hem mag regelen, staat bij Ketelherkenning."
         }
       },
       "ble_sensors": {
@@ -2185,10 +2192,12 @@
         "title": "Slim opwarmen",
         "description": "De E32 begint eerder met verwarmen, zodat een ruimte warm is op de tijd in het weekprogramma, met het koelste water dat dat nog haalt. Uit: verwarmen begint pas op de programmatijd, dus een ruimte kan een tijdje koel blijven (vloerverwarming een uur of langer).",
         "data": {
-          "smart_warm_up": "Slim opwarmen"
+          "smart_warm_up": "Slim opwarmen",
+          "comfort_style": "Comfortstijl"
         },
         "data_description": {
-          "smart_warm_up": "Dezelfde schakelaar als op het E32-apparaat."
+          "smart_warm_up": "Dezelfde schakelaar als op het E32-apparaat.",
+          "comfort_style": "Wat de E32 zwaarder laat wegen als hij de verwarming plant: comfort tegenover branderstarts en gas. Dezelfde keuze als op het E32-apparaat."
         }
       },
       "heating_weather": {
@@ -2400,6 +2409,100 @@
           "back": "← Terug",
           "done": "Klaar"
         }
+      },
+      "notifications": {
+        "title": "Meldingen",
+        "description": "{saved}Berichten op je telefoon. Over een ruimte (een raam dat openstaat terwijl de ruimte verwarmt, een ruimte die koud blijft, een sensor of batterij die aandacht nodig heeft): naar de personen van die ruimte, of naar iedereen met een telefoon als de ruimte er geen heeft. Over het huis (problemen en onderhoud van de ketel en de E32): alleen naar de personen met het vinkje \"Ook meldingen over het huis\". Er staat niets aan tot je het zelf aanzet.\n\nNu aan: {on}\n\nTelefoons:\n{people}",
+        "menu_options": {
+          "notify_people": "Personen en telefoons",
+          "notify_house": "Het huis",
+          "notify_rooms": "Ruimtes",
+          "back": "← Terug",
+          "done": "Klaar"
+        }
+      },
+      "notify_people": {
+        "title": "Personen en telefoons",
+        "description": "Kies een persoon om de telefoon of app in te stellen die zijn of haar berichten krijgt, en of die ook de meldingen over het huis krijgt. Wie geen telefoon heeft, ziet de berichten in Home Assistant.",
+        "data": {
+          "person": "Persoon"
+        },
+        "data_description": {
+          "person": "Iedereen in Home Assistant, en de mensen die je voor het huis en de ruimtes hebt gekozen."
+        }
+      },
+      "notify_person": {
+        "title": "Telefoon of app",
+        "description": "Waar {person} berichten krijgt. Meestal is dat de Home Assistant-app op de eigen telefoon; andere meldingsdiensten (Telegram, e-mail …) werken ook.",
+        "data": {
+          "phone": "Telefoon of app",
+          "house": "Ook meldingen over het huis"
+        },
+        "data_description": {
+          "phone": "Kies Geen telefoon om geen berichten meer naar een telefoon te sturen; ze verschijnen dan in Home Assistant.",
+          "house": "Problemen en onderhoud van de ketel en de E32 (Meldingen → Het huis). Standaard uit: alleen de personen met dit vinkje krijgen ze."
+        }
+      },
+      "notify_house": {
+        "title": "Het huis",
+        "description": "Berichten over het hele huis, dag en nacht, ook als niemand thuis is. {who} Elk probleem moet eerst even duren, dus een korte hapering stuurt nooit een bericht; een onderhoudsmelding komt één keer (per code, per versie).",
+        "data": {
+          "on": "Meldingen over het huis",
+          "kinds": "Problemen",
+          "maintenance": "Onderhoud"
+        },
+        "data_description": {
+          "on": "Uit: geen berichten over het huis.",
+          "kinds": "Kies over welke problemen je een bericht wilt.",
+          "maintenance": "De ketel die om onderhoud vraagt, een nieuwe versie van de E32-firmware of van deze integratie, en de dagelijkse back-up van de E32-instellingen die steeds mislukt."
+        }
+      },
+      "notify_rooms": {
+        "title": "Ruimtes",
+        "description": "Kies de ruimte waarvan je de meldingen wilt instellen.",
+        "data": {
+          "room": "Ruimte"
+        },
+        "data_description": {
+          "room": "Een van de ruimtes op je E32."
+        }
+      },
+      "notify_room": {
+        "title": "Meldingen voor {room}",
+        "description": "Berichten over deze ruimte gaan naar: {people}. Berichten over een open raam of een koude ruimte krijgen alleen degenen die thuis zijn. Tussen 23:00 en 07:00 wachten berichten over ruimtes tot de ochtend, en hetzelfde bericht komt hooguit eens per 2 uur.",
+        "data": {
+          "on": "Meldingen over deze ruimte",
+          "kinds": "Berichten"
+        },
+        "data_description": {
+          "on": "Uit: geen berichten over deze ruimte.",
+          "kinds": "Kies welke berichten je wilt."
+        }
+      },
+      "heating_flow": {
+        "title": "Slim opwarmen en weerafhankelijke regeling",
+        "description": "De E32 begint eerder met verwarmen, zodat een ruimte warm is op de tijd in het weekprogramma, met het koelste water dat dat nog haalt. Uit: verwarmen begint pas op de programmatijd, dus een ruimte kan een tijdje koel blijven (vloerverwarming een uur of langer).\n\nHoe kouder het buiten is, hoe warmer het water naar je verwarming wordt, nog voordat de ruimtes afkoelen. De ruimtetemperatuur stuurt nog bij. Zonder buitentemperatuur geldt de gewone ruimteregeling.",
+        "data": {
+          "smart_warm_up": "Slim opwarmen",
+          "weather_compensation": "Weerafhankelijke regeling",
+          "comfort_style": "Comfortstijl"
+        },
+        "data_description": {
+          "smart_warm_up": "Dezelfde schakelaar als op het E32-apparaat.",
+          "weather_compensation": "Dezelfde schakelaar als op het E32-apparaat. Hij begint met een standaardinstelling en leert je huis kennen.",
+          "comfort_style": "Wat de E32 zwaarder laat wegen als hij de verwarming plant: comfort tegenover branderstarts en gas. Dezelfde keuze als op het E32-apparaat."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Geavanceerd",
+            "data": {
+              "hard_frost_water_temperature": "Watertemperatuur bij strenge vorst (−10 °C)"
+            },
+            "data_description": {
+              "hard_frost_water_temperature": "Hoe warm het water naar je verwarming wordt als het −10 °C is buiten. Bij milder weer kiest de E32 minder. Niet zeker? Laat het op Automatisch staan: de E32 leert dit voor jouw huis."
+            }
+          }
+        }
       }
     },
     "error": {
@@ -2409,7 +2512,7 @@
       "contacts_invalid": "Kies hoogstens acht verschillende sensoren.",
       "not_contact_sensor": "Kies alleen raam-, deur- of openingssensoren.",
       "contact_window_and_door": "Een sensor is een raam of een deur, niet allebei: kies hem in een van de twee velden.",
-      "room_invalid": "Kies een van de E32-ruimtes.",
+      "room_invalid": "Kies een van de ruimtes.",
       "invalid_adapter_id": "Gebruik hetzelfde expliciete eigenaar-ID als op de E32 (1–32 letters, cijfers, _ of -).",
       "graph_room_contract_unavailable": "Deze ruimtes passen niet bij de opgeslagen instellingen van de E32. Opslaan of dit vakje aanvinken zet geen verwarming aan.",
       "graph_control_source_review_required": "Het gekozen SOURCE-contract past niet bij de huidige eigenaar of het beoordeelde schema, of wijzigde tijdens controle. Niets ingeschakeld. Beoordeel opgeslagen DATA en het SOURCE-contract; opnieuw verbinden alleen keurt geen wijzigingen goed.",
@@ -2433,7 +2536,7 @@
       "program_export_failed": "Een begrensd 15-daags programma kan niet worden samengesteld: controleer tijdzone, ruimtegrenzen en maximaal 128 overgangen.",
       "room_mode_actuator_conflict": "Climate-TRV-ruimtes vereisen radiatorkranen; ruimtes met alleen een verwarmingsschema mogen geen climate-radiatorkranen hebben.",
       "unsupported_room_binding_mode": "Niet-ondersteunde uitgangsconfiguratie van de ruimte.",
-      "graph_room_runtime_off_required": "Zet eerst de proefrun uit en wijzig daarna deze ruimte.",
+      "graph_room_runtime_off_required": "Zet eerst de proefperiode uit en wijzig daarna deze ruimte.",
       "confirm_room_mode_change": "Expliciete bevestiging is vereist om de uitgangsconfiguratie van de ruimte te wijzigen.",
       "invalid_name": "Gebruik een ruimtenaam van 1 tot en met 80 tekens.",
       "select_radiators": "Kies één tot en met acht radiatorkranen.",
@@ -2469,9 +2572,9 @@
       "controller_unreachable": "De E32 is niet bereikbaar. Controleer het adres en de netwerkverbinding.",
       "controller_update_required": "De firmware op deze E32 is te oud voor deze versie van de integratie. Werk de E32 eerst bij: open op zijn webpagina Systeem → Firmware bijwerken en installeer de nieuwste release; verbind daarna opnieuw.",
       "controller_busy_or_conflict": "De E32 wordt bijgewerkt of herstart, of wacht op een herstart. Wacht tot zijn webpagina weer normaal opent (herstart hem daar via Systeem → Apparaat herstarten als hij daarom vraagt) en probeer het opnieuw.",
-      "controller_legacy_rooms_present": "De E32 heeft nog eigen ruimtes uit zijn oudere zelfstandige opzet (op zijn webpagina: Systeem → Ruimtes en programma’s). Home Assistant neemt die niet over. Verwijder die ruimtes daar en sla op, en verbind dan opnieuw; daarna voeg je je ruimtes toe onder Configureren → Ruimtes.",
-      "controller_broker_setup_required": "De E32 heeft eerst een eigen MQTT-login nodig. Open op de E32 Systeem → Netwerk en Home Assistant → MQTT, vink Ingeschakeld aan, vul het adres en de poort van de broker en een gebruikersnaam en wachtwoord voor de broker in, sla op en laat de E32 herstarten. Zonder login maakt de E32 via een broker geen verbinding met Home Assistant.",
-      "controller_source_conflict": "Deze E32 is al gekoppeld aan een andere OpenThermostat-installatie, of deze installatie was eerder aan een andere E32 gekoppeld. Controleer eerst of het adres bij de juiste E32 hoort. Om deze E32 naar deze installatie te verhuizen: open op zijn webpagina Systeem → Netwerk en Home Assistant, onderdeel Home Assistant: haal het vinkje weg bij “Koppeling met Home Assistant in proefperiode (geen ketelregeling)”, maak het installatieprofiel onder “Installatiekoppeling en regelgrenzen (geavanceerd)” leeg als dat er staat, kies Instellingen opslaan en laat de E32 herstarten; verbind daarna opnieuw.",
+      "controller_legacy_rooms_present": "De E32 heeft nog ruimtes uit zijn oudere zelfstandige opzet. Werk de E32 bij naar de nieuwste firmware (Instellingen → Updates → OpenThermostat E32 Firmware); die ruimt ze op. Verbind daarna opnieuw.",
+      "controller_broker_setup_required": "De E32 heeft eerst een eigen MQTT-login nodig. Open op de E32 Systeem → Instellingen → Home Assistant → MQTT-broker, vink “Verbinding met de MQTT-broker” aan, vul het adres en de poort van de broker en een gebruikersnaam en wachtwoord voor de broker in, sla op en laat de E32 herstarten. Zonder login maakt de E32 via een broker geen verbinding met Home Assistant.",
+      "controller_source_conflict": "Deze E32 is al gekoppeld aan een andere OpenThermostat-installatie, of deze installatie was eerder aan een andere E32 gekoppeld. Controleer eerst of het adres bij de juiste E32 hoort. Om deze E32 naar deze installatie te verhuizen: open op zijn webpagina Systeem → Instellingen, onderdeel Home Assistant: haal het vinkje weg bij “Koppeling met Home Assistant”, maak het installatieprofiel onder “Installatiekoppeling en regelgrenzen (geavanceerd)” leeg als dat er staat, kies Instellingen opslaan en laat de E32 herstarten; verbind daarna opnieuw.",
       "controller_settings_too_large": "De configuratie overschrijdt de opslagruimte van de E32. Er wordt niet automatisch opnieuw geprobeerd.",
       "controller_response_invalid": "De E32 geeft een onverwacht antwoord. Controleer de firmware en verbinding.",
       "controller_response_too_large": "Het antwoord van de E32 is te groot. Controleer de firmware.",
@@ -2483,7 +2586,7 @@
       "controller_runtime_off_required": "De vorige verbinding wordt nog gestopt. Wacht een minuut en verstuur opnieuw.",
       "controller_boot_unconfirmed": "De E32 kwam na zijn herstart niet op tijd terug. Wacht tot zijn webpagina weer opent en verstuur dan opnieuw.",
       "controller_connection_failed": "De verbinding kon niet worden afgerond. Controleer of de E32 aan staat en zijn webpagina opent, wacht een minuut en verstuur opnieuw. Blijft het misgaan, dan staat de reden op de webpagina van de E32 onder Systeem → Diagnose en systeemlog.",
-      "controller_connection_unconfirmed": "Home Assistant hoorde niet op tijd iets terug van de E32. Controleer op de webpagina van de E32 onder Systeem → Netwerk en Home Assistant → MQTT dat hij dezelfde broker gebruikt als Home Assistant en dat zijn gebruikersnaam en wachtwoord worden geaccepteerd; verstuur daarna opnieuw.",
+      "controller_connection_unconfirmed": "Home Assistant hoorde niet op tijd iets terug van de E32. Controleer op de webpagina van de E32 onder Systeem → Instellingen → Home Assistant → MQTT-broker dat hij dezelfde broker gebruikt als Home Assistant en dat zijn gebruikersnaam en wachtwoord worden geaccepteerd; verstuur daarna opnieuw.",
       "controller_connection_changed": "De E32-verbinding veranderde terwijl het ruimteplan werd opgeslagen, bijvoorbeeld door een herstart of een tweede keer E32 verbinden. Wacht een minuut en verstuur opnieuw.",
       "controller_plan_pending": "Een eerdere wijziging van het ruimteplan is nog niet klaar. Kijk op de E32 wat is opgeslagen voordat je iets anders wijzigt.",
       "controller_plan_unconfirmed": "De E32 heeft het ruimteplan niet op tijd bevestigd. Wacht tot de E32 terug is na zijn herstart (zijn webpagina opent weer) en verstuur dan opnieuw.",
@@ -2528,16 +2631,15 @@
       "e32_flow_limits_floor_warning": "Een ruimte heeft vloerverwarming. Boven {floor_maximum} kan vloerverwarming zonder mengklep te heet worden. Sla opnieuw op om dit maximum te houden.",
       "e32_flow_limits_above_boiler": "Dit maximum ligt boven het eigen maximum van je ketel; de ketel gaat toch niet hoger. Sla opnieuw op om het te houden, of verlaag het.",
       "controller_ha_version_unsupported": "Deze integratie heeft Home Assistant 2026.10.0 of nieuwer nodig (getest met 2026.10.2 tot en met 2026.11.0). Werk Home Assistant bij; is jouw versie nieuwer, kijk dan of er een integratie-update is. Er is niets aangepast.",
-      "controller_mqtt_unconfirmed": "De E32 is herstart met de Home Assistant-instellingen, maar Home Assistant heeft binnen 90 seconden niets van de E32 via MQTT ontvangen. Controleer op de E32 Systeem → Netwerk en Home Assistant → MQTT: dezelfde broker als de MQTT-integratie in Home Assistant, en een gebruikersnaam en wachtwoord die de broker accepteert.",
+      "controller_mqtt_unconfirmed": "De E32 is herstart met de Home Assistant-instellingen, maar Home Assistant heeft binnen 90 seconden niets van de E32 via MQTT ontvangen. Controleer op de E32 Systeem → Instellingen → Home Assistant → MQTT-broker: dezelfde broker als de MQTT-integratie in Home Assistant, en een gebruikersnaam en wachtwoord die de broker accepteert.",
       "legacy_rooms_plan_changed": "Het ruimteplan van de E32 is veranderd sinds dit overzicht gemaakt is (op de E32-pagina of elders). Er is niets verwijderd. Bekijk het bijgewerkte overzicht en verstuur opnieuw.",
       "legacy_rooms_plan_failed": "De E32 heeft het bijgewerkte ruimteplan niet opgeslagen, dus er is niets verwijderd. Controleer of de E32 klaar is en probeer het opnieuw.",
       "legacy_rooms_plan_unreadable": "Het ruimteplan van de E32 kon niet gelezen worden, dus er is niets verwijderd. Controleer of de E32 aan staat en verbonden is en probeer het opnieuw.",
-      "controller_room_plan_update_required": "De E32 heeft hiervoor te oude firmware. Werk de E32 eerst bij naar beta.19 of nieuwer (de Firmware-update van de E32 onder Instellingen → Updates in Home Assistant, of Systeem → Firmware bijwerken op de webpagina van de E32) en probeer het daarna opnieuw. Er is niets gewijzigd.",
+      "controller_room_plan_update_required": "Hiervoor is nieuwere E32-firmware nodig. Werk de E32 eerst bij (Instellingen → Updates → OpenThermostat E32 Firmware) en probeer het opnieuw. Er is niets gewijzigd.",
       "controller_session_capacity": "De E32 heeft te veel open aanmeldingen. Meld je af op de webpagina van de E32 (of meld je daar aan met “Eerdere websessies beëindigen en aanmelden”) of herstart de E32, en probeer het daarna opnieuw.",
       "controller_try_again_later": "Te veel aanmeldpogingen op de E32. Wacht 30 seconden en probeer het daarna opnieuw.",
       "controller_readback_unconfirmed": "De E32 heeft zijn huidige ruimte-instellingen niet binnen 90 seconden teruggestuurd, dus deze opslag is niet bevestigd. Controleer of de E32 online is en met de MQTT-broker verbonden is, en probeer het daarna opnieuw.",
       "contact_delay_invalid": "De pauzevertraging ligt tussen 0 en 30 minuten.",
-      "e32_valve_name_invalid": "Gebruik de Zigbee2MQTT-naam van de kraan: hoogstens 64 tekens, geen # + \" \\ en geen / of spatie aan het begin of eind.",
       "e32_valve_duplicate": "Deze kraan is al in gebruik (hier of in een andere ruimte).",
       "e32_valve_model_missing": "Kies het model van de kraan.",
       "e32_valve_limit": "De E32 stuurt hoogstens 16 radiatorkranen aan, 24 met de BLU Gateway (E32 1.1).",
@@ -2566,7 +2668,7 @@
       "e32_away_invalid": "Kies een temperatuur tussen {away_range}, of laat het veld leeg voor de afwezigheidstemperatuur van het huis.",
       "comfort_away_temperature_invalid": "Kies een afwezigheidstemperatuur tussen 5 en 25 °C.",
       "away_temperature_not_saved": "De E32 heeft de afwezigheidstemperatuur niet opgeslagen ({error}), dus er is niets opgeslagen. Controleer of de E32 online is en probeer het opnieuw.",
-      "away_temperature_update_required": "Hier de afwezigheidstemperatuur wijzigen kan met E32-firmware beta.23 of nieuwer. Werk de E32 bij met zijn Firmware-entiteit.",
+      "away_temperature_update_required": "Hiervoor is nieuwere E32-firmware nodig. Werk de E32 eerst bij (Instellingen → Updates → OpenThermostat E32 Firmware) en probeer het opnieuw.",
       "care_value_invalid": "Deze waarde kan niet. Gebruik een waarde binnen {range}.",
       "care_knob_invalid": "Kies een van de instellingen.",
       "care_confirm": "Vink het vakje aan om te bevestigen.",
@@ -2612,7 +2714,8 @@
       "boiler_setting_advanced": "Deze waarde ligt buiten het gewone bereik: gebruik Geavanceerd (installateursinstellingen).",
       "boiler_setting_writes_off": "Ketelinstellingen wijzigen staat uit: kies eerst “De E32 ketelinstellingen laten wijzigen”.",
       "boiler_setting_unavailable": "Deze E32 kan geen ketelinstellingen wijzigen.",
-      "boiler_setting_not_now": "De E32 kan nu geen ketelinstellingen wijzigen: de keteltest, een update of actieve verwarming is bezig, of de ketel heeft nog niet geantwoord. Probeer het later opnieuw.",
+      "boiler_setting_not_now": "De E32 kan nu geen ketelinstellingen wijzigen: de keteltest, een uitlezing of een update is bezig, of de ketel heeft nog niet geantwoord. Probeer het later opnieuw.",
+      "boiler_setting_restarting": "De E32 gaat zo herstarten of bijwerken; probeer het over een minuut opnieuw.",
       "boiler_setting_unsupported": "Je ketel ondersteunt deze instelling niet.",
       "boiler_setting_check_boiler": "Een instelling kon niet worden teruggezet: controleer de ketel en bevestig dat eerst onder Instellingen → Reparaties.",
       "boiler_setting_too_soon": "Wacht een halve minuut voor je deze instelling weer wijzigt.",
@@ -2621,7 +2724,13 @@
       "boiler_setting_store_failed": "De E32 kon dit niet opslaan. Probeer het opnieuw.",
       "boiler_setting_refused": "De E32 weigerde de wijziging ({error}).",
       "heating_circuit_failed": "De E32 heeft de wijziging niet opgeslagen ({error}). Probeer het over een minuut opnieuw.",
-      "e32_valve_keep_open_loop": "Een kraan van een vloergroep kan niet open blijven als weg voor het water: kies hem in maar één van de twee lijsten."
+      "e32_valve_keep_open_loop": "Een kraan van een vloergroep kan niet open blijven als weg voor het water: kies hem in maar één van de twee lijsten.",
+      "notification_person_invalid": "Kies een van de personen in de lijst.",
+      "notification_phone_invalid": "Kies een van de telefoons in de lijst.",
+      "notification_invalid": "Iets in het formulier klopte niet. Probeer het opnieuw.",
+      "notification_kinds_needed": "Kies minstens één bericht, of zet de meldingen uit.",
+      "forecast_not_weather": "Kies een weerentiteit (weather.…) voor de verwachting.",
+      "forecast_no_hourly": "Deze weerentiteit geeft geen verwachting per uur. Kies een andere, of laat het veld leeg."
     },
     "abort": {
       "comfort_saved": "De comfortinstellingen zijn opgeslagen en gelden meteen.",
@@ -2637,19 +2746,19 @@
       "native_plan_config_limit": "Het volledige opgeslagen ruimteplan overschrijdt de huidige apparaatlimiet van 4096 bytes. Vereenvoudig het programma en probeer opnieuw. Opgeslagen ruimte-instellingen en bestaande plannen blijven behouden; niets verstuurd.",
       "native_plan_prepare_failed": "Het opgeslagen ruimteplan kon niet worden gecontroleerd. Controleer verbinding, gekozen profiel en configuratiestatus en bereid opnieuw voor. Er is niets automatisch toegepast.",
       "hot_water_information_complete": "Alleen-lezenwarmwaterinformatie gesloten; geen instellingen gewijzigd.",
-      "native_source_runtime_off_required": "Zet eerst de proefrun uit en controleer daarna de ruimte-instellingen.",
+      "native_source_runtime_off_required": "Zet eerst de proefperiode uit en controleer daarna de ruimte-instellingen.",
       "native_source_review_changed": "De instellingen zijn intussen gewijzigd. Er is niets nieuws opgeslagen.",
       "native_source_review_cancelled": "Geannuleerd; de instellingen zijn ongewijzigd.",
       "native_source_owner_conflict": "Er is voor deze installatie al een andere bron voor het ruimteplan in gebruik. Er is niets opgeslagen.",
       "native_source_replacement_unsupported": "De bron van het ruimteplan zo wijzigen kan nog niet. De huidige instellingen en gegevens blijven.",
       "native_source_plan_apply_required": "De eerdere wijziging van het ruimteplan is niet klaar of niet te lezen. Kijk eerst op de E32 wat is opgeslagen. Er is niets kwijtgeraakt.",
       "room_limit": "Er kunnen maximaal acht ruimtes worden ingesteld.",
-      "shadow_mode_required": "Kies eerst de proefrun-modus.",
+      "shadow_mode_required": "Kies eerst de proefperiode.",
       "program_cancelled": "Programma bewerken geannuleerd; niets opgeslagen.",
       "program_changed": "De ruimte is tijdens bewerken gewijzigd of verwijderd; open opnieuw.",
       "program_not_started": "Open eerst de weekeditor via de ruimtekoppelingen.",
       "room_changed": "De ruimte is tijdens bewerken gewijzigd. Open opnieuw voordat je opslaat.",
-      "setup_runtime_off": "Zet de proefrun uit in de instellingen van de integratie voordat je ruimtes wijzigt. Er is niets gewijzigd.",
+      "setup_runtime_off": "Zet de proefperiode uit in de instellingen van de integratie voordat je ruimtes wijzigt. Er is niets gewijzigd.",
       "setup_changed": "De inrichting is intussen gewijzigd. Sluit dit formulier en open de ruimte opnieuw.",
       "advanced_room_required": "Deze ruimte heeft aanvullende regelinstellingen die deze eenvoudige route nog niet kan aanpassen. De bestaande inrichting is behouden.",
       "room_saved": "Ruimte en koppelingen opgeslagen. De regeling is niet ingeschakeld.",
@@ -2661,7 +2770,7 @@
       "cancelled": "Geannuleerd; er is niets gewijzigd.",
       "configuration_status_closed": "Status gesloten.",
       "product_upgrade_required": "Deze oude inrichting moet eerst worden overgenomen naar de normale productconfiguratie.",
-      "controller_connection_complete": "De E32-verbinding en het ruimteprogramma zijn bevestigd.",
+      "controller_connection_complete": "De E32-verbinding en het ruimteplan zijn bevestigd.",
       "controller_connection_cancelled": "Verbinden geannuleerd. Een deel van de instellingen kan al op de E32 staan: open Configureren → E32-verbinding opnieuw om de verbinding af te maken.",
       "installation_applied": "Installatie opgeslagen en gecontroleerd tegen het E32-plan. Fysieke ketel- en kraanuitvoer blijven uitgeschakeld.",
       "installation_apply_pending": "Een eerdere profielwijziging is nog niet bevestigd. Open E32-verbinding en pas de opgeslagen instellingen toe voordat je de installatie opnieuw wijzigt.",
@@ -2671,7 +2780,6 @@
       "e32_unconfirmed": "De E32 kon niet bevestigen dat het ruimteplan is opgeslagen. Controleer de ruimte voordat je het opnieuw probeert.",
       "e32_room_missing": "Ruimte {room} staat niet meer in het ruimteplan van de E32.",
       "e32_room_saved": "{name} is opgeslagen in het ruimteplan van de E32.",
-      "e32_room_removed": "{name} is verwijderd uit het ruimteplan van de E32.",
       "e32_room_unchanged": "Er is niets gewijzigd; het ruimteplan van de E32 is niet opnieuw geschreven.",
       "e32_flow_limits_saved": "De E32 vraagt nu een watertemperatuur tussen {minimum} en {maximum} {unit}.",
       "energy_saved": "Energie-instellingen opgeslagen. Niets is verplicht; de E32 krijgt de waarden binnen een paar minuten.",
@@ -2679,7 +2787,6 @@
       "legacy_rooms_removed": "De oude Home Assistant-ruimtes zijn verwijderd. De E32 blijft verbonden met {rooms} ruimte(s) in zijn plan.",
       "legacy_rooms_none": "Er zijn geen oude Home Assistant-ruimtes om te verwijderen.",
       "legacy_rooms_cancelled": "Geannuleerd. Kies Configureren → E32-verbinding om de verbinding te controleren; sommige instellingen kunnen al op de E32 zijn opgeslagen.",
-      "e32_valves_update_required": "Deze E32-firmware kan nog geen radiatorkranen aansturen. Werk de E32 eerst bij.",
       "entity_ids_nothing": "Alle entiteit-ID's van OpenThermostat zijn al zoals Home Assistant ze zou geven.",
       "entity_ids_done": "{count} entiteit-ID's hernoemd. Pas deze plekken zelf aan:\n\n{todo}",
       "entity_ids_undone": "{count} entiteit-ID's hebben hun oude naam terug.",
@@ -2697,7 +2804,7 @@
       "care_unconfirmed": "De E32 antwoordde niet zoals verwacht. Probeer het later opnieuw.",
       "care_update_required": "Deze E32-firmware toont deze instellingen, maar kan ze niet vanuit Home Assistant wijzigen. Werk de E32 eerst bij (Firmware-update).",
       "care_unchanged": "Er is niets gewijzigd; er is niets naar de E32 geschreven.",
-      "care_saved": "Opgeslagen op de E32. De thermostaat kijkt eerst een hele dag voordat hij weer iets aanpast.",
+      "care_saved": "Opgeslagen op de E32. De E32 kijkt eerst een hele dag voordat hij weer iets aanpast.",
       "e32_settings_unreachable": "De E32 was niet bereikbaar ({error}). Probeer het later opnieuw.",
       "e32_settings_update_required": "Deze E32-firmware heeft deze instelling niet. Werk de E32 eerst bij (Firmware-update).",
       "e32_settings_password_default": "De E32 gebruikt nog het standaardwachtwoord en accepteert geen wijzigingen tot je een nieuw kiest: Instellingen → Reparaties → “E32 gebruikt nog het standaardwachtwoord”.",
@@ -2735,7 +2842,11 @@
       "tester_shared": "Klaar: open de melding. Daarin staat wat er in de bestanden zit, met de links om ze te downloaden en het GitHub-formulier. Er is niets verstuurd.",
       "tester_switched_off": "Het testerprogramma staat uit. Bestanden die je al schreef blijven in www/open_thermostat tot je ze verwijdert.",
       "tester_recording_unavailable": "Deze E32 heeft geen ruimte in zijn geheugen voor een busopname. Herstart de E32 en probeer het opnieuw. Je kunt het resultaat ook zonder opname delen.",
-      "tester_share_not_written": "Home Assistant kon de bestanden niet in zijn map www/open_thermostat schrijven. Controleer of er ruimte vrij is in de configuratiemap en probeer het opnieuw."
+      "tester_share_not_written": "Home Assistant kon de bestanden niet in zijn map www/open_thermostat schrijven. Controleer of er ruimte vrij is in de configuratiemap en probeer het opnieuw.",
+      "notifications_saved": "Meldingen opgeslagen.",
+      "notifications_unchanged": "Niets veranderd.",
+      "notifications_no_people": "Er zijn nog geen personen in Home Assistant. Voeg een persoon toe onder Instellingen → Personen en kies daarna hier de telefoon.",
+      "notifications_no_rooms": "De E32 heeft nog geen ruimtes gemeld. Voeg ruimtes toe onder Configureren → Ruimtes, wacht even en probeer het opnieuw."
     },
     "progress": {
       "controller_connect": "Verbinden met de E32…",
@@ -2817,7 +2928,7 @@
         "name": "Geschat radiatorvermogen"
       },
       "controller_requested_flow_temperature": {
-        "name": "Keteltest: gevraagde watertemperatuur"
+        "name": "Naar de ketel gestuurde watertemperatuur"
       },
       "room_temperature": {
         "name": "Temperatuur"
@@ -2845,7 +2956,7 @@
           "window_pending": "Raam of deur open, pauzeert zo",
           "no_measurement": "Geen meting",
           "hot_water": "Wacht: de ketel maakt warm water",
-          "boiler_pause": "Wacht: minimale ketelpauze",
+          "boiler_pause": "Brander rust voor de volgende start",
           "away_return": "Opwarmen voor je terugkomst",
           "holiday": "Vakantie",
           "away": "Afwezig",
@@ -2873,7 +2984,7 @@
               "window_pending_door": "Er staat een deur open: de ruimte pauzeert zo",
               "no_measurement": "Geen meting: deze ruimte vraagt geen warmte",
               "hot_water": "Wacht: de ketel maakt warm water",
-              "boiler_pause": "Wacht: minimale ketelpauze",
+              "boiler_pause": "Brander rust voor de volgende start",
               "away_return": "Opwarmen voor je terugkomst",
               "holiday": "Vakantie tot {until} ({target} °C)",
               "away": "Afwezig: het huis staat op afwezig ({target} °C)",
@@ -2979,16 +3090,16 @@
         "name": "Batterij"
       },
       "shadow_e32_heating_time_today": {
-        "name": "E32-verwarmingstijd vandaag (proef)"
+        "name": "E32-verwarmingstijd vandaag (proefperiode)"
       },
       "shadow_tado_heating_time_today": {
-        "name": "Thermostaat-verwarmingstijd vandaag (proef)"
+        "name": "Thermostaat-verwarmingstijd (proefperiode)"
       },
       "shadow_e32_starts_today": {
-        "name": "E32-branderstarts vandaag (proef)"
+        "name": "E32-branderstarts vandaag (proefperiode)"
       },
       "shadow_tado_starts_today": {
-        "name": "Thermostaat-branderstarts vandaag (proef)"
+        "name": "Thermostaat-branderstarts (proefperiode)"
       },
       "shadow_agreement_today": {
         "name": "Overeenstemming met thermostaat vandaag"
@@ -3047,7 +3158,7 @@
               "today_since": "Vandaag sinds middernacht",
               "burner": "brander {n} %",
               "code": "code {code}",
-              "water": "boiler {t} °C",
+              "water": "water {t} °C",
               "last_hour": "{n} in het laatste uur",
               "would_ask": "E32 zou {flow} °C vragen",
               "no_wish": "De E32 zou geen warmte vragen",
@@ -3059,7 +3170,7 @@
               "early_hours": "{h} u {m} min te vroeg",
               "not_warm": "niet warm binnen 3 uur",
               "yesterday_starts": "Branderstarts per stookuur",
-              "yesterday_heating": "Energie voor verwarmen (schatting)",
+              "yesterday_heating": "Gas voor verwarming (schatting)",
               "warm_on_time": "{room}: op tijd warm",
               "late_h": "{h} u te laat",
               "early_h": "{h} u te vroeg"
@@ -3097,10 +3208,10 @@
         "name": "Doel watertemperatuur (ketel)"
       },
       "field_measured_flow_temperature": {
-        "name": "Watertemperatuur naar verwarming (aanvoer)"
+        "name": "Water naar verwarming (aanvoer)"
       },
       "field_measured_return_temperature": {
-        "name": "Watertemperatuur terug (retour)"
+        "name": "Water terug (retour)"
       },
       "field_outdoor_temperature": {
         "name": "Buitentemperatuur"
@@ -3153,7 +3264,7 @@
         }
       },
       "field_selected_dhw_temperature": {
-        "name": "Gekozen warmwatertemperatuur"
+        "name": "Ingestelde tapwatertemperatuur"
       },
       "field_measured_dhw_temperature": {
         "name": "Warmwatertemperatuur"
@@ -3262,10 +3373,10 @@
         "name": "Maximaal brandervermogen"
       },
       "field_pump_run_on": {
-        "name": "Pomp loopt na na verwarmen"
+        "name": "Pompnaloop"
       },
       "field_configured_heating_temperature": {
-        "name": "Ingestelde verwarmingstemperatuur"
+        "name": "Maximum van de ketel"
       },
       "field_reported_dhw_target": {
         "name": "Gewenste warmwatertemperatuur"
@@ -3508,7 +3619,7 @@
         "name": "Doel watertemperatuur (EMS+)"
       },
       "field_plus_flow_temperature": {
-        "name": "Watertemperatuur naar verwarming (EMS+)"
+        "name": "Water naar verwarming (EMS+)"
       },
       "field_plus_requested_burner_power": {
         "name": "Gevraagd brandervermogen (EMS+)"
@@ -3531,7 +3642,7 @@
         }
       },
       "field_plus_return_temperature": {
-        "name": "Watertemperatuur terug (EMS+)"
+        "name": "Water terug (EMS+)"
       },
       "field_plus_flame_current": {
         "name": "Vlamsignaal (EMS+)"
@@ -3602,7 +3713,7 @@
         }
       },
       "field_plus_dhw_selected_temperature": {
-        "name": "Gekozen warmwatertemperatuur (EMS+)"
+        "name": "Ingestelde tapwatertemperatuur (EMS+)"
       },
       "field_plus_heating_temperature": {
         "name": "Ingestelde verwarmingstemperatuur (EMS+)"
@@ -3692,7 +3803,7 @@
         "name": "Verwarmingsadvies"
       },
       "learned_overview": {
-        "name": "Wat de thermostaat geleerd heeft"
+        "name": "Wat de E32 geleerd heeft"
       },
       "knowledge": {
         "name": "Bekend over je huis",
@@ -3724,7 +3835,11 @@
               "curve": "Hij leert nog hoeveel warmer het water moet zijn als het buiten kouder wordt.",
               "boiler_minimum": "Hij zoekt nog uit vanaf welke watertemperatuur je ketel gaat verwarmen.",
               "boiler_response": "Hij luistert nog hoe je ketel zijn temperatuur vasthoudt.",
-              "house": "Hij rekent nog uit hoe snel je huis warmte verliest."
+              "house": "Hij rekent nog uit hoe snel je huis warmte verliest.",
+              "model": "Hij controleert zijn model van {room} nog.",
+              "plant": "Hij zoekt nog uit wat de kleinste vlam van je ketel is en bij welke watertemperatuur hij rustig doorbrandt.",
+              "outlook": "Hij heeft nog een weersverwachting of een paar dagen buitentemperaturen nodig.",
+              "track": "Zijn voorspellingen voor {room} moeten nog een paar dagen goed zijn."
             }
           }
         }
@@ -3762,7 +3877,7 @@
         }
       },
       "heating_gas": {
-        "name": "Gas voor verwarmen"
+        "name": "Gas voor verwarming"
       },
       "hot_water_gas": {
         "name": "Gas voor warm water"
@@ -3779,7 +3894,8 @@
           "rule": "Ruimteregeling",
           "curve": "Weerafhankelijke regeling",
           "learned": "Geleerde watertemperatuur",
-          "optimum_start": "Op tijd warm (vroege start)"
+          "optimum_start": "Op tijd warm (vroege start)",
+          "plan": "Het verwarmingsplan"
         }
       },
       "flow_curve": {
@@ -3857,7 +3973,7 @@
         "name": "Ketelvermogen bij volle brander"
       },
       "night_heating_gas": {
-        "name": "Gas voor verwarmen afgelopen nacht"
+        "name": "Gas voor verwarming afgelopen nacht"
       },
       "hub_memory_free": {
         "name": "Vrij geheugen"
@@ -3995,8 +4111,9 @@
               "dhw": "warm water: {state}",
               "yes": "ja",
               "no": "nee",
-              "flow": "Water naar de verwarming",
+              "flow": "Water naar verwarming",
               "asked": "gevraagd {flow} °C",
+              "asked_sent": "gevraagd {flow} °C, gestuurd {sent} °C",
               "would_ask": "E32 zou {flow} °C vragen",
               "no_request": "geen vraag",
               "ceiling": "hoogstens {flow} °C",
@@ -4041,17 +4158,17 @@
         "name": "Korte brandtijden gisteren"
       },
       "heating_gas_yesterday": {
-        "name": "Energie voor verwarmen gisteren (schatting)"
+        "name": "Gas voor verwarming gisteren (ketelschatting)"
       },
       "gas_per_degree_day": {
         "name": "Verwarmingsenergie per graaddag (gisteren)"
       },
       "boiler_settings_writes": {
-        "name": "Ketelinstellingen schrijven",
+        "name": "Ketelinstellingen wijzigen",
         "state": {
           "off": "Uit",
-          "ready": "Klaar",
-          "watching": "Wijziging wordt bekeken",
+          "ready": "Toegestaan",
+          "watching": "Wacht op jou: behouden of terugzetten",
           "failed": "Controleer de ketel"
         },
         "state_attributes": {
@@ -4294,6 +4411,24 @@
           "on": "Aan",
           "off": "Uit"
         }
+      },
+      "last_restart": {
+        "name": "Laatste herstart",
+        "state_attributes": {
+          "reason": {
+            "name": "Waarom",
+            "state": {
+              "power": "Stroom aan of een stroomdip",
+              "restart": "Installatie of herstartverzoek",
+              "automatic": "Automatische herstart door de E32",
+              "crash": "Vastgelopen",
+              "unknown": "Onbekend"
+            }
+          }
+        }
+      },
+      "heating_plan": {
+        "name": "Verwarmingsplan"
       }
     },
     "select": {
@@ -4393,6 +4528,14 @@
           "on": "1 uur aan",
           "off": "1 uur uit"
         }
+      },
+      "flow_comfort_style": {
+        "name": "Comfortstijl",
+        "state": {
+          "comfort": "Comfort eerst",
+          "balanced": "In balans",
+          "save": "Zuinigst"
+        }
       }
     },
     "datetime": {
@@ -4400,7 +4543,7 @@
         "name": "Uit tot"
       },
       "holiday_until": {
-        "name": "Vakantie tot"
+        "name": "Vakantie eindigt"
       }
     },
     "switch": {
@@ -4428,6 +4571,9 @@
       },
       "e32_restart": {
         "name": "E32 opnieuw starten"
+      },
+      "plan_confirm": {
+        "name": "Laat de E32 de verwarming plannen"
       }
     }
   },
@@ -4443,7 +4589,7 @@
         },
         "abort": {
           "room_programs_done": "Elke ruimte heeft al een weekprogramma.",
-          "e32_rooms_unavailable": "De E32-ruimtes zijn nu niet te lezen. Probeer het zo opnieuw."
+          "e32_rooms_unavailable": "De ruimtes zijn nu niet van de E32 te lezen. Probeer het zo opnieuw."
         }
       },
       "description": "Deze ruimtes hebben nog geen weekprogramma: {rooms}. Kies Oplossen om ze het standaardprogramma te geven. Je kunt het later aanpassen in de weekplanner."
@@ -4466,7 +4612,7 @@
         "abort": {
           "reconfirm_done": "De E32 wacht niet meer op een bevestiging.",
           "reconfirm_plan_not_active": "Het ruimteplan is niet meer actief, dus er valt niets te bevestigen.",
-          "e32_rooms_unavailable": "De E32-ruimtes zijn nu niet leesbaar. Probeer het zo opnieuw."
+          "e32_rooms_unavailable": "De ruimtes zijn nu niet van de E32 te lezen. Probeer het zo opnieuw."
         }
       },
       "description": "De E32 stuurde je ketel aan vóór de firmware-update. Hij wacht nu op jou voordat hij het weer overneemt, zodat nooit twee thermostaten tegelijk de ketel sturen. Tot dan houdt hij alleen vorstbeveiliging aan. Kies Oplossen en bevestig dat er geen andere thermostaat op de ketel is aangesloten."
@@ -4489,7 +4635,7 @@
         "abort": {
           "reconfirm_done": "De E32 wacht niet meer op een bevestiging.",
           "reconfirm_plan_not_active": "Het ruimteplan is niet meer actief, dus er valt niets te bevestigen.",
-          "e32_rooms_unavailable": "De E32-ruimtes zijn nu niet leesbaar. Probeer het zo opnieuw."
+          "e32_rooms_unavailable": "De ruimtes zijn nu niet van de E32 te lezen. Probeer het zo opnieuw."
         }
       },
       "description": "De E32 stuurde je ketel aan vóór de firmware-update. Hij wacht nu op jou voordat hij het weer overneemt, zodat nooit twee thermostaten tegelijk de ketel sturen. Tot dan houdt hij alleen vorstbeveiliging aan. Kies Oplossen en bevestig dat je oude thermostaat nog van de ketel is losgekoppeld."
@@ -4499,12 +4645,12 @@
       "description": "Het doel van {device} (ruimte {room}) veranderde op meerdere dagen vanzelf op hetzelfde tijdstip. Zet het eigen programma uit (handmatige stand), zodat het weekprogramma van de E32 beslist; het apparaat volgt het dan, en eraan draaien verandert de ruimte tot het volgende schakelpunt."
     },
     "legacy_metrics_history": {
-      "title": "Ketelteller zijn vernieuwd",
-      "description": "De ketelteller zijn vernieuwd. Je geschiedenis blijft bewaard. Heb je eigen kaarten met de oude sensoren gemaakt, zet ze dan over op de nieuwe."
+      "title": "Keteltellers zijn vernieuwd",
+      "description": "De keteltellers zijn vernieuwd. Je geschiedenis blijft bewaard. Heb je eigen kaarten met de oude sensoren gemaakt, zet ze dan over op de nieuwe."
     },
     "metrics_definition_v2": {
-      "title": "Ketelteller zijn vernieuwd",
-      "description": "De ketelteller zijn vernieuwd. Je geschiedenis blijft bewaard. Heb je eigen kaarten met de oude sensoren gemaakt, zet ze dan over op de nieuwe. Energie is een schatting, geen gas- of warmtemeter."
+      "title": "Keteltellers zijn vernieuwd",
+      "description": "De keteltellers zijn vernieuwd. Je geschiedenis blijft bewaard. Heb je eigen kaarten met de oude sensoren gemaakt, zet ze dan over op de nieuwe. Energie is een schatting, geen gas- of warmtemeter."
     },
     "room_model_v2": {
       "title": "Warmteschattingen per ruimte zijn vernieuwd",
@@ -4579,15 +4725,15 @@
         "error": {
           "e32_password": "De E32 accepteerde het bewaarde wachtwoord niet. Vul het huidige E32-wachtwoord in onder Configureren → E32-verbinding en probeer het opnieuw.",
           "e32_unreachable": "De E32 is niet bereikbaar. Controleer of hij aan staat en met je netwerk verbonden is, en probeer het opnieuw.",
-          "broker_login": "De E32 heeft eerst een eigen MQTT-login nodig. Open op de E32 Systeem → Netwerk en Home Assistant → MQTT, vink Ingeschakeld aan, vul het adres en de poort van de broker en een gebruikersnaam en wachtwoord voor de broker in, sla op en laat de E32 herstarten. Zonder login maakt de E32 via een broker geen verbinding met Home Assistant.",
-          "mqtt_unconfirmed": "De E32 is herstart met de Home Assistant-instellingen, maar Home Assistant heeft binnen 90 seconden niets van de E32 via MQTT ontvangen. Controleer op de E32 Systeem → Netwerk en Home Assistant → MQTT: dezelfde broker als de MQTT-integratie in Home Assistant, en een gebruikersnaam en wachtwoord die de broker accepteert.",
+          "broker_login": "De E32 heeft eerst een eigen MQTT-login nodig. Open op de E32 Systeem → Instellingen → Home Assistant → MQTT-broker, vink “Verbinding met de MQTT-broker” aan, vul het adres en de poort van de broker en een gebruikersnaam en wachtwoord voor de broker in, sla op en laat de E32 herstarten. Zonder login maakt de E32 via een broker geen verbinding met Home Assistant.",
+          "mqtt_unconfirmed": "De E32 is herstart met de Home Assistant-instellingen, maar Home Assistant heeft binnen 90 seconden niets van de E32 via MQTT ontvangen. Controleer op de E32 Systeem → Instellingen → Home Assistant → MQTT-broker: dezelfde broker als de MQTT-integratie in Home Assistant, en een gebruikersnaam en wachtwoord die de broker accepteert.",
           "e32_busy": "De E32 is bezig met bijwerken of herstarten. Wacht tot hij klaar is en probeer het opnieuw.",
           "ha_version_unsupported": "Deze integratie heeft Home Assistant 2026.10.0 of nieuwer nodig (getest met 2026.10.2 tot en met 2026.11.0). Werk Home Assistant bij; is jouw versie nieuwer, kijk dan of er een integratie-update is. Er is niets aangepast.",
           "connection_failed": "De E32-verbinding kon niet worden bevestigd. Open Configureren → E32-verbinding voor details en probeer het hier daarna opnieuw.",
           "legacy_rooms_plan_changed": "Het ruimteplan van de E32 is veranderd sinds dit overzicht gemaakt is (op de E32-pagina of elders). Er is niets verwijderd. Bekijk het bijgewerkte overzicht en verstuur opnieuw.",
           "legacy_rooms_plan_failed": "De E32 heeft het bijgewerkte ruimteplan niet opgeslagen, dus er is niets verwijderd. Controleer of de E32 klaar is en probeer het opnieuw.",
           "legacy_rooms_plan_unreadable": "Het ruimteplan van de E32 kon niet gelezen worden, dus er is niets verwijderd. Controleer of de E32 aan staat en verbonden is en probeer het opnieuw.",
-          "e32_update_required": "De E32 heeft hiervoor te oude firmware. Werk de E32 eerst bij naar beta.19 of nieuwer (Home Assistant: Instellingen → Updates → OpenThermostat E32 Firmware → Installeren) en probeer het daarna opnieuw. Er is niets gewijzigd.",
+          "e32_update_required": "Hiervoor is nieuwere E32-firmware nodig. Werk de E32 eerst bij (Instellingen → Updates → OpenThermostat E32 Firmware) en probeer het opnieuw. Er is niets gewijzigd.",
           "e32_session_capacity": "De E32 heeft te veel open aanmeldingen. Meld je af op de webpagina van de E32 (of meld je daar aan met “Eerdere websessies beëindigen en aanmelden”) of herstart de E32, en probeer het daarna opnieuw.",
           "e32_try_again_later": "Te veel aanmeldpogingen op de E32. Wacht 30 seconden en probeer het daarna opnieuw.",
           "e32_password_change_required": "De E32 gebruikt nog het standaardwachtwoord en accepteert geen wijzigingen tot je een nieuw wachtwoord kiest. Open Instellingen → Reparaties → “E32 gebruikt nog het standaardwachtwoord” om het te kiezen. Er is niets opgeslagen."
@@ -4622,15 +4768,15 @@
         "error": {
           "e32_password": "De E32 accepteerde het bewaarde wachtwoord niet. Vul het huidige E32-wachtwoord in onder Configureren → E32-verbinding en probeer het opnieuw.",
           "e32_unreachable": "De E32 is niet bereikbaar. Controleer of hij aan staat en met je netwerk verbonden is, en probeer het opnieuw.",
-          "broker_login": "De E32 heeft eerst een eigen MQTT-login nodig. Open op de E32 Systeem → Netwerk en Home Assistant → MQTT, vink Ingeschakeld aan, vul het adres en de poort van de broker en een gebruikersnaam en wachtwoord voor de broker in, sla op en laat de E32 herstarten. Zonder login maakt de E32 via een broker geen verbinding met Home Assistant.",
-          "mqtt_unconfirmed": "De E32 is herstart met de Home Assistant-instellingen, maar Home Assistant heeft binnen 90 seconden niets van de E32 via MQTT ontvangen. Controleer op de E32 Systeem → Netwerk en Home Assistant → MQTT: dezelfde broker als de MQTT-integratie in Home Assistant, en een gebruikersnaam en wachtwoord die de broker accepteert.",
+          "broker_login": "De E32 heeft eerst een eigen MQTT-login nodig. Open op de E32 Systeem → Instellingen → Home Assistant → MQTT-broker, vink “Verbinding met de MQTT-broker” aan, vul het adres en de poort van de broker en een gebruikersnaam en wachtwoord voor de broker in, sla op en laat de E32 herstarten. Zonder login maakt de E32 via een broker geen verbinding met Home Assistant.",
+          "mqtt_unconfirmed": "De E32 is herstart met de Home Assistant-instellingen, maar Home Assistant heeft binnen 90 seconden niets van de E32 via MQTT ontvangen. Controleer op de E32 Systeem → Instellingen → Home Assistant → MQTT-broker: dezelfde broker als de MQTT-integratie in Home Assistant, en een gebruikersnaam en wachtwoord die de broker accepteert.",
           "e32_busy": "De E32 is bezig met bijwerken of herstarten. Wacht tot hij klaar is en probeer het opnieuw.",
           "ha_version_unsupported": "Deze integratie heeft Home Assistant 2026.10.0 of nieuwer nodig (getest met 2026.10.2 tot en met 2026.11.0). Werk Home Assistant bij; is jouw versie nieuwer, kijk dan of er een integratie-update is. Er is niets aangepast.",
           "connection_failed": "De E32-verbinding kon niet worden bevestigd. Open Configureren → E32-verbinding voor details en probeer het hier daarna opnieuw.",
           "legacy_rooms_plan_changed": "Het ruimteplan van de E32 is veranderd sinds dit overzicht gemaakt is (op de E32-pagina of elders). Er is niets verwijderd. Bekijk het bijgewerkte overzicht en verstuur opnieuw.",
           "legacy_rooms_plan_failed": "De E32 heeft het bijgewerkte ruimteplan niet opgeslagen, dus er is niets verwijderd. Controleer of de E32 klaar is en probeer het opnieuw.",
           "legacy_rooms_plan_unreadable": "Het ruimteplan van de E32 kon niet gelezen worden, dus er is niets verwijderd. Controleer of de E32 aan staat en verbonden is en probeer het opnieuw.",
-          "e32_update_required": "De E32 heeft hiervoor te oude firmware. Werk de E32 eerst bij naar beta.19 of nieuwer (Home Assistant: Instellingen → Updates → OpenThermostat E32 Firmware → Installeren) en probeer het daarna opnieuw. Er is niets gewijzigd.",
+          "e32_update_required": "Hiervoor is nieuwere E32-firmware nodig. Werk de E32 eerst bij (Instellingen → Updates → OpenThermostat E32 Firmware) en probeer het opnieuw. Er is niets gewijzigd.",
           "e32_session_capacity": "De E32 heeft te veel open aanmeldingen. Meld je af op de webpagina van de E32 (of meld je daar aan met “Eerdere websessies beëindigen en aanmelden”) of herstart de E32, en probeer het daarna opnieuw.",
           "e32_try_again_later": "Te veel aanmeldpogingen op de E32. Wacht 30 seconden en probeer het daarna opnieuw.",
           "e32_password_change_required": "De E32 gebruikt nog het standaardwachtwoord en accepteert geen wijzigingen tot je een nieuw wachtwoord kiest. Open Instellingen → Reparaties → “E32 gebruikt nog het standaardwachtwoord” om het te kiezen. Er is niets opgeslagen."
@@ -4683,7 +4829,7 @@
     },
     "valve_offline": {
       "title": "Radiatorkraan meldt zich niet in {room}",
-      "description": "Al meer dan twee uur geen melding in {room}: {valves}. Controleer de batterij en de verbinding van de kraan (Zigbee of de BLU Gateway). De ruimte blijft verwarmen op haar andere temperatuurbronnen; een kraan regelt zelf door op zijn laatste setpoint."
+      "description": "Al meer dan twee uur geen melding in {room}: {valves}. Controleer de batterij en de verbinding van de kraan (Zigbee of de BLU Gateway). De ruimte blijft verwarmen op haar andere temperatuurbronnen; een kraan regelt zelf door naar de laatste gewenste temperatuur."
     },
     "valve_single_source": {
       "title": "{room} hangt af van één temperatuurbron",
@@ -4858,12 +5004,43 @@
     "tester_recording_update": {
       "title": "Werk de E32 bij voor de busopname",
       "description": "{name}: het testerprogramma staat aan, maar deze E32-firmware kan nog geen busopname maken. Werk de E32 bij (Firmware-update). Je kunt het resultaat ook zonder opname delen, of het testerprogramma uitzetten: Configureren → Geavanceerd en diagnose → Testerprogramma."
+    },
+    "learned_not_saved": {
+      "title": "De E32 kon niet opslaan wat hij geleerd heeft",
+      "description": "{name}: de E32 kon niet opslaan wat hij geleerd heeft voor {missing} van zijn {of} ruimtes. Hij houdt het in zijn geheugen tot er weer plaats is, maar een herstart vóór die tijd verliest het. Nu niets te doen; blijft dit dagen staan, open dan op de E32 Systeem → Diagnose en deel de diagnose. Deze melding verdwijnt na de volgende volledige opslag."
+    },
+    "learned_not_saved_part": {
+      "title": "De E32 kon niet alles opslaan wat hij geleerd heeft",
+      "description": "{name}: de E32 heeft opgeslagen wat hij over elke ruimte geleerd heeft, maar niet alles wat hij over het huis en de ketel geleerd heeft. Hij houdt het in zijn geheugen tot er weer plaats is, maar een herstart vóór die tijd verliest het. Nu niets te doen; blijft dit dagen staan, open dan op de E32 Systeem → Diagnose en deel de diagnose. Deze melding verdwijnt na de volgende volledige opslag."
+    },
+    "learned_lost_at_restart": {
+      "title": "De E32 is een deel van wat hij geleerd heeft kwijt",
+      "description": "{name}: de E32 is bij zijn laatste herstart een deel kwijtgeraakt van wat hij geleerd heeft: wat hij over je huis weet zakte van {before} % naar {after} %. Hij leert het de komende dagen opnieuw; de verwarming blijft intussen werken. Gebeurt dit vaker, deel dan de diagnose van de E32 (Systeem → Diagnose). Deze melding verdwijnt zodra het cijfer terug is."
+    },
+    "plan_ready": {
+      "title": "De E32 is klaar om de verwarming te plannen",
+      "description": "De voorspellingen van de E32 voor {room} zijn al een week goed. Mag hij de verwarming plannen? Hij kiest dan zelf wanneer hij begint en hoe warm het water wordt, zodat de ruimtes op tijd warm zijn met zo weinig mogelijk branderstarts en gas. Je weekprogramma, temperaturen en Slim opwarmen blijven zoals ze zijn. Worden zijn voorspellingen slechter, dan verwarmt hij vanzelf weer zoals voorheen en vraagt hij het je later opnieuw.\n\nKies Oplossen om te bevestigen, of negeer dit om de verwarming te laten zoals die is.",
+      "fix_flow": {
+        "step": {
+          "plan_ready": {
+            "title": "Laat de E32 de verwarming plannen",
+            "description": "Bevestig dat de E32 vanaf nu de verwarming mag plannen, te beginnen met {room}. Je ziet het plan op het dashboard (Leren en instellingen → Plan voor vandaag) en op de Huis-pagina van de E32. De comfortstijl (Configureren → Verwarming en ketel) bepaalt wat zwaarder weegt: comfort eerst, gebalanceerd of zo zuinig mogelijk."
+          }
+        },
+        "error": {
+          "plan_confirm_failed": "De E32 nam de bevestiging niet aan. Kijk of hij bereikbaar is en probeer het zo nog eens."
+        },
+        "abort": {
+          "plan_confirm_done": "De E32 wacht niet meer op deze bevestiging.",
+          "e32_rooms_unavailable": "De E32 is nu niet bereikbaar. Probeer het zo nog eens."
+        }
+      }
     }
   },
   "services": {
     "set_room_override": {
-      "name": "Tijdelijk overrulen",
-      "description": "Een tijdelijk doel voor een E32-ruimte. Boost verwarmt tot het maximum van de ruimte (een uur, tenzij je een duur kiest). De E32 beëindigt het overrulen zelf, ook na een herstart, en de ruimte volgt daarna weer haar weekprogramma. Alleen het doel van de ruimte verandert; de aanvoergrenzen en de vorstbeveiliging blijven.",
+      "name": "Tijdelijke temperatuur voor een ruimte",
+      "description": "Een tijdelijke gewenste temperatuur voor een ruimte. Boost verwarmt tot het maximum van de ruimte (een uur, tenzij je een duur kiest). De E32 beëindigt de tijdelijke temperatuur zelf, ook na een herstart, en de ruimte volgt daarna weer haar weekprogramma. Alleen de gewenste temperatuur van de ruimte verandert; de grenzen van de watertemperatuur en de vorstbeveiliging blijven.",
       "fields": {
         "mode": {
           "name": "Soort",
@@ -4871,7 +5048,7 @@
         },
         "temperature": {
           "name": "Temperatuur",
-          "description": "Het doel van de ruimte in de tussentijd. Leeg: het huidige doel."
+          "description": "De gewenste temperatuur van de ruimte in de tussentijd. Leeg: de huidige gewenste temperatuur."
         },
         "duration_minutes": {
           "name": "Duur",
@@ -4880,7 +5057,7 @@
       }
     },
     "clear_room_override": {
-      "name": "Overrulen beëindigen",
+      "name": "Tijdelijke temperatuur beëindigen",
       "description": "De ruimte volgt weer haar weekprogramma."
     },
     "set_away": {
@@ -5018,7 +5195,7 @@
       "message": "Zet voor een vakantie \"Vakantie tot\" op de dag dat je terug bent; de huismodus wordt dan vanzelf Vakantie."
     },
     "house_mode_update_required": {
-      "message": "Hiervoor is E32-firmware beta.23 of nieuwer nodig. Werk de E32 bij met zijn Firmware-entiteit."
+      "message": "Hiervoor is nieuwere E32-firmware nodig. Werk de E32 eerst bij (Instellingen → Updates → OpenThermostat E32 Firmware) en probeer het opnieuw."
     },
     "valves_unconfirmed": {
       "message": "De E32 heeft niet bevestigd dat de radiatorkranen zijn opgeslagen. Probeer het over een minuut opnieuw."
@@ -5054,7 +5231,7 @@
       "message": "De herstart van de E32 is niet bevestigd ({error}). Controleer de verbinding en probeer het opnieuw."
     },
     "set_comfort_unsupported": {
-      "message": "{entity} is een E32-ruimte: gebruik in plaats daarvan Tijdelijk overrulen, Overrulen beëindigen of Afwezig."
+      "message": "{entity} volgt het ruimteplan op de E32: gebruik in plaats daarvan Tijdelijke temperatuur voor een ruimte, Tijdelijke temperatuur beëindigen of Afwezig."
     },
     "holiday_temperature_invalid": {
       "message": "Kies een temperatuur op vakantie tussen 5 en 25 °C."
@@ -5106,26 +5283,38 @@
     },
     "shelly_unreachable": {
       "message": "De E32 was niet bereikbaar om de pomp te wijzigen ({error})."
+    },
+    "plan_confirm_unavailable": {
+      "message": "Home Assistant heeft geen verbinding met de instellingen van de E32, dus kan het plan niet bevestigen. Koppel de E32 eerst via Configureren."
+    },
+    "plan_confirm_unconfirmed": {
+      "message": "De E32 bevestigde niet dat hij de verwarming plant. Probeer het zo nog eens."
+    },
+    "comfort_style_invalid": {
+      "message": "Kies comfort eerst, in balans of zuinigst."
+    },
+    "plan_confirm_refused": {
+      "message": "De E32 weigerde de bevestiging ({error}). Kijk op zijn Huis-pagina, of probeer het zo nog eens."
     }
   },
   "device": {
     "ems_boiler": {
-      "name": "EMS-ketel {address} (product {product})"
+      "name": "Ketel"
     },
     "ems_thermostat": {
-      "name": "EMS-thermostaat {address} (product {product})"
+      "name": "Thermostaat op de ketelbus"
     },
     "ems_device": {
       "name": "EMS-apparaat {address} (product {product})"
-    },
-    "ems_boiler_brand": {
-      "name": "{brand}-ketel (product {product}) ({address})"
     },
     "circuit_floor": {
       "name": "Vloercircuit"
     },
     "circuit_radiators": {
       "name": "Radiatorcircuit"
+    },
+    "ems_thermostat_address": {
+      "name": "Thermostaat op de ketelbus ({address})"
     }
   }
 }

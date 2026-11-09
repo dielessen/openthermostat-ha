@@ -379,9 +379,9 @@ def setup_time_zone_check(hass, entry, backups):
     removers.append(hass.bus.async_listen(EVENT_CORE_CONFIG_UPDATE, home_changed))
 
     @callback
-    def remove():
-        for undo in removers:
-            undo()
+    def remove():  # idempotent: both the setup's cleanup and the entry's unload hold it
+        while removers:
+            removers.pop()()
         ir.async_delete_issue(hass, DOMAIN, time_zone_issue_id(entry))
     return remove
 

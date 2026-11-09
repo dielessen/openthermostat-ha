@@ -1,19 +1,28 @@
-"""What the thermostat has learned: everything the E32 learned and tuned, in plain language (E32 rc.2).
+"""What the E32 has learned: everything the E32 learned and tuned, in plain language (E32 rc.2).
 
-One sensor on the product device ("What the thermostat learned"). Its state is the newest change
+One sensor on the product device ("What the E32 learned"). Its state is the newest change
 the self-tuning made (or what it is doing), its attributes the whole overview in the Home Assistant
 language (English, Dutch or Polish), each figure with a line on what it means:
 
-- ``rooms``: per room its learning progress and what was learned (how fast it warms and cools,
+- ``rooms``: per room its learning progress and what was learned (1.1.1 stage B: first how far the E32 is with
+  its model of the room, ``model``: collecting, checking its predictions "2 of 3 days good", trusted with its heat
+  loss and hours per degree, or checking again after a demotion; also the room's ``model`` sentence for the
+  Learning tab's progress list), how fast it warms and cools,
   the lowest water temperature that still warms it in time, Smart warm-up's start for the next
   program step, how the last morning went and what Smart warm-up changes for it (E32 rc.4), the
   night advice, and the heat it gets for free from sun, cooking and people (E32 rc.5)), from
   ``fw/telemetry/learned/<room>``;
 - ``house``: the heating curve, the burner (starts and burn time yesterday) and, once learned, the
   lowest water temperature the boiler starts heating at, from the summary; that last figure is
-  also the attribute ``boiler_minimum_flow_c`` (absent until learned);
-- ``changes``: the self-tuning's changes, newest first. The E32 sends its newest four
-  (``fw/telemetry/tuning``); this sensor keeps the last ten over restarts;
+  also the attribute ``boiler_minimum_flow_c`` (absent until learned); and (E32 SL-A, ``boiler.steady``) the
+  water temperature from which the boiler burns steadily, also the attributes ``steady_burn_floor_c`` and
+  ``boiler_least_output_pct`` (each absent until learned) with ``steady_burn`` (applied, cycling, and up to three
+  points of its starts table: water temperature, burner stops per hour asked, hours asked);
+- ``changes``: the self-tuning's changes, newest first. The E32 sends its newest four and (SL-A) every change of
+  its newest evaluation (``fw/telemetry/tuning`` ``log``, with ``day_changes`` how many that evaluation made);
+  this sensor keeps the last twenty over restarts;
+- ``latest_changes``: the texts of the newest evaluation's changes, all of them (the dashboard's "Latest change"),
+  and ``latest_more``: how many of that evaluation the E32 left out to stay within 1 KB (0: none);
 - ``settings``: the knobs in effect by their plain names, "(automatic)" or "(set by you)";
 - ``insights``: yesterday against the house's own usual days, each with what can cause it (E32 rc.5,
   insight.py; also a notification each);
@@ -33,7 +42,7 @@ from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 
 from .const import DOMAIN
 
-LOG_KEPT = 10
+LOG_KEPT = 20  # one evaluation can step all ten knobs (E32 SL-A sends the whole newest day): a day and more
 STATE_MAX = 255
 REFERENCE_OUTDOOR_C, REFERENCE_ROOM_C = 5, 20  # "loses about .. per hour at 5 °C outside"
 WARMUPS_TO_LEARN = 6                           # FlowLearner::Params::roomSegments
@@ -55,19 +64,19 @@ TEXT = {
         "why.cold_during_rest": "The burner rest is now {to}, because {subject} cooled {figure} °C below its target while the burner rested. Comfort comes first.",
         "why.short_burns": "Each burner run now lasts at least {to}, because {figure} runs yesterday were very short. Longer runs are gentler on the boiler.",
         "why.boiler_cycling": "The boiler switches on and off by itself ({figure} times yesterday); longer pauses would only delay heat, so this is now {to} again.",
-        "why.overshoot": "{subject} got {figure} °C warmer than its target; the thermostat now stops heating a little earlier.",
-        "why.overshoot_gain": "{subject} still got {figure} °C warmer than its target; the thermostat now heats a little more gently.",
-        "why.settled": "{room} hardly gets too warm any more ({figure} °C); the thermostat stops heating a little later again, so the burner starts less often.",
+        "why.overshoot": "{subject} got {figure} °C warmer than its target; the E32 now stops heating a little earlier.",
+        "why.overshoot_gain": "{subject} still got {figure} °C warmer than its target; the E32 now heats a little more gently.",
+        "why.settled": "{room} hardly gets too warm any more ({figure} °C); the E32 stops heating a little later again, so the burner starts less often.",
         "why.hovering": "Heating now starts when a room is {to} below its target, because it started {figure} times yesterday for small dips. Fewer starts are gentler on the boiler.",
         "why.few_starts": "Heating now starts sooner again, at {to} below the target: with only {figure} starts yesterday there is room for more comfort.",
-        "why.room_response_up": "{room} warms about 1 °C in {figure}; the thermostat now reacts a little more strongly to a cold room.",
-        "why.room_response_down": "{room} warms about 1 °C in {figure}; the thermostat now reacts a little more gently to a cold room.",
-        "why.learned_warmup": "{room} warms about 1 °C in {figure}; mornings are planned with that.",
+        "why.room_response_up": "{room} warms about 1 °C in {figure}; the E32 now reacts a little more strongly to a cold room.",
+        "why.room_response_down": "{room} warms about 1 °C in {figure}; the E32 now reacts a little more gently to a cold room.",
+        "why.learned_warmup": "{room} warms about 1 °C in {figure}; the E32 starts from that until it has learned this room's warm-up.",
         "would": "Would change: {text}",
-        "state.waiting": "After a restart or a change the thermostat first watches a whole day before it adjusts anything.",
+        "state.waiting": "After a restart or a change the E32 first watches a whole day before it adjusts anything.",
         "state.collecting": "Yesterday there was too little heating to learn from; the settings stay as they are.",
         "state.shadow": "Your current thermostat or the boiler's own control is still in charge, so the E32 only shows what it would change.",
-        "state.active": "The thermostat adjusts its settings itself, at most one small step a day.",
+        "state.active": "The E32 adjusts its settings itself, at most one small step a day.",
         "state.none": "Nothing changed yet: the start values still fit, or there is not enough to go on.",
         "learned": "Learned", "learning": "Learning: {n} of {m} warm-ups seen",
         "learning_seen": "Learning: {n} warm-ups seen; it still needs warm-ups on other days or at another water temperature",
@@ -76,7 +85,7 @@ TEXT = {
         "learning_first": "It learns from every warm-up while the heating runs.",
         "learning_mean": "Until then it uses safe standard times.",
         "warms": "Warms about 1 °C in {d} with water of {flow} °C.",
-        "warms_mean": "The thermostat plans the start of every warm-up with this.",
+        "warms_mean": "The E32 plans the start of every warm-up with this.",
         "lowest": "The lowest water temperature that still warms it in time: {flow} °C.",
         "lowest_mean": "Cooler water lets the boiler condense better, so it uses less gas.",
         "cools": "Loses about {rate} °C per hour at {out} °C outside.",
@@ -102,6 +111,8 @@ TEXT = {
         "arrival": "{when} warm at {time} ({how}).",
         "arrival_earlier": "{when} warm at {time} ({how}); next time it starts a little earlier.",
         "arrival_later": "{when} warm at {time} ({how}); next time it starts a little later.",
+        "arrival_earlier_min": "{when} warm at {time} ({how}); next time it starts about {n} earlier.",
+        "arrival_later_min": "{when} warm at {time} ({how}); next time it starts about {n} later.",
         "arrival_mean": "It checks every morning whether the room was warm on time and adjusts its warm-up time.",
         "how_late": "{d} late",
         "how_early": "{d} early",
@@ -133,20 +144,33 @@ TEXT = {
         "curve_off": "Weather compensation is not switched on; this is shown as advice.",
         "burner": "Yesterday the burner started {n} times for heating; a burn lasted {d} on average.",
         "burner_starts": "Yesterday the burner started {n} times for heating.",
-        "burner_often": "That is often. Fewer, longer burns are gentler on the boiler; the thermostat works on that.",
+        "burner_often": "That is often. Fewer, longer burns are gentler on the boiler; the E32 works on that.",
         "burner_mean": "Fewer, longer burns are gentler on the boiler and use gas more efficiently.",
-        "boiler_minimum": "Your boiler only starts heating from about {flow} °C water; the thermostat asks at least that much.",
+        "boiler_minimum": "Your boiler only starts heating from about {flow} °C water; the E32 asks at least that much.",
         "boiler_minimum_mean": "It learned this when the boiler did not start for cooler water.",
+        "steady": "Your boiler burns steadily from about {flow} °C water; the E32 asks at least that much.",
+        "steady_off": "Your boiler burns steadily from about {flow} °C water; with Smart warm-up on the E32 asks at least that much.",
+        "steady_mean": "Below that it switches itself off and on at its lowest flame. Slightly warmer water means far fewer burner starts and costs at most a little efficiency.",
         "house_none": "Nothing yet: this appears after the first heating days.",
         "unavailable": "The E32 has not reported what it learned yet.",
         # rc7: the sentences review (R1, R3). {subject}: the room as the subject of a sentence (Polish: "pomieszczenie X").
         "room_subject": "{room}", "your_rooms_subject": "a typical room",
+        # 1.1.1 stage B (SL-B2): the room's model in shadow, in the E32 House page's words.
+        "model.collecting": "The E32 is collecting readings for a model of {room}.",
+        "model.checking": "The E32 is checking its predictions for {room} ({n} of {m} days good).",
+        "model.trusted": "The E32 trusts its model of {room}: heat loss {ua} kW per degree, the room needs about {h} hours per degree at 50 °C water.",
+        "model.trusted_plain": "The E32 trusts its model of {room}: heat loss {ua} kW per degree.",
+        "model.trusted_bare": "The E32 trusts its model of {room}.",
+        "model.demoted": "The model of {room} predicted less well; the E32 went back to its last good model and checks it again ({n} of {m} days good).",
+        "model_mean": "For now this is only a check: nothing in the heating changes because of it.",
+        "model_mean_planning": "The E32 plans the heating with this model.",
         "warmup_now_estimate": "Smart warm-up: heating now (estimate; it learns from every morning) so it is {target} °C at {time}.",
         "warmup_trial": "Smart warm-up in the trial run: it would start at {start} so it is {target} °C at {time}.",
         "warmup_trial_now": "Smart warm-up in the trial run: it would be heating now so it is {target} °C at {time}.",
         "free_heat_later": "So the warm-up starts {m} min later than without the free heat.",
         "arrival_not_warm": "{when} not warm within 3 hours after {time}.",
         "arrival_not_warm_earlier": "{when} not warm within 3 hours after {time}; next time it starts a little earlier.",
+        "arrival_not_warm_earlier_min": "{when} not warm within 3 hours after {time}; next time it starts about {n} earlier.",
         "saving_eur_once": "about {m3} m³ gas ({eur})",
         "saving_once": "about {m3} m³ gas",
         "night_hold_until": "Keeping it at {night} °C until {time} is cheaper than letting it cool down: {saving}.",
@@ -188,19 +212,19 @@ TEXT = {
         "why.cold_during_rest": "De rust van de brander is nu {to}, omdat {subject} {figure} °C onder de gewenste temperatuur afkoelde terwijl de brander rustte. Comfort gaat voor.",
         "why.short_burns": "Elke keer branden duurt nu minstens {to}, omdat {figure} keer branden gisteren heel kort was. Langer branden is beter voor de ketel.",
         "why.boiler_cycling": "De ketel schakelt zelf aan en uit ({figure} keer gisteren); langere pauzes zouden de warmte alleen vertragen, dus dit is nu weer {to}.",
-        "why.overshoot": "{subject} werd {figure} °C warmer dan gewenst; de thermostaat stopt nu iets eerder met verwarmen.",
-        "why.overshoot_gain": "{subject} werd nog steeds {figure} °C warmer dan gewenst; de thermostaat verwarmt nu iets rustiger.",
-        "why.settled": "{room} wordt bijna niet meer te warm ({figure} °C); de thermostaat stopt weer iets later met verwarmen, zodat de brander minder vaak start.",
+        "why.overshoot": "{subject} werd {figure} °C warmer dan gewenst; de E32 stopt nu iets eerder met verwarmen.",
+        "why.overshoot_gain": "{subject} werd nog steeds {figure} °C warmer dan gewenst; de E32 verwarmt nu iets rustiger.",
+        "why.settled": "{room} wordt bijna niet meer te warm ({figure} °C); de E32 stopt weer iets later met verwarmen, zodat de brander minder vaak start.",
         "why.hovering": "Het verwarmen start nu als een ruimte {to} onder de gewenste temperatuur is, omdat het gisteren {figure} keer startte voor kleine dalingen. Minder starts zijn beter voor de ketel.",
         "why.few_starts": "Het verwarmen start nu weer eerder, bij {to} onder de gewenste temperatuur: met maar {figure} starts gisteren is er ruimte voor meer comfort.",
-        "why.room_response_up": "{room} warmt ongeveer 1 °C op in {figure}; de thermostaat reageert nu iets sterker op een koude ruimte.",
-        "why.room_response_down": "{room} warmt ongeveer 1 °C op in {figure}; de thermostaat reageert nu iets rustiger op een koude ruimte.",
-        "why.learned_warmup": "{room} warmt ongeveer 1 °C op in {figure}; de ochtenden worden daarmee gepland.",
+        "why.room_response_up": "{room} warmt ongeveer 1 °C op in {figure}; de E32 reageert nu iets sterker op een koude ruimte.",
+        "why.room_response_down": "{room} warmt ongeveer 1 °C op in {figure}; de E32 reageert nu iets rustiger op een koude ruimte.",
+        "why.learned_warmup": "{room} warmt ongeveer 1 °C op in {figure}; daar begint de E32 mee tot hij de opwarming van deze ruimte heeft geleerd.",
         "would": "Zou aanpassen: {text}",
-        "state.waiting": "Na een herstart of een wijziging kijkt de thermostaat eerst een hele dag voordat hij iets aanpast.",
+        "state.waiting": "Na een herstart of een wijziging kijkt de E32 eerst een hele dag voordat hij iets aanpast.",
         "state.collecting": "Gisteren werd er te weinig verwarmd om van te leren; de instellingen blijven zoals ze zijn.",
         "state.shadow": "Je huidige thermostaat of de eigen regeling van de ketel is nog de baas, dus de E32 laat alleen zien wat hij zou aanpassen.",
-        "state.active": "De thermostaat past zijn instellingen zelf aan, hooguit één kleine stap per dag.",
+        "state.active": "De E32 past zijn instellingen zelf aan, hooguit één kleine stap per dag.",
         "state.none": "Nog niets aangepast: de beginwaarden passen nog, of er is nog te weinig om op af te gaan.",
         "learned": "Geleerd", "learning": "Aan het leren: {n} van {m} keer opwarmen gezien",
         "learning_seen": "Aan het leren: {n} keer opwarmen gezien; nog nodig: opwarmen op andere dagen of bij een andere watertemperatuur",
@@ -209,7 +233,7 @@ TEXT = {
         "learning_first": "Hij leert van elke keer opwarmen terwijl de verwarming aan staat.",
         "learning_mean": "Tot dan gebruikt hij veilige standaardtijden.",
         "warms": "Warmt ongeveer 1 °C op in {d} met water van {flow} °C.",
-        "warms_mean": "Hiermee plant de thermostaat de start van elke keer opwarmen.",
+        "warms_mean": "Hiermee plant de E32 de start van elke keer opwarmen.",
         "lowest": "De laagste watertemperatuur die nog op tijd opwarmt: {flow} °C.",
         "lowest_mean": "Met koeler water condenseert de ketel beter, dus verbruikt hij minder gas.",
         "cools": "Verliest ongeveer {rate} °C per uur bij {out} °C buiten.",
@@ -236,6 +260,8 @@ TEXT = {
         "arrival": "{when} warm om {time} ({how}).",
         "arrival_earlier": "{when} warm om {time} ({how}); de volgende keer begint het iets eerder.",
         "arrival_later": "{when} warm om {time} ({how}); de volgende keer begint het iets later.",
+        "arrival_earlier_min": "{when} warm om {time} ({how}); de volgende keer begint het ongeveer {n} eerder.",
+        "arrival_later_min": "{when} warm om {time} ({how}); de volgende keer begint het ongeveer {n} later.",
         "arrival_mean": "Hij kijkt elke ochtend of de ruimte op tijd warm was en past zijn opwarmtijd daarop aan.",
         "how_late": "{d} te laat",
         "how_early": "{d} te vroeg",
@@ -267,20 +293,33 @@ TEXT = {
         "curve_off": "De weerafhankelijke regeling staat niet aan; dit is een advies.",
         "burner": "Gisteren startte de brander {n} keer voor verwarmen; hij brandde gemiddeld {d}.",
         "burner_starts": "Gisteren startte de brander {n} keer voor verwarmen.",
-        "burner_often": "Dat is vaak. Minder en langer branden is beter voor de ketel; de thermostaat werkt daaraan.",
+        "burner_often": "Dat is vaak. Minder en langer branden is beter voor de ketel; de E32 werkt daaraan.",
         "burner_mean": "Minder en langer branden is beter voor de ketel en gebruikt gas zuiniger.",
-        "boiler_minimum": "Je ketel begint pas te verwarmen vanaf water van ongeveer {flow} °C; de thermostaat vraagt minstens zoveel.",
+        "boiler_minimum": "Je ketel begint pas te verwarmen vanaf water van ongeveer {flow} °C; de E32 vraagt minstens zoveel.",
         "boiler_minimum_mean": "Dat leerde hij toen de ketel voor koeler water niet aansloeg.",
+        "steady": "Je ketel brandt rustig door vanaf water van ongeveer {flow} °C; de E32 vraagt minstens zoveel.",
+        "steady_off": "Je ketel brandt rustig door vanaf water van ongeveer {flow} °C; met Slim opwarmen aan vraagt de E32 minstens zoveel.",
+        "steady_mean": "Daaronder slaat hij op zijn kleinste vlam steeds af en weer aan. Iets warmer water geeft veel minder branderstarts en kost hooguit een klein beetje rendement.",
         "house_none": "Nog niets: dit verschijnt na de eerste dagen met verwarming.",
         "unavailable": "De E32 heeft nog niet gemeld wat hij geleerd heeft.",
         # rc7: the sentences review (R1, R3).
         "room_subject": "{room}", "your_rooms_subject": "een gemiddelde ruimte",
+        # 1.1.1 stage B (SL-B2): the room's model in shadow, in the E32 House page's words.
+        "model.collecting": "De E32 verzamelt metingen voor een model van {room}.",
+        "model.checking": "De E32 controleert zijn voorspellingen voor {room} ({n} van {m} dagen goed).",
+        "model.trusted": "De E32 vertrouwt zijn model van {room}: warmteverlies {ua} kW per graad, de ruimte heeft ongeveer {h} uur per graad nodig bij water van 50 °C.",
+        "model.trusted_plain": "De E32 vertrouwt zijn model van {room}: warmteverlies {ua} kW per graad.",
+        "model.trusted_bare": "De E32 vertrouwt zijn model van {room}.",
+        "model.demoted": "Het model van {room} voorspelde minder goed; de E32 gebruikt weer zijn laatste goede model en controleert het opnieuw ({n} van {m} dagen goed).",
+        "model_mean": "Voorlopig is dit alleen een controle: er verandert niets aan de verwarming door.",
+        "model_mean_planning": "De E32 plant de verwarming met dit model.",
         "warmup_now_estimate": "Slim opwarmen: verwarmt nu (schatting; hij leert van elke ochtend), zodat het om {time} {target} °C is.",
         "warmup_trial": "Slim opwarmen in de proefperiode: het zou om {start} beginnen, zodat het om {time} {target} °C is.",
         "warmup_trial_now": "Slim opwarmen in de proefperiode: het zou nu verwarmen, zodat het om {time} {target} °C is.",
         "free_heat_later": "Daardoor begint het opwarmen {m} min later dan zonder de gratis warmte.",
         "arrival_not_warm": "{when} niet warm binnen 3 uur na {time}.",
         "arrival_not_warm_earlier": "{when} niet warm binnen 3 uur na {time}; de volgende keer begint het iets eerder.",
+        "arrival_not_warm_earlier_min": "{when} niet warm binnen 3 uur na {time}; de volgende keer begint het ongeveer {n} eerder.",
         "saving_eur_once": "ongeveer {m3} m³ gas ({eur})",
         "saving_once": "ongeveer {m3} m³ gas",
         "night_hold_until": "Tot {time} op {night} °C houden is goedkoper dan laten afkoelen: {saving}.",
@@ -322,19 +361,19 @@ TEXT = {
         "why.cold_during_rest": "Przerwa palnika wynosi teraz {to}, bo {subject} ochłodziło się o {figure} °C poniżej zadanej temperatury, gdy palnik odpoczywał. Komfort jest najważniejszy.",
         "why.short_burns": "Każda praca palnika trwa teraz co najmniej {to}, bo wczoraj {figure} razy pracował bardzo krótko. Dłuższa praca oszczędza kocioł.",
         "why.boiler_cycling": "Kocioł sam włącza się i wyłącza ({figure} razy wczoraj); dłuższe przerwy tylko opóźniłyby ciepło, więc teraz znów jest to {to}.",
-        "why.overshoot": "{subject} nagrzało się o {figure} °C powyżej zadanej temperatury; termostat kończy teraz grzanie nieco wcześniej.",
-        "why.overshoot_gain": "{subject} wciąż nagrzało się o {figure} °C powyżej zadanej temperatury; termostat grzeje teraz nieco łagodniej.",
-        "why.settled": "{room} prawie już się nie przegrzewa ({figure} °C); termostat znów kończy grzanie nieco później, więc palnik rzadziej się uruchamia.",
+        "why.overshoot": "{subject} nagrzało się o {figure} °C powyżej zadanej temperatury; E32 kończy teraz grzanie nieco wcześniej.",
+        "why.overshoot_gain": "{subject} wciąż nagrzało się o {figure} °C powyżej zadanej temperatury; E32 grzeje teraz nieco łagodniej.",
+        "why.settled": "{room} prawie już się nie przegrzewa ({figure} °C); E32 znów kończy grzanie nieco później, więc palnik rzadziej się uruchamia.",
         "why.hovering": "Grzanie zaczyna się teraz, gdy w pomieszczeniu jest o {to} chłodniej niż zadana temperatura, bo wczoraj uruchomiło się {figure} razy przy małych spadkach. Mniej uruchomień oszczędza kocioł.",
         "why.few_starts": "Grzanie zaczyna się znów wcześniej, przy {to} poniżej zadanej temperatury: przy zaledwie {figure} uruchomieniach wczoraj jest miejsce na większy komfort.",
-        "why.room_response_up": "{room} nagrzewa się o około 1 °C w {figure}; termostat reaguje teraz nieco mocniej na zimne pomieszczenie.",
-        "why.room_response_down": "{room} nagrzewa się o około 1 °C w {figure}; termostat reaguje teraz nieco łagodniej na zimne pomieszczenie.",
-        "why.learned_warmup": "{room} nagrzewa się o około 1 °C w {figure}; poranki są planowane według tego.",
+        "why.room_response_up": "{room} nagrzewa się o około 1 °C w {figure}; E32 reaguje teraz nieco mocniej na zimne pomieszczenie.",
+        "why.room_response_down": "{room} nagrzewa się o około 1 °C w {figure}; E32 reaguje teraz nieco łagodniej na zimne pomieszczenie.",
+        "why.learned_warmup": "{room} nagrzewa się o około 1 °C w {figure}; E32 zaczyna od tego, dopóki nie nauczy się nagrzewania tego pomieszczenia.",
         "would": "Zmieniłby: {text}",
-        "state.waiting": "Po ponownym uruchomieniu lub zmianie termostat najpierw obserwuje cały dzień, zanim coś zmieni.",
+        "state.waiting": "Po ponownym uruchomieniu lub zmianie E32 najpierw obserwuje cały dzień, zanim coś zmieni.",
         "state.collecting": "Wczoraj grzano za mało, by się czegoś nauczyć; ustawienia pozostają bez zmian.",
         "state.shadow": "Nadal decyduje Twój obecny termostat lub własna regulacja kotła, więc E32 tylko pokazuje, co by zmienił.",
-        "state.active": "Termostat sam dostosowuje swoje ustawienia, najwyżej o jeden mały krok dziennie.",
+        "state.active": "E32 sam dostosowuje swoje ustawienia, najwyżej o jeden mały krok dziennie.",
         "state.none": "Jeszcze nic nie zmieniono: wartości początkowe nadal pasują albo jest za mało danych.",
         "learned": "Wyuczone", "learning": "Uczy się: widziano {n} z {m} nagrzewań",
         "learning_seen": "Uczy się: widziano {n} nagrzewań; potrzebuje jeszcze nagrzewań w inne dni lub przy innej temperaturze wody",
@@ -343,7 +382,7 @@ TEXT = {
         "learning_first": "Uczy się z każdego nagrzewania, gdy ogrzewanie pracuje.",
         "learning_mean": "Do tego czasu używa bezpiecznych czasów standardowych.",
         "warms": "Nagrzewa się o około 1 °C w {d} przy wodzie o temperaturze {flow} °C.",
-        "warms_mean": "Według tego termostat planuje początek każdego nagrzewania.",
+        "warms_mean": "Według tego E32 planuje początek każdego nagrzewania.",
         "lowest": "Najniższa temperatura wody, która jeszcze nagrzewa na czas: {flow} °C.",
         "lowest_mean": "Chłodniejsza woda pozwala kotłowi lepiej kondensować, więc zużywa mniej gazu.",
         "cools": "Traci około {rate} °C na godzinę przy {out} °C na zewnątrz.",
@@ -370,6 +409,8 @@ TEXT = {
         "arrival": "{when} ciepło o {time} ({how}).",
         "arrival_earlier": "{when} ciepło o {time} ({how}); następnym razem nagrzewanie zacznie się nieco wcześniej.",
         "arrival_later": "{when} ciepło o {time} ({how}); następnym razem nagrzewanie zacznie się nieco później.",
+        "arrival_earlier_min": "{when} ciepło o {time} ({how}); następnym razem nagrzewanie zacznie się około {n} wcześniej.",
+        "arrival_later_min": "{when} ciepło o {time} ({how}); następnym razem nagrzewanie zacznie się około {n} później.",
         "arrival_mean": "Każdego ranka sprawdza, czy pomieszczenie było ciepłe na czas, i dostosowuje czas nagrzewania.",
         "how_late": "{d} za późno",
         "how_early": "{d} za wcześnie",
@@ -401,21 +442,34 @@ TEXT = {
         "curve_off": "Kompensacja pogodowa nie jest włączona; to tylko porada.",
         "burner": "Wczoraj palnik uruchomił się {n} razy do ogrzewania; praca trwała średnio {d}.",
         "burner_starts": "Wczoraj palnik uruchomił się {n} razy do ogrzewania.",
-        "burner_often": "To często. Rzadsza, dłuższa praca oszczędza kocioł; termostat nad tym pracuje.",
+        "burner_often": "To często. Rzadsza, dłuższa praca oszczędza kocioł; E32 nad tym pracuje.",
         "burner_mean": "Rzadsza, dłuższa praca oszczędza kocioł i zużywa gaz wydajniej.",
-        "boiler_minimum": "Twój kocioł zaczyna grzać dopiero od wody o temperaturze około {flow} °C; termostat żąda co najmniej tyle.",
+        "boiler_minimum": "Twój kocioł zaczyna grzać dopiero od wody o temperaturze około {flow} °C; E32 żąda co najmniej tyle.",
         "boiler_minimum_mean": "Nauczył się tego, gdy kocioł nie uruchamiał się przy chłodniejszej wodzie.",
+        "steady": "Twój kocioł pali równo od wody o temperaturze około {flow} °C; E32 żąda co najmniej tyle.",
+        "steady_off": "Twój kocioł pali równo od wody o temperaturze około {flow} °C; przy włączonym Inteligentnym nagrzewaniu E32 żąda co najmniej tyle.",
+        "steady_mean": "Poniżej tego kocioł na najmniejszym płomieniu sam ciągle się wyłącza i włącza. Nieco cieplejsza woda daje znacznie mniej startów palnika i kosztuje co najwyżej odrobinę sprawności.",
         "house_none": "Jeszcze nic: pojawi się po pierwszych dniach ogrzewania.",
         "unavailable": "E32 jeszcze nie przekazał, czego się nauczył.",
         # rc7: the sentences review (R1, R3).
         "room_subject": "pomieszczenie {room}",
         "your_rooms_subject": "przeciętne pomieszczenie",
+        # 1.1.1 stage B (SL-B2): the room's model in shadow (the E32 pages have no Polish: written here).
+        "model.collecting": "E32 zbiera pomiary do modelu pomieszczenia {room}.",
+        "model.checking": "E32 sprawdza swoje prognozy dla pomieszczenia {room} ({n} z {m} dni dobrych).",
+        "model.trusted": "E32 ufa swojemu modelowi pomieszczenia {room}: straty ciepła {ua} kW na stopień, pomieszczenie potrzebuje około {h} godz. na stopień przy wodzie 50 °C.",
+        "model.trusted_plain": "E32 ufa swojemu modelowi pomieszczenia {room}: straty ciepła {ua} kW na stopień.",
+        "model.trusted_bare": "E32 ufa swojemu modelowi pomieszczenia {room}.",
+        "model.demoted": "Model pomieszczenia {room} prognozował gorzej; E32 wrócił do ostatniego dobrego modelu i sprawdza go ponownie ({n} z {m} dni dobrych).",
+        "model_mean": "Na razie to tylko kontrola: nic w ogrzewaniu się przez to nie zmienia.",
+        "model_mean_planning": "E32 planuje ogrzewanie z tym modelem.",
         "warmup_now_estimate": "Inteligentne nagrzewanie: grzeje teraz (szacunek; uczy się z każdego poranka), aby o {time} było {target} °C.",
         "warmup_trial": "Inteligentne nagrzewanie w okresie próbnym: start byłby o {start}, aby o {time} było {target} °C.",
         "warmup_trial_now": "Inteligentne nagrzewanie w okresie próbnym: grzałoby teraz, aby o {time} było {target} °C.",
         "free_heat_later": "Dlatego nagrzewanie zaczyna się {m} min później niż bez darmowego ciepła.",
         "arrival_not_warm": "{when} nie było ciepło w ciągu 3 godz. po {time}.",
         "arrival_not_warm_earlier": "{when} nie było ciepło w ciągu 3 godz. po {time}; następnym razem nagrzewanie zacznie się nieco wcześniej.",
+        "arrival_not_warm_earlier_min": "{when} nie było ciepło w ciągu 3 godz. po {time}; następnym razem nagrzewanie zacznie się około {n} wcześniej.",
         "saving_eur_once": "około {m3} m³ gazu ({eur})",
         "saving_once": "około {m3} m³ gazu",
         "night_hold_until": "Utrzymywanie {night} °C do {time} jest tańsze niż wychładzanie: {saving}.",
@@ -540,6 +594,23 @@ def merge_changes(kept, incoming):
     return merged[:LOG_KEPT]
 
 
+def newest_evaluation(log, tuning=None):
+    """(the newest evaluation's changes, how many of it are missing) from the kept log, newest first.
+
+    One evaluation steps several knobs at one time (one utc). ``tuning``: the E32's tuning; its ``day_changes``
+    (SL-A) says how many that evaluation made when its newest change is the newest kept here.
+    """
+    if not log:
+        return [], 0
+    newest = [change for change in log if change[0] == log[0][0]]
+    tuning = tuning if type(tuning) is dict else {}
+    sent = tuning.get("log") if type(tuning.get("log")) is list else []
+    made = tuning.get("day_changes")
+    same = bool(sent) and type(sent[0]) is list and len(sent[0]) == 7 and sent[0][0] == log[0][0]
+    missing = made - len(newest) if same and type(made) is int and 0 < made <= 64 and made > len(newest) else 0
+    return newest, missing
+
+
 def settings(values, manual, lang):
     """{plain name: "10 min (automatic)"} for the knobs in effect."""
     t, out = TEXT[lang], {}
@@ -609,9 +680,37 @@ def whole_minutes(minutes, lang):
 NOT_WARM_MIN = 180   # ArrivalLearner::Params::windowS: a room not warm within 3 h counts as 3 h late
 LATE_MIN, EARLY_MIN = 10, -15   # ArrivalLearner lateS (600 s) and earlyS (900 s): the factor changes beyond these
 FACTOR_LIMITS = (0.5, 2.0)      # ArrivalLearner minFactor and maxFactor
+STEP_LIMITS = (0.5, 1.5)        # ArrivalLearner minStep and maxStep (E32 SL-A): one morning moves the lead at most so much
+PROPORTIONAL_FROM_MIN = 15      # below this lead (proportionalFromS is 10 min, plus margin) the E32 keeps small steps
+SAME_RISE_S = 3600              # the next rise is the judged one's on a later day when it is this close in clock time
 
 
-def arrival_line(arrival, lang, clock, day=None, today=None):
+def arrival_shift(minutes, start, at):
+    """About how many minutes the next warm-up starts earlier (late) or later (early) after this morning, or None.
+
+    E32 SL-A (ArrivalLearner::resolve): the lead moves in proportion, to the lead that would have been right (lead +
+    error), at most x0.5..x1.5 per morning. The E32 sends the new lead of the next rise (``optimum_start``
+    ``lead_minutes``), not the old one; when that rise is the judged one on a later day (and its warm-up has not
+    started), the move is the error, capped at a third of the new lead when late (x1.5) and at the new lead when
+    early (x0.5). Rounded to 5 minutes; None when
+    the numbers do not tell it (another rise next, a short lead, firmware without them): then "a little".
+    """
+    start = start if type(start) is dict else {}
+    lead, switch = start.get("lead_minutes"), start.get("next_switch")
+    rise = switch.get("utc") if type(switch) is dict else None
+    # While the next warm-up runs its lead shrinks with the room's warming: no longer the lead it planned.
+    if not _ok(lead) or lead < PROPORTIONAL_FROM_MIN or not _ok(rise) or rise <= at or start.get("start_now") is True:
+        return None
+    apart = (rise - at) % 86400
+    if min(apart, 86400 - apart) > SAME_RISE_S or rise - at < 86400 - SAME_RISE_S:
+        return None
+    late = minutes > 0
+    cap = lead * (1 - 1 / STEP_LIMITS[1]) if late else lead * (1 / STEP_LIMITS[0] - 1)
+    shown = int(round(min(abs(minutes), cap) / 5) * 5)
+    return shown if shown >= 5 else None
+
+
+def arrival_line(arrival, lang, clock, day=None, today=None, start=None):
     """(text, meaning) on how the room's last program step up turned out (E32 rc.4), or None.
 
     ``arrival`` (the room's plan): ``last_at_utc`` the program's switch time of the last judged morning,
@@ -619,6 +718,8 @@ def arrival_line(arrival, lang, clock, day=None, today=None):
     warm at last_at_utc + last_error_min, ArrivalLearner::resolve), ``factor`` what the E32 now does
     with the warm-up time (above 1: it starts earlier). clock: utc -> "09:12"; day: utc -> the local
     date; today: the local date now ("Yesterday warm at 09:12 (12 min late); next time it starts a little earlier.").
+    start: the room's ``optimum_start``: with it the E32's numbers may say how much ("about 10 min earlier",
+    arrival_shift).
 
     What changes next time follows from this morning alone, with the E32's own thresholds (more than 10 min late:
     earlier; more than 15 min early: later; not beyond its limits), not from the factor, which is the product of
@@ -643,14 +744,17 @@ def arrival_line(arrival, lang, clock, day=None, today=None):
     factor = factor if _ok(factor) else None
     earlier = minutes >= LATE_MIN and (factor is None or factor < FACTOR_LIMITS[1] - 1e-3)
     later = minutes <= EARLY_MIN and (factor is None or factor > FACTOR_LIMITS[0] + 1e-3)
+    shift = arrival_shift(min(minutes, NOT_WARM_MIN), start, at) if earlier or later else None
+    n = whole_minutes(shift, lang) if shift is not None else None
     if minutes >= NOT_WARM_MIN:
-        key = "arrival_not_warm_earlier" if earlier else "arrival_not_warm"
-        return t[key].format(when=when, time=clock(at)), t["arrival_mean"]
+        key = ("arrival_not_warm_earlier_min" if n else "arrival_not_warm_earlier") if earlier else "arrival_not_warm"
+        return t[key].format(when=when, time=clock(at), n=n), t["arrival_mean"]
     how = (t["how_late"].format(d=whole_minutes(minutes, lang)) if minutes > 0
            else t["how_early"].format(d=whole_minutes(-minutes, lang)) if minutes < 0 else t["how_on_time"])
     key = "arrival_earlier" if earlier else "arrival_later" if later else "arrival"
+    key += "_min" if n and key != "arrival" else ""
     # The moment the room was warm: the switch time plus the error (the E32's Home page shows the same moment).
-    return t[key].format(when=when, time=clock(at + minutes * 60), how=how), t["arrival_mean"]
+    return t[key].format(when=when, time=clock(at + minutes * 60), how=how, n=n), t["arrival_mean"]
 
 
 FREE_HEAT_DAYPARTS = 6        # FreeHeat: six local dayparts of 4 hours from midnight
@@ -745,20 +849,73 @@ def money(value, lang, currency=None):
     return f"{sign} {amount}" if lang == "nl" else f"{sign}{amount}"
 
 
+MODEL_STATES = ("collecting", "checking", "trusted", "demoted")
+MODEL_EMITTERS = ("floor", "radiator", "mixed")
+
+
+def room_model(learned):
+    """The room's model (``model`` of fw/telemetry/learned/<id>, 1.1.1 stage B, control/RoomModels.h), checked, or None
+    on firmware without it. Each figure is None while the E32 does not know it (it leaves the key out then)."""
+    model = learned.get("model") if type(learned) is dict else None
+    if type(model) is not dict or model.get("state") not in MODEL_STATES:
+        return None
+
+    def figure(key, low, high):
+        value = model.get(key)
+        return value if _ok(value) and low <= value <= high else None
+    good, need = figure("good_days", 0, 365), figure("of", 1, 365)
+    emitter = model.get("type") if model.get("type") in MODEL_EMITTERS else None
+    return {"state": model["state"], "good_days": int(good) if good is not None else None,
+            "of": int(need) if need is not None else None,
+            "why": model["why"] if type(model.get("why")) is str and len(model["why"]) <= 24 else None,
+            "error_3h_c": figure("err_3h", 0, 20), "error_6h_c": figure("err_6h", 0, 20),
+            "emitter": emitter, "emitter_from": model.get("type_from") if model.get("type_from") == "floor_rejected" else None,
+            "heat_loss_kw_per_c": figure("ua", 0, 5), "time_constant_h": figure("tau_h", 0, 2000),
+            "lag_min": figure("lag_min", 0, 600), "hours_per_degree": figure("h_per_k", 0, 200),
+            "resting": model.get("resting") is True}
+
+
+def model_line(name, learned, lang, planning=False):
+    """(text, meaning) on how far the E32 is with its model of the room, or None (firmware without the models)."""
+    model = room_model(learned)
+    if model is None:
+        return None
+    t = TEXT[lang]
+    state = model["state"]
+    meaning = t["model_mean_planning" if planning and state == "trusted" else "model_mean"]
+    if state == "trusted":
+        if model["heat_loss_kw_per_c"] is None:
+            return t["model.trusted_bare"].format(room=name), meaning
+        values = {"room": name, "ua": number(model["heat_loss_kw_per_c"], lang, 2)}
+        if model["hours_per_degree"] is not None:
+            return t["model.trusted"].format(h=number(model["hours_per_degree"], lang, 1), **values), meaning
+        return t["model.trusted_plain"].format(**values), meaning
+    if state in ("checking", "demoted"):
+        n, m = model["good_days"], model["of"]
+        if n is None or m is None:
+            return t["model.collecting"].format(room=name), meaning
+        return t["model." + state].format(room=name, n=n, m=m), meaning
+    return t["model.collecting"].format(room=name), meaning
+
+
 def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=None, room_id=None, comfort=None,
-                  trial=False, currency=None, now=None):
+                  trial=False, currency=None, now=None, planning=False):
     """{name, room_id, progress, summary, lines: [{text, meaning}]} of one room; clock: utc -> "07:10" in local time.
 
     day: utc -> the local date, today: the local date now (for "Yesterday warm at 09:12", arrival_line).
     comfort: the room's ``comfort`` (its mode: away or an open window holds the program, so no Smart warm-up line);
     trial: the trial run; currency: Home Assistant's (the night advice's money); summary: once learned, how fast it
-    warms in a few words (the Learning tab's progress list).
+    warms in a few words (the Learning tab's progress list); planning: the E32 plans the heating (heating_plan.py);
+    model: the model line's text (None on firmware without the room models).
     """
     t = TEXT[lang]
     learned = learned if type(learned) is dict else {}
     ready = learned.get("readiness") == "ready"
     seen = min(WARMUPS_TO_LEARN, learned["segments"]) if _ok(learned.get("segments")) else 0
     lines = []
+    model = model_line(name, learned, lang, planning)
+    if model is not None:  # 1.1.1 stage B: what the E32's model of the room says first
+        lines.append(_line(*model))
     if not ready and learned.get("readiness_timing") == "ready":  # E32 rc.4: the warm-up time from one water temperature
         lines.append(_line(t["timing_learned"], t["timing_learned_mean"]))
     elif not ready:
@@ -789,7 +946,7 @@ def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=
     # E32 rc.5: sun, cooking and people, after the Smart warm-up line, which names the later start it gives.
     if (free := free_heat_line(learned, plan, lang, False if held else smart, warm is not None)) is not None:
         lines.append(_line(*free))
-    if (arrived := arrival_line(plan.get("arrival"), lang, clock, day, today)) is not None:
+    if (arrived := arrival_line(plan.get("arrival"), lang, clock, day, today, start)) is not None:
         lines.append(_line(*arrived))
     night = plan.get("night") if type(plan.get("night")) is dict else {}
     if night.get("reason") == "estimated" and type(night.get("recommended")) is str:
@@ -818,7 +975,8 @@ def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=
         progress = t["learning_seen"].format(n=learned["segments"])
     else:
         progress = t["learning"].format(n=seen, m=WARMUPS_TO_LEARN)
-    return {"name": name, "room_id": room_id, "progress": progress, "summary": summary, "lines": lines}
+    return {"name": name, "room_id": room_id, "progress": progress, "summary": summary, "lines": lines,
+            "model": model[0] if model is not None else None}
 
 
 def boiler_minimum_flow(summary):
@@ -830,6 +988,32 @@ def boiler_minimum_flow(summary):
     learned = summary.get("learned") if type(summary) is dict and type(summary.get("learned")) is dict else {}
     value = learned.get("boiler_minimum_flow_c")
     return value if _ok(value) and 20 <= value <= 90 else None
+
+
+def steady_burn(summary):
+    """The boiler's learned steady-burn floor (``boiler.steady`` of fw/telemetry/flow, E32 SL-A, control/SteadyBurn.h),
+    checked, or None on firmware without it.
+
+    {"floor_c": the lowest water temperature at which the boiler keeps burning for the rooms' highest target (None
+    while not learned), "applied": whether the E32 asks at least that (Smart warm-up on, the E32 driving the boiler),
+    "least_pct": the boiler's least output (p10 of its burns), "cycling": self-cycling seen in an E32 request,
+    "points": up to three [{"flow_c", "stops_per_hour", "hours_asked"}] of its starts table (the lowest and highest
+    band with evidence and the floor's band)}.
+    """
+    boiler = summary.get("boiler") if type(summary) is dict else None
+    steady = boiler.get("steady") if type(boiler) is dict else None
+    if type(steady) is not dict:
+        return None
+    floor, least = steady.get("floor_c"), steady.get("least_pct")
+    points = []
+    for point in steady.get("points") if type(steady.get("points")) is list else []:
+        if (type(point) is list and len(point) == 3 and all(_ok(v) for v in point) and 10 <= point[0] <= 90
+                and 0 <= point[1] <= 600 and 0 <= point[2] <= 1e5):
+            points.append({"flow_c": point[0], "stops_per_hour": point[1], "hours_asked": point[2]})
+    floor = floor if _ok(floor) and 20 <= floor <= 90 else None
+    return {"floor_c": floor, "applied": steady.get("applied") is True and floor is not None,
+            "least_pct": least if _ok(least) and 0 <= least <= 100 else None,
+            "cycling": steady.get("cycling") is True, "points": points[:3]}
 
 
 CURVE_STEPS = 6  # CurveLearner::Params::minWindows: steady 3-hour periods before the learned curve is used
@@ -909,6 +1093,11 @@ def house_overview(summary, lang, options=None):
     lowest = boiler_minimum_flow(summary)
     if lowest is not None:
         lines.append(_line(t["boiler_minimum"].format(flow=number(lowest, lang, 0)), t["boiler_minimum_mean"]))
+    # E32 SL-A: the learned steady-burn floor, in the E32 page's words (house.html, "House and boiler").
+    steady = steady_burn(summary)
+    if steady is not None and steady["floor_c"] is not None:
+        lines.append(_line(t["steady" if steady["applied"] else "steady_off"].format(flow=number(steady["floor_c"], lang, 0)),
+                           t["steady_mean"]))
     return lines or [_line(t["house_none"], None)]
 
 
@@ -933,14 +1122,16 @@ class LearnedStoredData(ExtraStoredData):
 
 
 class LearnedOverviewSensor(RestoreEntity, SensorEntity):
-    """What the thermostat learned: state = the newest change (or what it does); the overview as attributes."""
+    """What the E32 learned: state = the newest change (or what it does); the overview as attributes."""
 
     _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_translation_key = "learned_overview"
     _attr_icon = "mdi:school-outline"
     # The texts are shown, not kept in the history.
-    _unrecorded_attributes = frozenset({"rooms", "house", "changes", "settings", "explanation", "insights", "free_heat"})
+    # steady_burn: its starts table grows every few minutes (the floor and the least output are recorded).
+    _unrecorded_attributes = frozenset({"rooms", "house", "changes", "settings", "explanation", "insights", "free_heat",
+                                        "steady_burn", "latest_changes", "latest_more"})
 
     def __init__(self, entry, hub, clock=None):
         self.entry, self.hub = entry, hub
@@ -1007,20 +1198,26 @@ class LearnedOverviewSensor(RestoreEntity, SensorEntity):
             text = change_text(change[1:], names, lang)
             if text:
                 changes.append({"time": datetime.fromtimestamp(change[0], timezone.utc).isoformat(timespec="seconds"), "text": text})
+        newest, more = newest_evaluation(self.log, tuning)
+        latest = [text for text in (change_text(change[1:], names, lang) for change in newest) if text]
         from .e32_flow import smart_warm_up
         smart = smart_warm_up(self.hass, self.entry.entry_id) if getattr(self, "hass", None) is not None else None
         day, today = local_day(self.hass) if getattr(self, "hass", None) is not None and self._clock is None else (None, None)
         active = [(room_id, name) for room_id, name in names.items() if self.hub.rooms[room_id].get("state") != "inactive"]
         trial = trial_run(self.hub.status)  # the trial run or a takeover not confirmed yet: the E32 heats nothing early
         currency = getattr(getattr(getattr(self, "hass", None), "config", None), "currency", None)
+        from .heating_plan import plan_state
+        planning = plan_state(self.hub) == "planning"
         rooms = [room_overview(name, self.hub.learned.get(room_id), self.hub.warmup.get(room_id), lang, clock, smart,
-                               day, today, room_id, self.hub.rooms[room_id].get("comfort"), trial, currency)
+                               day, today, room_id, self.hub.rooms[room_id].get("comfort"), trial, currency,
+                               planning=planning)
                  for room_id, name in active]
         manual = tuning.get("manual") if type(tuning.get("manual")) is list else []
         from .insight import insight_lines  # E32 rc.5: yesterday against the house's own usual days
         attributes = {"explanation": t.get("state." + str(tuning.get("state")), "") if tuning else t["unavailable"],
                       "rooms": rooms, "house": house_overview(self.hub.summary, lang, self._flow_options()),
                       "changes": changes or [{"time": None, "text": t["state.none"]}],
+                      "latest_changes": latest, "latest_more": more,
                       "settings": settings(tuning.get("values"), manual, lang),
                       "insights": insight_lines(self.hub.summary, names, lang),
                       "free_heat": free_heat_lines([(name, self.hub.learned.get(room_id), self.hub.warmup.get(room_id))
@@ -1028,6 +1225,13 @@ class LearnedOverviewSensor(RestoreEntity, SensorEntity):
         lowest = boiler_minimum_flow(self.hub.summary)
         if lowest is not None:  # only once learned
             attributes["boiler_minimum_flow_c"] = lowest
+        steady = steady_burn(self.hub.summary)
+        if steady is not None:  # E32 SL-A: the steady-burn floor (recorded) and the starts table it comes from
+            if steady["floor_c"] is not None:
+                attributes["steady_burn_floor_c"] = steady["floor_c"]
+            if steady["least_pct"] is not None:
+                attributes["boiler_least_output_pct"] = steady["least_pct"]
+            attributes["steady_burn"] = {key: steady[key] for key in ("applied", "cycling", "points")}
         return attributes
 
     @property

@@ -415,32 +415,32 @@ TEXT = {
     "en": {
         "rules": {
             "short_cycling": {
-                "title": "The boiler switches on and off too often",
+                "title": "The burner switches on and off too often",
                 "observed": "The burner started up to {starts} times per hour for heating, for {hours} h "
                             "(the E32 counts the starts it hears from the boiler).",
                 "observed@flagonly": "The E32 saw the burner switch on and off too often for {hours} h.",
                 "observed+mbp": " Burner rest between starts (boiler setting): {mbp} min.",
                 "observed+hyst": " Switching margins (hysteresis): on {hyst_on} K, off {hyst_off} K.",
-                "observed+maxch": " Maximum heating temperature of the boiler: {max_ch} °C.",
+                "observed+maxch": " Boiler maximum: {max_ch} °C.",
                 "why": "Every start costs extra gas (purging and warming up), wears the ignition and fan, "
                        "and makes the room temperature less steady.",
-                "action": "Let the burner rest longer between starts: raise the boiler's minimum burner period (anti-cycling time) to, for example, "
-                          "{mbp_target} min. Also consider lowering the maximum heating temperature on your "
-                          "boiler, so it reaches its switch-off point less quickly.",
-                "action@mbpmax": "The burner already rests long between starts (minimum burner period); consider lowering the maximum heating "
-                                 "temperature on your boiler, so it reaches its switch-off point less quickly.",
+                "action": "Let the burner rest longer between starts: raise the boiler's burner rest between starts to, for example, "
+                          "{mbp_target} min. Also consider lowering the boiler maximum, "
+                          "so the boiler reaches its switch-off point less quickly.",
+                "action@mbpmax": "The burner already rests long between starts; consider lowering the boiler "
+                                 "maximum, so the boiler reaches its switch-off point less quickly.",
                 "action+hyst": " A wider switching margin (hysteresis, about 2 K more) also reduces the starts.",
-                "where": "Boiler service menu (installer level). The maximum heating temperature: on many "
+                "where": "Boiler service menu (installer level). The boiler maximum: on many "
                          "models a knob, on others the boiler menu or its app.",
             },
             "max_ch_high": {
-                "title": "The boiler's maximum heating temperature is higher than needed",
-                "observed": "The boiler's maximum heating temperature is {max_ch} °C, but over the last {days} days with "
+                "title": "The boiler maximum is higher than needed",
+                "observed": "The boiler maximum is {max_ch} °C, but over the last {days} days with "
                             "heating the highest water temperature asked of the boiler (thermostat and E32) was {peak} °C.",
                 "why": "A lower maximum keeps the return water cooler, so the boiler condenses more (less gas), "
                        "and it limits overshoot and cycling. Floor heating usually has its own valve that limits "
                        "its water to about 50 °C, so a higher boiler maximum only serves the radiators.",
-                "action": "Lower the maximum heating temperature on your boiler to {suggest} °C — on many "
+                "action": "Lower the boiler maximum to {suggest} °C — on many "
                           "models a knob, on others the boiler menu or its app. The E32 never asks for more than "
                           "this maximum. If a room no longer gets warm on cold days, raise it again by 5 °C.",
                 "where": "On the boiler: on many models a knob, on others the boiler menu or its app.",
@@ -452,8 +452,8 @@ TEXT = {
                 "observed+flow": " The water going out (flow) was typically {flow} °C.",
                 "why": "A condensing boiler only condenses (recovers the heat in its flue gas, about 10% more "
                        "efficient) when the return water stays below about 55 °C.",
-                "action": "Lower the water temperature to the heating: the maximum heating temperature or weather compensation on "
-                          "your boiler, or the E32's highest water temperature. If the water going out and coming back "
+                "action": "Lower the water temperature to the heating: the boiler maximum or the weather compensation on "
+                          "the boiler, or the E32's highest water temperature. If the water going out and coming back "
                           "are close together, a lower pump speed makes the returning water cooler.",
                 "where": "On the boiler: on many models a knob, on others the boiler menu or its app. Home Assistant: OpenThermostat → Configure → Heating and boiler (or on the E32: Home → Water temperature limits).",
             },
@@ -481,8 +481,8 @@ TEXT = {
                                    "than its room control asks now.",
                 "why": "With water that is too cool the room warms up slowly after a cooler period, so it reaches its comfort "
                        "temperature too late.",
-                "action": "Check that the E32's highest water temperature and the maximum heating temperature on "
-                          "your boiler allow {need} °C, or start heating earlier in the week program.",
+                "action": "Check that the E32's highest water temperature and the boiler maximum "
+                          "allow {need} °C, or start heating earlier in the week program.",
                 "action+cap": " The E32's highest water temperature ({max_flow} °C) is below what this room needs.",
                 "where": "Home Assistant: OpenThermostat → Configure → Heating and boiler (or on the E32: Home → Water temperature limits). The week program: Configure → Rooms → Edit or remove a "
                          "room.",
@@ -568,7 +568,7 @@ TEXT = {
                 "observed@gas_meter": "No boiler power is set; {kw} kW is what the E32 measured with your gas meter.",
                 "observed@boiler": "No boiler power is set; {kw} kW is what the boiler itself reports.",
                 "observed@product": "No boiler power is set; {kw} kW is known for this boiler type.",
-                "why": "The flow and night estimates scale with the boiler's power; a wrong power gives wrong "
+                "why": "The water temperature and night estimates scale with the boiler's power; a wrong power gives wrong "
                        "savings.",
                 "action": "Check the nominal heating power on the boiler's type plate and enter it only if it differs.",
                 "where": "Home Assistant: OpenThermostat → Configure → Energy and outdoor temperature.",
@@ -576,7 +576,7 @@ TEXT = {
         },
         "missing": {
             "no_burner_count": "The E32 reports no burner starts yet (needs E32 firmware that counts them).",
-            "no_max_ch": "The boiler does not report its maximum heating temperature.",
+            "no_max_ch": "The boiler does not report the boiler maximum.",
             "few_days": "Needs at least {needed} days with heating; {days} so far.",
             "no_return": "The boiler does not report a return temperature while heating.",
             "few_heating": "Needs at least 1 h of heating with a return temperature.",
@@ -591,33 +591,33 @@ TEXT = {
     "nl": {
         "rules": {
             "short_cycling": {
-                "title": "De ketel slaat te vaak aan en af (pendelen)",
+                "title": "De brander slaat te vaak aan en uit",
                 "observed": "De brander startte tot {starts} keer per uur voor verwarming, {hours} uur lang "
                             "(de E32 telt de starts die hij van de ketel hoort).",
-                "observed@flagonly": "De E32 zag de brander {hours} uur lang te vaak aan- en afslaan.",
+                "observed@flagonly": "De E32 zag de brander {hours} uur lang te vaak aan- en uitgaan.",
                 "observed+mbp": " Rusttijd brander tussen starts (ketelinstelling): {mbp} min.",
                 "observed+hyst": " Schakelmarges (hysterese): aan {hyst_on} K, uit {hyst_off} K.",
-                "observed+maxch": " Maximale cv-temperatuur van de ketel: {max_ch} °C.",
+                "observed+maxch": " Maximum van de ketel: {max_ch} °C.",
                 "why": "Elke start kost extra gas (voorspoelen en opwarmen), slijt de ontsteking en ventilator, "
                        "en maakt de kamertemperatuur onrustiger.",
-                "action": "Laat de brander langer rusten tussen starts: verhoog de anti-pendeltijd (minimale branderperiode) van de ketel, bijvoorbeeld naar "
-                          "{mbp_target} min. Overweeg ook de maximale cv-temperatuur op je ketel te verlagen, zodat "
+                "action": "Laat de brander langer rusten tussen starts: verhoog de rusttijd brander tussen starts op de ketel, bijvoorbeeld naar "
+                          "{mbp_target} min. Overweeg ook het maximum van de ketel te verlagen, zodat "
                           "de ketel minder snel zijn uitschakelpunt bereikt.",
-                "action@mbpmax": "De brander rust al lang tussen starts (anti-pendeltijd); overweeg de maximale cv-temperatuur op je "
+                "action@mbpmax": "De brander rust al lang tussen starts; overweeg het maximum van de "
                                  "ketel te verlagen, zodat de ketel minder snel zijn uitschakelpunt bereikt.",
                 "action+hyst": " Een ruimere schakelmarge (hysterese, ongeveer 2 K meer) vermindert de starts ook.",
-                "where": "Servicemenu van de ketel (installateursniveau). De maximale cv-temperatuur: bij veel "
+                "where": "Servicemenu van de ketel (installateursniveau). Het maximum van de ketel: bij veel "
                          "modellen een draaiknop, bij andere het ketelmenu of de app van de ketel.",
             },
             "max_ch_high": {
-                "title": "Maximale cv-temperatuur van de ketel hoger dan nodig",
-                "observed": "De maximale cv-temperatuur van de ketel staat op {max_ch} °C, maar de afgelopen {days} "
+                "title": "Het maximum van de ketel is hoger dan nodig",
+                "observed": "Het maximum van de ketel staat op {max_ch} °C, maar de afgelopen {days} "
                             "dagen met verwarming was de hoogste watertemperatuur die aan de ketel werd gevraagd (thermostaat en E32) {peak} °C.",
                 "why": "Een lager maximum houdt het retourwater koeler, zodat de ketel meer condenseert (minder "
                        "gas), en beperkt doorschieten en pendelen. Vloerverwarming heeft meestal een eigen klep "
-                       "die het water op ongeveer 50 °C begrenst; een hoger ketelmaximum dient dan alleen de "
+                       "die het water op ongeveer 50 °C begrenst; een hoger maximum van de ketel dient dan alleen de "
                        "radiatoren.",
-                "action": "Verlaag de maximale cv-temperatuur op je ketel naar {suggest} °C — bij veel modellen "
+                "action": "Verlaag het maximum van de ketel naar {suggest} °C — bij veel modellen "
                           "een draaiknop, bij andere het ketelmenu of de app van de ketel. De E32 vraagt nooit meer "
                           "dan dit maximum. Wordt een ruimte op koude dagen niet meer warm, verhoog dan weer met "
                           "5 °C.",
@@ -630,7 +630,7 @@ TEXT = {
                 "observed+flow": " Het water dat de ketel uitging (aanvoer) was meestal {flow} °C.",
                 "why": "Een HR-ketel condenseert alleen (haalt de warmte uit zijn rookgas, ongeveer 10% zuiniger) "
                        "als het retourwater onder ongeveer 55 °C blijft.",
-                "action": "Verlaag de watertemperatuur naar de verwarming: de maximale cv-temperatuur of weerafhankelijke regeling op je ketel, of "
+                "action": "Verlaag de watertemperatuur naar de verwarming: het maximum van de ketel of de weerafhankelijke regeling op de ketel, of "
                           "de hoogste watertemperatuur van de E32. Liggen het uitgaande en terugkomende water dicht bij elkaar, "
                           "dan maakt een lagere pompstand het terugkomende water koeler.",
                 "where": "Op de ketel: bij veel modellen een draaiknop, bij andere het ketelmenu of de app van de ketel. Home Assistant: OpenThermostat → Configureren → Verwarming en ketel (of op de E32: Huis → Grenzen watertemperatuur).",
@@ -642,7 +642,7 @@ TEXT = {
                 "observed@norule": "De E32 heeft geleerd dat water van {need} °C {room} op tijd 1 °C opwarmt, minder "
                                    "dan de ruimteregeling nu vraagt.",
                 "why": "Koeler water naar de verwarming komt koeler terug, zodat de ketel meer condenseert en rustiger "
-                       "brander: minder gas voor hetzelfde comfort.",
+                       "brandt: minder gas voor hetzelfde comfort.",
                 "action": "Nu niets doen. Zodra de E32 de ketel regelt, vraagt hij zelf deze lagere temperatuur. "
                           "Geeft elke ruimte dit advies, dan kun je de hoogste watertemperatuur van de E32 nu al "
                           "ongeveer {lower_by} °C verlagen.",
@@ -659,8 +659,8 @@ TEXT = {
                                    "op te warmen, meer dan de ruimteregeling nu vraagt.",
                 "why": "Met te koel water warmt de ruimte na een koelere periode langzaam op, zodat de "
                        "comforttemperatuur te laat bereikt wordt.",
-                "action": "Controleer of de hoogste watertemperatuur van de E32 en de maximale cv-temperatuur "
-                          "op je ketel {need} °C toelaten, of begin eerder met verwarmen in het weekprogramma.",
+                "action": "Controleer of de hoogste watertemperatuur van de E32 en het maximum van de "
+                          "ketel {need} °C toelaten, of begin eerder met verwarmen in het weekprogramma.",
                 "action+cap": " De hoogste watertemperatuur van de E32 ({max_flow} °C) ligt onder wat deze ruimte nodig "
                               "heeft.",
                 "where": "Home Assistant: OpenThermostat → Configureren → Verwarming en ketel (of op de E32: Huis → Grenzen watertemperatuur). Het weekprogramma: Configureren → Ruimtes → Ruimte "
@@ -688,18 +688,18 @@ TEXT = {
             },
             "dhw_high": {
                 "title": "Warm water heter dan nodig",
-                "observed": "De gekozen warmwatertemperatuur is {dhw} °C.",
+                "observed": "De ingestelde tapwatertemperatuur is {dhw} °C.",
                 "observed+disinfection": " Wekelijkse desinfectie: {disinfection} °C.",
                 "why": "Elke graad boven ongeveer 55 °C kost gas om het water warm te houden, geeft meer kalk en "
                        "een groter risico op verbranden.",
-                "action": "Zet de warmwatertemperatuur op {suggest} °C. Laat bij een warmwaterboiler de wekelijkse "
+                "action": "Zet de ingestelde tapwatertemperatuur op {suggest} °C. Laat bij een warmwaterboiler de wekelijkse "
                           "desinfectie (thermische legionellabescherming) van de ketel aan staan.",
                 "where": "Ketelscherm (warmwatertemperatuur), of de warmwaterinstelling van een thermostaat "
                          "die hem instelt, als je die hebt.",
             },
             "dhw_low": {
                 "title": "Warm water onder 50 °C",
-                "observed": "De gekozen warmwatertemperatuur is {dhw} °C.",
+                "observed": "De ingestelde tapwatertemperatuur is {dhw} °C.",
                 "observed+disinfection": " Wekelijkse desinfectie: {disinfection} °C.",
                 "why": "Legionellabacteriën kunnen groeien in stilstaand water tussen ongeveer 25 en 50 °C. Bij een "
                        "combiketel zonder voorraadvat is het risico klein; met een warmwaterboiler telt het wel.",
@@ -750,7 +750,7 @@ TEXT = {
                 "observed@gas_meter": "Er is geen ketelvermogen ingesteld; {kw} kW heeft de E32 gemeten met je gasmeter.",
                 "observed@boiler": "Er is geen ketelvermogen ingesteld; {kw} kW meldt de ketel zelf.",
                 "observed@product": "Er is geen ketelvermogen ingesteld; {kw} kW is bekend voor dit keteltype.",
-                "why": "De aanvoer- en nachtschattingen schalen met het ketelvermogen; een verkeerd vermogen geeft "
+                "why": "De schattingen van de watertemperatuur en de nacht schalen met het ketelvermogen; een verkeerd vermogen geeft "
                        "een verkeerde besparing.",
                 "action": "Kijk het nominale verwarmingsvermogen na op het typeplaatje van de ketel en vul het alleen "
                           "in als het afwijkt.",
@@ -759,7 +759,7 @@ TEXT = {
         },
         "missing": {
             "no_burner_count": "De E32 meldt nog geen branderstarts (vereist E32-firmware die ze telt).",
-            "no_max_ch": "De ketel meldt zijn maximale cv-temperatuur niet.",
+            "no_max_ch": "De ketel meldt zijn maximum niet.",
             "few_days": "Vereist minstens {needed} dagen met verwarming; tot nu toe {days}.",
             "no_return": "De ketel meldt geen retourtemperatuur tijdens verwarmen.",
             "few_heating": "Vereist minstens 1 uur verwarmen met een retourtemperatuur.",
@@ -775,33 +775,33 @@ TEXT = {
     "pl": {
         "rules": {
             "short_cycling": {
-                "title": "Kocioł zbyt często się włącza i wyłącza",
+                "title": "Palnik zbyt często się włącza",
                 "observed": "Palnik uruchamiał się do ogrzewania nawet {starts} razy na godzinę, przez {hours} godz. "
                             "(E32 liczy starty, które słyszy z kotła).",
                 "observed@flagonly": "E32 widział, że palnik zbyt często się włączał i wyłączał przez {hours} godz.",
                 "observed+mbp": " Przerwa palnika między startami (ustawienie kotła): {mbp} min.",
                 "observed+hyst": " Marginesy przełączania (histereza): włączenie {hyst_on} K, wyłączenie {hyst_off} K.",
-                "observed+maxch": " Maksymalna temperatura c.o. kotła: {max_ch} °C.",
+                "observed+maxch": " Maksimum kotła: {max_ch} °C.",
                 "why": "Każdy start kosztuje dodatkowy gaz (przedmuch i rozgrzewanie), zużywa zapłon i wentylator "
                        "oraz sprawia, że temperatura w pomieszczeniu jest mniej stabilna.",
-                "action": "Niech palnik dłużej odpoczywa między startami: zwiększ w kotle minimalny czas przerwy "
-                          "palnika (blokadę taktowania), na przykład do {mbp_target} min. Rozważ też obniżenie "
-                          "maksymalnej temperatury c.o. w kotle, aby wolniej dochodził do punktu wyłączenia.",
-                "action@mbpmax": "Palnik już długo odpoczywa między startami (minimalny czas przerwy); rozważ obniżenie "
-                                 "maksymalnej temperatury c.o. w kotle, aby wolniej dochodził do punktu wyłączenia.",
+                "action": "Niech palnik dłużej odpoczywa między startami: zwiększ w kotle przerwę "
+                          "palnika między startami, na przykład do {mbp_target} min. Rozważ też obniżenie "
+                          "maksimum kotła, aby wolniej dochodził do punktu wyłączenia.",
+                "action@mbpmax": "Palnik już długo odpoczywa między startami; rozważ obniżenie "
+                                 "maksimum kotła, aby wolniej dochodził do punktu wyłączenia.",
                 "action+hyst": " Szerszy margines przełączania (histereza, o około 2 K więcej) też zmniejsza liczbę startów.",
-                "where": "Menu serwisowe kotła (poziom instalatora). Maksymalna temperatura c.o.: w wielu modelach "
+                "where": "Menu serwisowe kotła (poziom instalatora). Maksimum kotła: w wielu modelach "
                          "pokrętło, w innych menu kotła lub jego aplikacja.",
             },
             "max_ch_high": {
-                "title": "Maksymalna temperatura c.o. kotła jest wyższa, niż trzeba",
-                "observed": "Maksymalna temperatura c.o. kotła wynosi {max_ch} °C, ale w ciągu ostatnich {days} dni "
+                "title": "Maksimum kotła jest wyższe, niż trzeba",
+                "observed": "Maksimum kotła wynosi {max_ch} °C, ale w ciągu ostatnich {days} dni "
                             "z ogrzewaniem najwyższa temperatura wody żądana od kotła (termostat i E32) wynosiła {peak} °C.",
                 "why": "Niższe maksimum utrzymuje chłodniejszą wodę powrotną, więc kocioł lepiej kondensuje (mniej "
                        "gazu), i ogranicza przegrzewanie oraz taktowanie. Ogrzewanie podłogowe ma zwykle własny "
                        "zawór, który ogranicza jego wodę do około 50 °C, więc wyższe maksimum kotła służy tylko "
                        "grzejnikom.",
-                "action": "Obniż maksymalną temperaturę c.o. w kotle do {suggest} °C — w wielu modelach pokrętłem, "
+                "action": "Obniż maksimum kotła do {suggest} °C — w wielu modelach pokrętłem, "
                           "w innych w menu kotła lub w jego aplikacji. E32 nigdy nie żąda więcej niż to maksimum. "
                           "Jeśli w zimne dni jakieś pomieszczenie przestanie się nagrzewać, podnieś je znów o 5 °C.",
                 "where": "Na kotle: w wielu modelach pokrętło, w innych menu kotła lub jego aplikacja.",
@@ -813,7 +813,7 @@ TEXT = {
                 "observed+flow": " Woda wychodząca (zasilanie) miała zwykle {flow} °C.",
                 "why": "Kocioł kondensacyjny kondensuje (odzyskuje ciepło ze spalin, około 10% wyższa sprawność) "
                        "tylko wtedy, gdy woda powrotna pozostaje poniżej około 55 °C.",
-                "action": "Obniż temperaturę wody do ogrzewania: maksymalną temperaturę c.o. lub kompensację pogodową "
+                "action": "Obniż temperaturę wody do ogrzewania: maksimum kotła lub kompensację pogodową "
                           "w kotle albo najwyższą temperaturę wody w E32. Jeśli woda wychodząca i wracająca mają "
                           "zbliżone temperatury, niższa prędkość pompy sprawi, że woda powrotna będzie chłodniejsza.",
                 "where": "Na kotle: w wielu modelach pokrętło, w innych menu kotła lub jego aplikacja. Home Assistant: "
@@ -844,7 +844,7 @@ TEXT = {
                                    "aby nagrzać się o 1 °C na czas, więcej, niż regulacja pokojowa żąda teraz.",
                 "why": "Przy zbyt chłodnej wodzie pomieszczenie po chłodniejszym okresie nagrzewa się powoli, więc "
                        "osiąga temperaturę komfortu za późno.",
-                "action": "Sprawdź, czy najwyższa temperatura wody w E32 i maksymalna temperatura c.o. w kotle "
+                "action": "Sprawdź, czy najwyższa temperatura wody w E32 i maksimum kotła "
                           "pozwalają na {need} °C, albo zacznij grzać wcześniej w programie tygodniowym.",
                 "action+cap": " Najwyższa temperatura wody w E32 ({max_flow} °C) jest niższa, niż potrzebuje to "
                               "pomieszczenie.",
@@ -943,7 +943,7 @@ TEXT = {
         },
         "missing": {
             "no_burner_count": "E32 nie zgłasza jeszcze startów palnika (wymaga oprogramowania E32, które je liczy).",
-            "no_max_ch": "Kocioł nie zgłasza swojej maksymalnej temperatury c.o.",
+            "no_max_ch": "Kocioł nie zgłasza swojego maksimum.",
             "few_days": "Wymaga co najmniej {needed} dni z ogrzewaniem; dotąd {days}.",
             "no_return": "Kocioł nie zgłasza temperatury powrotu podczas grzania.",
             "few_heating": "Wymaga co najmniej 1 godz. grzania z temperaturą powrotu.",
@@ -1261,7 +1261,13 @@ class HeatingAdviceSensor(RestoreEntity, SensorEntity):
         use = hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {}).get("energy_use") if hass is not None else None
         records = use.data["days"] if use is not None else {}
         options = energy_options(self.entry)
-        return weekly_summary(records, self._today(self.clock()), titles, lang,
+        # The missed comfort the E32 counted itself, per day (daily_summary.py; older firmware: none).
+        from .daily_summary import comfort_of
+        daily = hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {}).get("daily_summary") if hass is not None else None
+        comfort = {key: value[0] for key, value in ((key, comfort_of(day)) for key, day in
+                                                     (daily.data["days"].items() if daily is not None else ()))
+                   if value is not None}
+        return weekly_summary(records, self._today(self.clock()), titles, lang, comfort=comfort,
                               unit=use.unit if use is not None else "m³",
                               rough=use is not None and not use.power()[1],
                               price=gas_price(hass, options) if hass is not None else None,

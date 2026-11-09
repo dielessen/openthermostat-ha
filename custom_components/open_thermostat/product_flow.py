@@ -262,9 +262,10 @@ from .options_house_heating import HouseHeatingSteps  # noqa: E402
 from .options_navigation import MenuNavigation  # noqa: E402
 from .e32_shelly import CircuitOptionsSteps  # noqa: E402
 from .e32_tester import TesterSteps  # noqa: E402
+from .notifications_flow import NotificationOptionsSteps  # noqa: E402
 
 
-class ProductOptionsFlow(MenuNavigation, HouseHeatingSteps, CircuitOptionsSteps, TesterSteps, E32RestoreSteps, CareOptionsSteps, SystemOptionsSteps, BoilerModelSteps, BoilerSettingsSteps, BluetoothOptionsSteps, ComfortOptionsSteps, E32RoomFlow, LegacyRoomsSteps, ControllerSetupFlow, ShadowOptionsFlow,
+class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingSteps, CircuitOptionsSteps, TesterSteps, E32RestoreSteps, CareOptionsSteps, SystemOptionsSteps, BoilerModelSteps, BoilerSettingsSteps, BluetoothOptionsSteps, ComfortOptionsSteps, E32RoomFlow, LegacyRoomsSteps, ControllerSetupFlow, ShadowOptionsFlow,
                          ProductRoomFlow):
     """One central options entrypoint, using the same room editor and native Store.
 
@@ -296,7 +297,8 @@ class ProductOptionsFlow(MenuNavigation, HouseHeatingSteps, CircuitOptionsSteps,
         from .e32_flow import KEY
         link = (self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id) or {}).get(KEY)
         # Offered once the E32 device page has the two controls (the link exists from the platform setup on).
-        flow = ["heating_warm_up", "heating_weather"] if link is not None and not link.unsupported else []
+        # One row for both switches (1.1.1, V12-31); heating_warm_up and heating_weather stay as steps.
+        flow = ["heating_flow"] if link is not None and not link.unsupported else []
         care = ["comfort_care"] if care_offered(self.hass, self.config_entry) else []
         settings = ["boiler_settings"] if boiler_settings_offered(self.hass, self.config_entry) else []
         circuits = ["heating_circuits"] if circuits_offered(self.hass, self.config_entry) else []
@@ -583,9 +585,9 @@ class ProductOptionsFlow(MenuNavigation, HouseHeatingSteps, CircuitOptionsSteps,
         from .room_plan import uses_e32_rooms
         entry = self.config_entry
         e32 = uses_e32_rooms(entry)
-        # "Installation status" counts and checks the older Home Assistant rooms only:
-        # with the E32 room plan it is shown while such rooms are left.
-        options = ["general"]
+        # Dashboard and name are on the main menu for an E32 room plan (1.1.1, Q6). "Installation status" counts
+        # and checks the older Home Assistant rooms only: with the E32 room plan it is shown while such rooms are left.
+        options = [] if e32 else ["general"]
         if not e32 or legacy_zones(entry):
             options.append("configuration_status")
         if e32 and legacy_zones(entry):
@@ -671,15 +673,17 @@ def main_menu(entry):
     """Configure's top level, in the order a user needs it, without duplicates.
 
     E32 room plan (connected): Rooms, House, Heating and boiler, Energy and outdoor temperature,
-    E32 connection, Advanced and diagnostics (dashboard and name are in Advanced). A new installation whose
-    E32 is not connected yet starts with E32 connection (rooms and heating need it).
+    Notifications, E32 connection, Dashboard and name, Advanced and diagnostics (1.1.1, the owner's Q6: Dashboard
+    and name on the main menu, its last row before Advanced). A new installation whose E32 is not connected yet
+    starts with E32 connection (rooms and heating need it).
     Older installations on the Home Assistant room route keep their menu.
     """
     from .room_plan import has_room_plan, uses_e32_rooms
     if has_room_plan(entry):
-        return ["e32_rooms", "house", "heating_boiler", "energy", "controller_connection", "advanced_settings"]
+        return ["e32_rooms", "house", "heating_boiler", "energy", "notifications", "controller_connection",
+                "general", "advanced_settings"]
     if uses_e32_rooms(entry):
-        return ["controller_connection", "energy", "advanced_settings"]
+        return ["controller_connection", "energy", "general", "advanced_settings"]
     return ["room_settings", "controller_connection", "energy", "installation", "advanced_settings"]
 
 

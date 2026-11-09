@@ -207,6 +207,8 @@ class RoomPlanLink:
         self._confirm = None  # the scheduled plan read that confirms a room missing from the plan
         self._seen_revision = None
         self._failed_at = None
+        # R-C-06: the room clean-up or issues after a background read raised; the plan is read again.
+        self._follow_up_failed = False
         # Writes wait for a free E32 web session (only 4; all in use: 429 session_capacity).
         # The newest write per key (one room's override, the house mode) wins; older ones stop.
         self.session_waits = SESSION_WAITS
@@ -281,7 +283,8 @@ class RoomPlanLink:
         if self.hub.status is None or (self._task is not None and not self._task.done()):
             return
         revision = self.hub.revision
-        if self.plan is not None and (revision is None or revision in (self.revision, self._seen_revision)):
+        if (self.plan is not None and not self._follow_up_failed
+                and (revision is None or revision in (self.revision, self._seen_revision))):
             return
         if self.login_rejected or (self._failed_at is not None and self.clock() - self._failed_at < RETRY_SECONDS):
             return
@@ -451,7 +454,13 @@ class RoomPlanLink:
                     self._confirm_later(RETRY_SECONDS)  # a room missing from the plan still waits for its check
             return
         self._failed_at = None
-        self._set(plan)
+        try:
+            self._set(plan)
+        except Exception:  # R-C-06: a background task, nobody retrieves its exception
+            (_LOGGER.debug if self._follow_up_failed else _LOGGER.exception)(
+                "OpenThermostat: the room clean-up after reading the E32 room plan failed; the plan is read "
+                "again in %d s", RETRY_SECONDS)
+            self._failed_at, self._seen_revision, self._follow_up_failed = self.clock(), None, True
 
     async def async_read(self):
         """The plan as the E32 holds it now; a clear error when it cannot be read."""
@@ -482,6 +491,7 @@ class RoomPlanLink:
             # "Choose a temperature source for <room>" goes once the room has a new source.
             from .legacy_room_migration import update_choose_source_issues
             update_choose_source_issues(self.hass, self.entry, plan)
+        self._follow_up_failed = False  # before notify: its listeners may start the next read
         self.hub.notify()
 
     @callback

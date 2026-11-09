@@ -1,0 +1,111 @@
+"""Two Repairs items about what the E32 learned and could not keep (1.1.1, R-E-04).
+
+On 5 November the E32 lost what it learned at a restart, and nothing showed it (R-E-04: the boot's "restored"
+and the save's count were RAM log lines only). The E32 (SL-A, ``LearnedStore::addJson``, TELEMETRIEBUDGET.nl.md
+section 25) now puts a bounded ``learned_store`` part at the top of its summary (``fw/telemetry/summary``)::
+
+    "learned_store": {"restored_rooms": n, "restored_parts": n, "rooms": n | null, "saved_rooms": n | null,
+                      "complete": bool | null, "saves": n, "pending_entries": n, "nvs_free_entries": n | null}
+
+``restored_*`` are the boot's restore; ``rooms``, ``saved_rooms`` and ``complete`` the last save of this boot
+(null before the first one); ``saves`` the saves this boot; ``pending_entries`` what the frames left in RAM would
+need; ``nvs_free_entries`` the free NVS entries (null when unreadable). Firmware without it raises nothing here.
+
+- ``learned_not_saved``: the last save stored fewer rooms than the plan has (``saved_rooms < rooms``): "the E32
+  could not save what it learned for <n> of its <m> rooms; it keeps it in memory until there is room". A save
+  that kept every room but not all the rest (``complete`` false: the house and boiler part) raises
+  ``learned_not_saved_part``. Either goes once a later save is complete.
+- ``learned_lost_at_restart``: right after an E32 restart, the knowledge figure ("Known about your house", the
+  insight's ``knowledge.pct``) is more than LOSS_POINTS below the last figure before it: "the E32 lost part of
+  what it learned at the restart", with both figures. It goes once the figure is back within LOSS_POINTS, or at
+  the next restart that loses nothing. Kept in memory only: Home Assistant has to have seen the figure before the
+  restart (it has, unless Home Assistant itself was off then).
+"""
+from __future__ import annotations
+
+from homeassistant.core import callback
+
+from .const import DOMAIN
+from .issue_sync import clear_issues, sync_issues
+
+GROUP = "learned_store"
+LOSS_POINTS = 30
+COUNTS = ("restored_rooms", "restored_parts", "rooms", "saved_rooms", "saves", "pending_entries", "nvs_free_entries")
+# The largest believable count: rooms (RoomPlan::maxRooms is 8) and saves (uint16) fit; NVS entries of 4 KB pages too.
+COUNT_MAX = 65535
+
+
+def store_status(summary):
+    """The summary's ``learned_store`` with every field checked (an implausible one is None); None without it."""
+    part = summary.get("learned_store") if type(summary) is dict else None
+    if type(part) is not dict:
+        return None
+
+    def count(value):
+        return value if type(value) is int and 0 <= value <= COUNT_MAX else None
+    status = {key: count(part.get(key)) for key in COUNTS}
+    status["complete"] = part.get("complete") if type(part.get("complete")) is bool else None
+    return status
+
+
+def not_saved(status):
+    """("rooms", missing, of) when the last save left rooms out, ("part", 0, of) when it kept every room but not
+    the rest, else None (no save yet this boot, or a complete one)."""
+    if status is None or status["rooms"] is None or status["saved_rooms"] is None:
+        return None
+    rooms, saved = status["rooms"], status["saved_rooms"]
+    if saved < rooms:
+        return "rooms", rooms - saved, rooms
+    if status["complete"] is False:
+        return "part", 0, rooms
+    return None
+
+
+class LearnedStoreWatch:
+    """Follows the hub: the last save and the knowledge figure around each E32 restart."""
+
+    def __init__(self, hass, entry, hub):
+        self.hass, self.entry, self.hub = hass, entry, hub
+        self.boots = getattr(hub, "boots", 0)
+        self.before = None      # the knowledge figure before the latest restart
+        self.last = None        # the latest knowledge figure of this E32 boot
+        self.loss = None        # (before, after) of a restart that lost what it learned
+        self.after_restart = False
+
+    @callback
+    def check(self):
+        from .insight import knowledge
+        summary = getattr(self.hub, "summary", None)
+        boots = getattr(self.hub, "boots", 0)
+        if boots != self.boots:
+            self.boots = boots
+            self.before, self.last, self.after_restart = self.last, None, True
+        figure = (knowledge(summary) or {}).get("pct") if summary is not None else None
+        if figure is not None:
+            if self.after_restart and self.before is not None:
+                self.loss = (self.before, figure) if self.before - figure > LOSS_POINTS else None
+            self.after_restart = False
+            self.last = figure
+            if self.loss is not None and self.loss[0] - figure <= LOSS_POINTS:
+                self.loss = None  # it learned it again
+        wanted = {}
+        missing = not_saved(store_status(summary))
+        if missing is not None and missing[0] == "rooms":
+            wanted["not_saved"] = ("learned_not_saved", {"name": self.entry.title, "missing": missing[1],
+                                                         "of": missing[2]})
+        elif missing is not None:
+            wanted["not_saved"] = ("learned_not_saved_part", {"name": self.entry.title})
+        if self.loss is not None:
+            wanted["lost"] = ("learned_lost_at_restart", {"name": self.entry.title, "before": self.loss[0],
+                                                          "after": self.loss[1]})
+        sync_issues(self.hass, self.entry.entry_id, GROUP, wanted)
+
+
+async def async_setup_learned_store(hass, entry):
+    """Product entries: the two Repairs items (no entities)."""
+    from .heating_link import heating_hub
+    hub = heating_hub(hass, entry)
+    watch = hass.data[DOMAIN][entry.entry_id]["learned_store_watch"] = LearnedStoreWatch(hass, entry, hub)
+    entry.async_on_unload(hub.add_listener(watch.check))
+    entry.async_on_unload(lambda: clear_issues(hass, entry.entry_id, GROUP))
+    watch.check()

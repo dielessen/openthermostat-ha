@@ -4,6 +4,7 @@ from copy import deepcopy
 import re
 import time
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
+from homeassistant.const import EntityCategory
 from homeassistant.helpers.device_registry import DeviceInfo
 from .const import DOMAIN
 
@@ -37,6 +38,9 @@ class ControllerRequestSensor(SensorEntity):
     _attr_should_poll=False
     _attr_has_entity_name=True
     _attr_translation_key='controller_requested_flow_temperature'
+    # "Water temperature sent to the boiler": diagnostic since 1.1.1 (the owner's Q4); the everyday figure is
+    # "Requested water temperature" (heat_request). Same unique ID: the registry record follows on the next start.
+    _attr_entity_category=EntityCategory.DIAGNOSTIC
     _attr_device_class=SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement='°C'
     # A command is not a measured temperature/statistic.
@@ -66,7 +70,7 @@ class ControllerRequestSensor(SensorEntity):
         row=self.row;age=None
         if row and row['known'] and self.received is not None:
             age=row['observed_at_ms']-row['emitted_at_ms']+max(0,int((self.clock()-self.received)*1000))
-        return {'data_role':'last_controller_transmitted_request','scope':'attended_ecomline_trial',
+        return {'data_role':'last_controller_transmitted_request',
                 'boiler_readback':False,'control_qualified':False,'physical_validation':False,
                 'source_boot_id':row['boot_id']if row else None,'sequence':row['sequence']if row else None,
                 'emitted_at_ms':row['emitted_at_ms']if row else None,'last_command_age_ms':age,

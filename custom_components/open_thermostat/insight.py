@@ -7,7 +7,11 @@ the summary as ``insight`` (heating_link.decode_insight):
   learned (how fast each room warms up and cools down, the morning check, Weather compensation, the
   boiler's minimum and response, the house) and what is still missing. Keys: ``warmup:<room>``,
   ``cooling:<room>``, ``arrival:<room>``, ``curve``, ``boiler_minimum``, ``boiler_response``, ``house``;
-  at most 8, ``more`` counts the rest (a key this version does not know counts there too);
+  1.1.1 stage B (SL-B3) re-weights it around the room models (SL-3 section 7.3): the E32 V2 then names
+  ``model:<room>`` (its model is not trusted yet), ``track:<room>`` (its predictions not good for a few days
+  yet), ``plant`` (the boiler's lowest flame and steady-burn water temperature) and ``outlook`` (no forecast and
+  not a few days of outdoor temperatures) besides ``arrival:<room>`` and ``curve``; the older keys stay for
+  older firmware; at most 8, ``more`` counts the rest (a key this version does not know counts there too);
 - ``boiler``: the boiler's response (BoilerResponse): ``held`` (today's held temperatures), ``rest_s``
   (the boiler's own rest after one), ``ceiling_c`` (the ceiling learned for this outdoor temperature, applied
   or not; the one in effect is the flow document's ``flow.ceiling_c``, only with Smart warm-up on and never
@@ -43,8 +47,8 @@ from .heating_link import ROOM_ID, HubEntity, label, number
 from .learned_overview import language, number as decimal
 
 # Missing keys: the house-wide ones, and the per-room ones as "<kind>:<room id>".
-HOUSE_KEYS = ("curve", "boiler_minimum", "boiler_response", "house")
-ROOM_KEYS = ("warmup", "cooling", "arrival")
+HOUSE_KEYS = ("curve", "boiler_minimum", "boiler_response", "house", "plant", "outlook")
+ROOM_KEYS = ("warmup", "cooling", "arrival", "model", "track")
 INSIGHT_KINDS = ("gas_per_dd_up", "gas_per_dd_down", "starts_up", "hours_per_dd_up", "warmup_slower")
 LOOP_KINDS = ("loop_warm", "loop_cold")  # E32 1.1: a floor loop returns warmer or cooler than the others
 MAX_INSIGHTS = 8  # the E32 sends at most 4
@@ -62,6 +66,11 @@ TEXT = {
         "missing.boiler_minimum": "It is still finding out from which water temperature your boiler starts heating.",
         "missing.boiler_response": "It is still listening to how your boiler holds its temperature.",
         "missing.house": "It is still working out how fast your house loses heat.",
+        # 1.1.1 stage B: the E32 House page's words.
+        "missing.model": "It is still checking its model of {room}.",
+        "missing.track": "Its predictions for {room} still have to be good for a few days.",
+        "missing.plant": "It is still finding out your boiler's lowest flame and the water temperature at which it burns steadily.",
+        "missing.outlook": "It still needs a weather forecast or a few days of outdoor temperatures.",
         "boiler.learned_both": "Your boiler holds about {flow} °C and rests {rest}; near the target the E32 asks at most "
                                "{ceiling} °C.",
         "boiler.learned_ceiling": "Your boiler holds about {flow} °C; near the target the E32 asks at most {ceiling} °C.",
@@ -89,7 +98,7 @@ TEXT = {
         "title.warmup_slower": "{room} warmed up more slowly",
         "mean.gas_per_dd_up": "A window or door left open, or a room set warmer, can cause this.",
         "mean.gas_per_dd_down": "Sun, a cooler setting or fewer hours at home can cause this.",
-        "mean.starts_up": "Fewer, longer burns are gentler on the boiler; the thermostat watches this.",
+        "mean.starts_up": "Fewer, longer burns are gentler on the boiler; the E32 watches this.",
         "mean.hours_per_dd_up": "A window or door left open, or a room set warmer, can cause this.",
         "mean.warmup_slower": "A window left open, a closed radiator valve or furniture in front of the radiator can "
                               "slow a room down.",
@@ -113,6 +122,10 @@ TEXT = {
         "missing.boiler_minimum": "Hij zoekt nog uit vanaf welke watertemperatuur je ketel gaat verwarmen.",
         "missing.boiler_response": "Hij luistert nog hoe je ketel zijn temperatuur vasthoudt.",
         "missing.house": "Hij rekent nog uit hoe snel je huis warmte verliest.",
+        "missing.model": "Hij controleert zijn model van {room} nog.",
+        "missing.track": "Zijn voorspellingen voor {room} moeten nog een paar dagen goed zijn.",
+        "missing.plant": "Hij zoekt nog uit wat de kleinste vlam van je ketel is en bij welke watertemperatuur hij rustig doorbrandt.",
+        "missing.outlook": "Hij heeft nog een weersverwachting of een paar dagen buitentemperaturen nodig.",
         "boiler.learned_both": "Je ketel houdt ongeveer {flow} °C vast en rust {rest}; dicht bij de doeltemperatuur vraagt "
                                "de E32 hoogstens {ceiling} °C.",
         "boiler.learned_ceiling": "Je ketel houdt ongeveer {flow} °C vast; dicht bij de doeltemperatuur vraagt de E32 "
@@ -143,7 +156,7 @@ TEXT = {
         "title.warmup_slower": "{room} warmde langzamer op",
         "mean.gas_per_dd_up": "Een raam of deur die openstond, of een ruimte die warmer is ingesteld, kan dit veroorzaken.",
         "mean.gas_per_dd_down": "Zon, een lagere instelling of minder uren thuis kan dit veroorzaken.",
-        "mean.starts_up": "Minder en langer branden is beter voor de ketel; de thermostaat houdt dit in de gaten.",
+        "mean.starts_up": "Minder en langer branden is beter voor de ketel; de E32 houdt dit in de gaten.",
         "mean.hours_per_dd_up": "Een raam of deur die openstond, of een ruimte die warmer is ingesteld, kan dit veroorzaken.",
         "mean.warmup_slower": "Een open raam, een dichte radiatorkraan of meubels voor de radiator kunnen een ruimte "
                               "vertragen.",
@@ -168,6 +181,10 @@ TEXT = {
         "missing.boiler_minimum": "Wciąż sprawdza, od jakiej temperatury wody Twój kocioł zaczyna grzać.",
         "missing.boiler_response": "Wciąż wsłuchuje się, jak Twój kocioł utrzymuje swoją temperaturę.",
         "missing.house": "Wciąż oblicza, jak szybko Twój dom traci ciepło.",
+        "missing.model": "Wciąż sprawdza swój model pomieszczenia {room}.",
+        "missing.track": "Jego prognozy dla pomieszczenia {room} muszą jeszcze przez kilka dni być dobre.",
+        "missing.plant": "Wciąż sprawdza najmniejszy płomień Twojego kotła i temperaturę wody, przy której pali równo.",
+        "missing.outlook": "Potrzebuje jeszcze prognozy pogody lub kilku dni temperatur zewnętrznych.",
         "boiler.learned_both": "Twój kocioł utrzymuje około {flow} °C i odpoczywa {rest}; blisko temperatury docelowej E32 "
                                "żąda najwyżej {ceiling} °C.",
         "boiler.learned_ceiling": "Twój kocioł utrzymuje około {flow} °C; blisko temperatury docelowej E32 żąda najwyżej "
@@ -200,7 +217,7 @@ TEXT = {
         "mean.gas_per_dd_up": "Może to wynikać z otwartego okna lub drzwi albo z wyższej temperatury ustawionej w "
                               "pomieszczeniu.",
         "mean.gas_per_dd_down": "Może to wynikać ze słońca, niższego ustawienia lub krótszego pobytu w domu.",
-        "mean.starts_up": "Rzadsza, dłuższa praca oszczędza kocioł; termostat to obserwuje.",
+        "mean.starts_up": "Rzadsza, dłuższa praca oszczędza kocioł; E32 to obserwuje.",
         "mean.hours_per_dd_up": "Może to wynikać z otwartego okna lub drzwi albo z wyższej temperatury ustawionej w "
                                 "pomieszczeniu.",
         "mean.warmup_slower": "Otwarte okno, zamknięty zawór grzejnika lub meble przed grzejnikiem mogą spowolnić "

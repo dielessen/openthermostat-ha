@@ -115,7 +115,7 @@ TEXT = {
         "reason.unverified_profile": "Nog niet getest met OpenThermostat",
         "reason.not_supported": "Niet veilig aan te sturen (geen schone stop)",
         "reason.tested_profile": "Getest op deze ketel, nog niet beoordeeld",
-        "reason.verified_profile": "Bevestigd voor dit ketelmodel",
+        "reason.verified_profile": "Geverifieerd voor dit ketelmodel",
         "reason.other_boiler": "Er hangt een andere ketel aan",
         "unknown_model": "Onbekend model",
         "product": "product {product}",
@@ -288,7 +288,7 @@ def issue_id(entry_id):
 
 
 class BoilerRecognitionSensor(SensorEntity):
-    """Which boiler the E32 recognised and whether it may control it (a diagnostic of the product device)."""
+    """Which boiler the E32 recognised and whether it may control it (a diagnostic of the boiler device)."""
 
     _attr_should_poll = False
     _attr_has_entity_name = True
@@ -302,8 +302,9 @@ class BoilerRecognitionSensor(SensorEntity):
         from homeassistant.helpers.device_registry import DeviceInfo
         self._entry_id, self._hub = entry_id, hub
         self.added = False  # in Home Assistant now: only then is a state written
+        from .ems_devices import boiler_identifier
         self._attr_unique_id = f"{prefix}_boiler_recognition"
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, prefix)})
+        self._attr_device_info = DeviceInfo(identifiers={boiler_identifier(prefix)})  # 1.1.1: on the boiler
 
     def _doc(self):
         return current(self.hass, self._entry_id)

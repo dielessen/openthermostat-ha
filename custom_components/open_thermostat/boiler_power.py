@@ -83,6 +83,10 @@ def basis(source, language, model=None):
     return f"{phrase}: {model}" if source == "product" and model else phrase
 
 
+# The boiler device's fallback name (device.ems_boiler) in every language: no boiler type.
+GENERIC_BOILER_NAMES = frozenset({"boiler", "ketel", "kocioł"})
+
+
 def detected_model(hass, entry):
     """The boiler type as the E32's EMS bus list names it (its device at 0x08), or None."""
     from homeassistant.helpers import device_registry as dr
@@ -92,6 +96,7 @@ def detected_model(hass, entry):
               if prefix else None)
     if device is None:
         return None
-    if device.name:
+    # The chosen model names the boiler (1.1.1: no "(0x08)" any more); the fallback "Boiler" says no type.
+    if device.name and device.name.strip().lower() not in GENERIC_BOILER_NAMES:
         return re.sub(r"\s*\(0x08\)$", "", device.name)
-    return device.model
+    return None

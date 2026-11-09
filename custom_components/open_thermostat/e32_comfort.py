@@ -1038,8 +1038,8 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
 
     def _smart_warm_up(self):
         """What Smart warm-up does for the next program step (E32 rc.3) and how the last step up turned out
-        (E32 rc.4: "Yesterday warm at 09:12 (12 min late); next time it starts a little earlier."), in the Home Assistant
-        language, or None."""
+        (E32 rc.4: "Yesterday warm at 09:12 (12 min late); next time it starts a little earlier.", or "about 10 min
+        earlier" where the E32's numbers tell it, E32 SL-A), in the Home Assistant language, or None."""
         if self.hass is None:
             return None
         from .e32_flow import smart_warm_up
@@ -1057,7 +1057,7 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         later = free_heat_later((getattr(self.hub, "learned", None) or {}).get(self.room_id), plan)
         line = None if held else smart_warm_up_line(plan.get("optimum_start"),
                                                     smart_warm_up(self.hass, self.entry.entry_id), lang, clock, trial, later)
-        arrived = arrival_line(plan.get("arrival"), lang, clock, *local_day(self.hass))
+        arrived = arrival_line(plan.get("arrival"), lang, clock, *local_day(self.hass), plan.get("optimum_start"))
         return " ".join(item[0] for item in (line, arrived) if item) or None
 
     # -- commands ----------------------------------------------------------------
@@ -1333,9 +1333,6 @@ class ComfortOptionsSteps:
             schema = self.add_suggested_values_to_schema(schema, user_input)
         return self.async_show_form(step_id="house_presence", data_schema=schema, errors=errors,
                                     description_placeholders=placeholders)
-
-    async def async_step_comfort(self, user_input=None):
-        return self.async_show_menu(step_id="comfort", menu_options=["comfort_settings", "comfort_contacts"])
 
     async def async_step_comfort_settings(self, user_input=None):
         import voluptuous as vol

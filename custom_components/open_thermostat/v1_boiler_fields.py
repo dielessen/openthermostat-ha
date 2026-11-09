@@ -531,8 +531,14 @@ async def async_setup_boiler_fields(hass, entry, async_add_entities):
             placeholders |= {entity.index for entity in new if entity.placeholder}
             from .product import is_product
             if is_product(entry):
+                from .ems_devices import boiler_device_info, ensure_boiler_device
                 from .installation_group import ensure_installation_group
-                async_add_entities(new, config_subentry_id=ensure_installation_group(hass,entry))
+                group = ensure_installation_group(hass, entry)
+                # On the boiler device (1.1.1, V12-26): only the device changes; unique ID, entity ID and history stay.
+                ensure_boiler_device(hass, entry, group)
+                for entity in new:
+                    entity._attr_device_info = boiler_device_info(prefix)
+                async_add_entities(new, config_subentry_id=group)
             else:
                 async_add_entities(new)
         else:
@@ -667,6 +673,9 @@ class BoilerFieldEntity(SensorEntity):
         from .display_codes import CODE_FIELDS
         self._cause_index = INDEX_BY_NAME.get(CODE_FIELDS[name]) if name in CODE_FIELDS else None
         self._code_field = name in CODE_FIELDS
+        # The service number (cause code): 0 is none. Adapters such as the Bosch EasyControl Adapter pass none and
+        # send 0, which would read as a service number "0" (R-L-01): unknown, with not_reported.
+        self._cause_number = shown == "service_number"
         # A boiler counter that has read 0 since the first value: behind an adapter such as the Bosch EasyControl
         # the boiler's own counters are never filled in, and the E32's boiler profile counts a table counter's 0
         # as a value. Unknown (with not_reported) until it counts; once it did, every value shows.
@@ -772,7 +781,7 @@ class BoilerFieldEntity(SensorEntity):
             return None
         raw = value["raw"]
         name, unit, divisor, _ = spec(index)
-        if self._never_counted(raw):
+        if self._never_counted(raw) or self._no_cause(raw):
             return None
         if unit == "text":
             from .boiler_fields import text_value
@@ -791,6 +800,10 @@ class BoilerFieldEntity(SensorEntity):
             self._counted = True
             return False
         return True
+
+    def _no_cause(self, raw):
+        """True for a service number of 0: no service number (display_codes.describe reads it so too)."""
+        return self._cause_number and raw == 0
 
     def _code_attributes(self):
         if not self._code_field:
@@ -817,7 +830,7 @@ class BoilerFieldEntity(SensorEntity):
         raw = ({"raw_value": value["raw"]} if usable and self._presentation is not None else {}) | (
             {"hex": f"0x{value['raw']:02X}"} if usable and unit == "bits" else {})
         live = self._live()
-        never = usable and self._never_counted(value["raw"])
+        never = usable and (self._never_counted(value["raw"]) or self._no_cause(value["raw"]))
         reason = ("not_reported" if never else
                   "session_unavailable" if not live and not self.client.ready else
                   "capability_unavailable" if not live else

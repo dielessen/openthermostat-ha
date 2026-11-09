@@ -98,7 +98,9 @@ async def async_setup_sensors(hass, entry, async_add_entities, *, native_metrics
                 # Preserve old statistic identities as quarantined history.
                 old_id = er.async_get(hass).async_get_entity_id("sensor", DOMAIN, f"{prefix}_hub_{metric}")
                 old = er.async_get(hass).async_get(old_id) if old_id else None
-                if topic == "ems_metrics" and metric in VERSIONED_METRICS and old and old.config_entry_id == entry.entry_id:
+                # 1.1.1 (Q3): a product entry no longer shows the "Old: ..." counters (native_entity_cleanup).
+                if (topic == "ems_metrics" and metric in VERSIONED_METRICS and old and old.config_entry_id == entry.entry_id
+                        and not native_metrics):
                     legacy_key = topic, metric + "_legacy"
                     if legacy_key not in entities:
                         entities[legacy_key] = HubMetric(prefix, topic, metric, entry.entry_id, definition_version=1)

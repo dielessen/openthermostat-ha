@@ -1,9 +1,15 @@
-"""Button platform: back up the E32 settings now (e32_backup.py) and restart the E32 (e32_system.py)."""
+"""Button platform: back up the E32 settings now (e32_backup.py), restart the E32 (e32_system.py) and let the E32
+plan the heating (heating_plan.py, only while it is ready for that confirmation)."""
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN
+
+# Home Assistant may run this platform's actions in parallel (R4-15): every E32 request goes through the
+# entry's RoomPlanLink, which signs in once at a time and lets a newer write supersede one that waits for
+# a free E32 web session (R4-02). A limit of 1 here would hold every other write behind such a wait.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
@@ -17,3 +23,5 @@ async def async_setup_entry(
     await async_setup_buttons(hass, entry, async_add_entities)
     from .e32_system import async_setup_buttons as async_setup_restart_button
     await async_setup_restart_button(hass, entry, async_add_entities)
+    from .heating_plan import async_setup_buttons as async_setup_plan_button  # only while the E32 is ready to plan
+    await async_setup_plan_button(hass, entry, async_add_entities)

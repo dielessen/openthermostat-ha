@@ -30,6 +30,9 @@ most 1.5 KB, sent on a real change (deadbands), at most every 10 s, else every
   yesterday's insights, E32 rc.5; merged as ``insight``, insight.py), and
   ``fw/telemetry/shadow`` (today's comparison; 5 min) and
   ``fw/telemetry/readiness`` (E32 1.0: ready to take over?, takeover_readiness.py; 5 min);
+- ``fw/telemetry/plan`` (1.1.1 stage B, retained, on change): the E32's heating plan and how far its
+  planner is (heating_plan.py); a learned room's ``model`` (stage B, the room's model in shadow) rides in
+  ``fw/telemetry/learned/<id>``;
 - ``fw/availability`` (retained online/offline, the LWT) and ``fw/heartbeat``
   every 60 s.
 
@@ -166,12 +169,16 @@ INSIGHT_KEYS = ("knowledge", "house", "boiler", "insights")
 # The E32 sends the insight every 5 minutes: after this many live heartbeats (one a minute) without one, a
 # retained insight left on the broker (firmware without the topic, after a downgrade) is dropped.
 INSIGHT_MISSED_HEARTBEATS = 16
+# The heating plan (1.1.1 stage B, SL-B3's planner; retained, sent on change, at most 600 B): heating_plan.py
+# decodes it. Not merged into the summary: the plan sensor, the confirmation and the dashboard read the hub's
+# ``heating_plan``.
+HEATING_PLAN_TOPIC = "fw/telemetry/plan"
 HEARTBEAT_TOPIC = "fw/heartbeat"
 AVAILABILITY_TOPIC = "fw/availability"
 # What only the hub reads: the shadow session (v1_mqtt.NativeShadowConnection, subscribed to fw/#)
 # drops these at once instead of decoding every E32 message a second time (R4-03).
 _HUB_ONLY = (HEATING_TOPIC, PLAN_TOPIC, ENTITIES_TOPIC, SUMMARY_TOPIC, FLOW_TOPIC, TUNING_TOPIC, SCOREBOARD_TOPIC,
-             INSIGHT_TOPIC, SHADOW_TOPIC, READINESS_TOPIC, PROBES_TOPIC)
+             INSIGHT_TOPIC, SHADOW_TOPIC, READINESS_TOPIC, PROBES_TOPIC, HEATING_PLAN_TOPIC)
 _HUB_ONLY_PARTS = (ROOM_TOPIC, BLE_TOPIC, TRV_TOPIC, CIRCUIT_TOPIC, LEARNED_TOPIC, ENTITIES_TOPIC + "/")
 
 
@@ -406,6 +413,12 @@ def decode_learned(topic_room, payload):
     # E32 rc.5 (FreeHeat): "free_heat" belongs to the room, also when it sits beside "learned".
     if "free_heat" not in room and type(value.get("free_heat")) is dict:
         room["free_heat"] = value["free_heat"]
+    # 1.1.1 stage B (SL-B2, control/RoomModels.h): the room's model beside "learned" (in /status/heating it sits in
+    # the learned room itself); a model of the wrong type is left out.
+    if "model" in room and type(room["model"]) is not dict:
+        del room["model"]
+    if "model" not in room and type(value.get("model")) is dict:
+        room["model"] = value["model"]
     return room, ({**plan, "id": topic_room} if plan is not None else None)
 
 
@@ -584,6 +597,13 @@ class HeatingHub:
         # is gone again: a retained one alone may be stale (left by a firmware downgrade), so the insight
         # notifications wait for a live one (insight.InsightNotifier).
         self.insight_live = False
+        # 1.1.1 stage B: True once a learned room carried its ``model`` since the E32's last start (the firmware
+        # has the room models: it takes the weather forecast, weather_forecast.py); the heating plan
+        # (fw/telemetry/plan, heating_plan.decode_heating_plan) and whether it arrived live since that start.
+        self.models_seen = False
+        self.heating_plan_doc = None
+        self.heating_plan_live = False
+        self.heating_plan_seen = False  # a plan arrived in this Home Assistant run (heating_plan.remove_stale)
         self.received = None
         # The last live sign of the E32 (monotonic), kept while it is silent.
         self.last_seen = None
@@ -604,6 +624,10 @@ class HeatingHub:
         self.probes_received = None
         self.probes_expired = False  # the last probes document expired (SHELLY_STALE_SECONDS): not a message
         self.config = None
+        self.config_received = None  # when the last fw/config/plan message arrived (monotonic)
+        # The first plan message without ``trv`` while the heating document had no valve block either
+        # (e32_valves.remove_stale_entities, R-C-02), or None.
+        self.trv_missing_since = None
         self.entity_parts = {}
         self.entities = None  # the last complete entity list
         self.shadow = None
@@ -665,6 +689,16 @@ class HeatingHub:
     def stalled(self):
         """The E32 is heard (heartbeat) but its control sends nothing: its values are unavailable (heating_problem)."""
         return self.alive and self.heating_stalled
+
+    @property
+    def heating_plan(self):
+        """The E32's heating plan (heating_plan.decode_heating_plan), or None.
+
+        A retained plan alone may be one a firmware downgrade left on the broker: it counts once it came live
+        since the E32's last start, or while the E32 shows its room models (the firmware with the planner).
+        """
+        doc = self.heating_plan_doc
+        return doc if doc is not None and (self.heating_plan_live or self.models_seen) else None
 
     @property
     def learned_header(self):
@@ -729,6 +763,8 @@ class HeatingHub:
     def _merge_learned(self):
         """The learned rooms and plans: from the status (older firmware) and the per-room messages."""
         learned, warmup = learned_rooms(self.status), plan_rooms(self.status)
+        if any(type(room.get("model")) is dict for room in learned.values()):
+            self.models_seen = True
         plan_ids = set(self.config["rooms"]) if self.config else None
         for room_id, (_, room, plan) in self.learned_messages.items():
             if plan_ids is not None and room_id not in plan_ids:
@@ -805,6 +841,8 @@ class HeatingHub:
             previous = self.heartbeat
             if previous is not None and beat["uptime_s"] < previous.get("uptime_s", 0):
                 self.boots += 1  # the E32 restarted (DhwCarry)
+                # Perhaps with other firmware: its models and plan count again once it shows them.
+                self.models_seen = self.heating_plan_live = False
             self.heartbeat, self.heartbeat_received = beat, self.clock()
             self.online = True if self.online is None else self.online
             self.last_seen = self.heartbeat_received
@@ -822,6 +860,7 @@ class HeatingHub:
             if plan is None and not empty:
                 return  # a malformed plan never drops the rooms
             self.config = plan
+            self.config_received = self.clock() if plan is not None else None
             if plan is not None:
                 valves = tuple(plan["trv"]) if _ids(plan.get("trv"), ROOM_ID, 8) else ()
                 for key, store in ((tuple(plan["rooms"]), self.room_states), (tuple(plan["ble"]), self.ble_states),
@@ -834,7 +873,8 @@ class HeatingHub:
                     del self.entity_parts[part]
         elif suffix == ENTITIES_TOPIC or suffix.startswith(ENTITIES_TOPIC + "/"):
             tail = suffix[len(ENTITIES_TOPIC) + 1:]
-            part = 0 if suffix == ENTITIES_TOPIC else int(tail) if tail.isdigit() and len(tail) == 1 else None
+            # One ASCII digit below MAX_ENTITY_PARTS (R-C-05: str.isdigit() is true for "²", which int() refuses).
+            part = 0 if suffix == ENTITIES_TOPIC else int(tail) if re.fullmatch(r"[0-7]", tail) else None
             if part is None:
                 return
             value = None if empty else decode_entities(payload, part)
@@ -879,6 +919,8 @@ class HeatingHub:
                 value = decode_learned(room_id, payload)
                 if value is None:
                     return
+                if "model" in value[0]:
+                    self.models_seen = True
                 self.learned_messages[room_id] = (self.clock(), *self._keep_free_heat(room_id, value))
         elif suffix in (SUMMARY_TOPIC, FLOW_TOPIC, TUNING_TOPIC, SCOREBOARD_TOPIC, INSIGHT_TOPIC):
             if suffix == SUMMARY_TOPIC:
@@ -907,6 +949,14 @@ class HeatingHub:
         elif suffix == READINESS_TOPIC:
             self.readiness = None if empty else decode_document(payload)
             self.readiness_received = self.clock()
+        elif suffix == HEATING_PLAN_TOPIC:
+            from .heating_plan import decode_heating_plan
+            self.heating_plan_doc = None if empty else decode_heating_plan(payload)
+            if self.heating_plan_doc is None:
+                self.heating_plan_live = False
+            else:
+                self.heating_plan_seen = True
+                self.heating_plan_live = self.heating_plan_live or not retained
         else:
             return
         if not retained and suffix != AVAILABILITY_TOPIC:
@@ -945,6 +995,11 @@ class HeatingHub:
         previous = self.learned_messages.get(room_id)
         if "free_heat" not in room and previous is not None and "free_heat" in previous[1]:
             room = {**room, "free_heat": previous[1]["free_heat"]}
+        # The room's model (stage B) gives way last in that budget and is kept the same way, but only while the E32
+        # showed its models since its last start (never a model left from firmware before a downgrade).
+        if ("model" not in room and self.models_seen and previous is not None
+                and type(previous[1].get("model")) is dict):
+            room = {**room, "model": previous[1]["model"]}
         return room, plan
 
     @callback
@@ -1658,14 +1713,18 @@ class RoomEntity(HubEntity):
 class HeatRequestSensor(HubEntity, SensorEntity):
     """The E32's computed boiler flow request, "Requested water temperature" (0 when it does not ask for heat).
 
-    0 stays the "no request" state: the house and boiler-now cards read it so (frontend). Diagnostic: the
-    cards and the Boiler view show it, the device page keeps it out of the main list.
+    0 stays the "no request" state: the house and boiler-now cards read it so (frontend). The one everyday
+    "requested water temperature" on the E32 device since 1.1.1 (the owner's Q4); what was actually sent is the
+    diagnostic "Water temperature sent to the boiler" (controller_request).
+
+    E32 SL-A (TELEMETRIEBUDGET section 27): ``sent_flow_c`` (what the boiler got while the E32 drives it, after the
+    boiler's minimum; None otherwise) and ``outdoor_c`` (the outdoor temperature the E32 used; None when none is
+    fresh) are recorded attributes, so a replay of the history knows them; firmware without them has neither.
     """
 
     _attr_translation_key = "heat_request"
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     # Live only, not in the history: whether the E32 gets Home Assistant's values (HeatingInputWatch.attributes),
     # every room's state (the room entities keep their own history) and the plan revision.
     _unrecorded_attributes = frozenset({"ha_input", "rooms", "revision"})
@@ -1692,9 +1751,15 @@ class HeatRequestSensor(HubEntity, SensorEntity):
         active = status.get("active") if type(status.get("active")) is dict else {}
         watch = getattr(self.hub, "input_watch", None)
         # control: the active-control state (E32 1.0), e.g. awaiting_confirmation before the takeover.
-        return {"mode": status["mode"], "reason": status["request"]["reason"], "rooms": status["rooms"],
-                "revision": self.hub.revision, "control": active.get("state") if type(active.get("state")) is str else None,
-                "ha_input": watch.attributes() if watch is not None else None}
+        attributes = {"mode": status["mode"], "reason": status["request"]["reason"], "rooms": status["rooms"],
+                      "revision": self.hub.revision,
+                      "control": active.get("state") if type(active.get("state")) is str else None,
+                      "ha_input": watch.attributes() if watch is not None else None}
+        request = status["request"]
+        for key, low, high in (("sent_flow_c", 0, FLOW_REQUEST_MAX_C), ("outdoor_c", -60, 60)):
+            if key in request:  # E32 SL-A
+                attributes[key] = number(request[key], low, high)
+        return attributes
 
 
 class RoomTemperatureSensor(RoomEntity, SensorEntity):
@@ -2122,6 +2187,14 @@ class RoomLearningSensor(LearnedRoomEntity, SensorEntity):
                   "applied": self._applied()}
         if "readiness_timing" in learned:  # E32 rc.4: the warm-up time, learned before the coolest water
             result["timing"] = learned["readiness_timing"] if learned["readiness_timing"] in LEARNING_STATES else None
+        from .learned_overview import room_model
+        model = room_model(learned)
+        if model is not None:  # 1.1.1 stage B: the room's model in shadow (absent on firmware without it)
+            result.update({"model_state": model["state"], "model_days_good": model["good_days"],
+                           "model_days_needed": model["of"], "model_error_3h_c": model["error_3h_c"],
+                           "model_error_6h_c": model["error_6h_c"], "heat_loss_kw_per_c": model["heat_loss_kw_per_c"],
+                           "house_time_constant_h": model["time_constant_h"], "heat_lag_min": model["lag_min"],
+                           "hours_per_degree_at_50c": model["hours_per_degree"], "model_emitter": model["emitter"]})
         return result
 
 
@@ -2397,8 +2470,11 @@ def wanted_sensors(hub):
     if shadow_has_thermostat(hub.status):
         for key in SHADOW_SENSORS:
             yield ("shadow", key), lambda key=key: ShadowSensor(hub, key)
+    from .native_entity_cleanup import readiness_over
     from .takeover_readiness import TakeoverReadinessSensor, readiness_status
-    if readiness_status(hub.status) is not None:  # firmware that judges "ready to take over?" (1.0)
+    # Firmware that judges "ready to take over?" (1.0), until the E32 controls the boiler (1.1.1, Q4: then
+    # native_entity_cleanup removes it; it comes back in a trial run).
+    if readiness_status(hub.status) is not None and not readiness_over(hub.status):
         yield ("readiness",), lambda: TakeoverReadinessSensor(hub)
     if burner_status(hub.status) is not None:  # firmware that counts burner starts
         yield ("burner",), lambda: BurnerStartsSensor(hub)
@@ -2427,6 +2503,9 @@ def wanted_sensors(hub):
     # Yesterday's scoreboard (E32 rc.4): each figure once the E32 reported a value for it.
     from .scoreboard import wanted_scoreboard
     yield from wanted_scoreboard(hub)
+    # 1.1.1 stage B: the E32's heating plan, once it reports one (heating_plan.py).
+    from .heating_plan import wanted_sensors as wanted_plan
+    yield from wanted_plan(hub)
 
 
 def wanted_demand(hub):
@@ -2465,6 +2544,11 @@ async def async_setup_demand(hass, entry, async_add_entities):
     from .heating_problem import HeatingProblemSensor
     async_add_entities([HeatingProblemSensor(entry, hub)], **options)  # "is my heating OK?"
     entry.async_on_unload(track_entities(hub, async_add_entities, options, wanted_demand))
+    from .notifications import async_setup_notifications
+    try:
+        await async_setup_notifications(hass, entry, hub)  # Configure → Notifications (1.1.1)
+    except Exception:  # noqa: BLE001 - optional; the heating and its entities stay
+        _LOGGER.exception("OpenThermostat: setting up the notifications failed")
 
 
 async def async_setup_heating_link(hass, entry, async_add_entities, **options):
@@ -2507,6 +2591,9 @@ async def async_setup_heating_link(hass, entry, async_add_entities, **options):
             await async_setup_insight(hass, entry, async_add_entities, options, hub)
         except Exception:  # noqa: BLE001 - information only; the rooms and forwarding are not
             _LOGGER.exception("OpenThermostat: setting up what the E32 knows failed; the E32 rooms still load")
+        # 1.1.1 stage B: the invitation to let the E32 plan, and no plan entities left by older firmware.
+        from .heating_plan import watch as watch_plan
+        entry.async_on_unload(watch_plan(hass, entry, hub))
     forwarded = []
     unsubscribe_states = None
     was_fresh = False
@@ -2527,6 +2614,10 @@ async def async_setup_heating_link(hass, entry, async_add_entities, **options):
     from .energy_input import EnergyForwarder
     energy = state["energy_forwarder"] = EnergyForwarder(
         hass, entry, send, lambda hass, ids, action: async_track_state_change_event(hass, ids, action))
+    # 1.1.1 stage B (M3): the hourly weather forecast, the same route (weather_forecast.py); checked with every
+    # refresh and sent once an hour, at once to a restarted E32.
+    from .weather_forecast import ForecastForwarder
+    forecast = state["forecast_forwarder"] = ForecastForwarder(hass, entry, send, hub)
 
     @callback
     def state_changed(event):
@@ -2538,6 +2629,7 @@ async def async_setup_heating_link(hass, entry, async_add_entities, **options):
         for entity_id in forwarded:
             publish(entity_id, now)
         energy.publish()
+        forecast.check()
 
     boots = hub.boots
     resent_at = None  # hub.clock() of the last resend to a returning or restarted E32 (RESTART_RESEND_S)
@@ -2609,7 +2701,7 @@ async def async_setup_heating_link(hass, entry, async_add_entities, **options):
     entry.async_on_unload(hub.add_listener(follow, first=True))
     for topic in (AVAILABILITY_TOPIC, HEARTBEAT_TOPIC, HEATING_TOPIC, ROOM_TOPIC + "+", BLE_TOPIC + "+", TRV_TOPIC + "+", PLAN_TOPIC,
                   ENTITIES_TOPIC, ENTITIES_TOPIC + "/+", LEARNED_TOPIC + "+", SUMMARY_TOPIC, FLOW_TOPIC, TUNING_TOPIC, SCOREBOARD_TOPIC,
-                  INSIGHT_TOPIC, SHADOW_TOPIC, READINESS_TOPIC, CIRCUIT_TOPIC + "+", PROBES_TOPIC):
+                  INSIGHT_TOPIC, SHADOW_TOPIC, READINESS_TOPIC, CIRCUIT_TOPIC + "+", PROBES_TOPIC, HEATING_PLAN_TOPIC):
         entry.async_on_unload(await mqtt.async_subscribe(hass, base + topic, receive))
     entry.async_on_unload(async_track_time_interval(hass, refresh, timedelta(seconds=REFRESH_SECONDS)))
     entry.async_on_unload(async_track_time_interval(hass, hub.check_stale, STALE_CHECK))
@@ -2623,3 +2715,4 @@ async def async_setup_heating_link(hass, entry, async_add_entities, **options):
         entry.async_on_unload(RoomSourceWatch(hass, entry, hub).start())
     energy.reconfigure()
     entry.async_on_unload(energy.stop)
+    entry.async_on_unload(forecast.stop)

@@ -83,6 +83,10 @@ HEATING_FLOW = "/config/heating/flow"
 # The owner's handover for active mode: confirm that the old thermostat is
 # disconnected, or hand back (beta.23 Repairs: confirm again after an update).
 HEATING_HANDOVER = "/config/heating/handover"
+# 1.1.1 stage B (SL-B3, D5): the plan mode, POST {"mode": "planning"|"checking"} (one key), the owner's one
+# confirmation that the E32 may plan the heating (heating_plan.py); "planning" only while the planner is ready
+# (else 409 plan_not_ready). The answer (and a GET) is the plan with its "mode". Firmware without it answers 404.
+HEATING_PLAN_MODE = "/config/heating/plan"
 # The radiator valves per room, reached through Zigbee2MQTT (E32 beta.24, TrvConfig.h).
 HEATING_TRV = "/config/heating/trv"
 # The Shelly devices the E32 drives itself (E32 1.1, ShellyConfig.h): GET the record without secrets ("password":
@@ -613,7 +617,8 @@ class ControllerClient:
                         HEATING_TRV, "/status/heating", LOGGING, BOILER_DISPLAY, BLUETOOTH, BOILER_SETTINGS,
                         SHELLY_CONFIG, SHELLY_STATUS, *TESTER_READS))
     _writes = frozenset(("/auth/login", "/auth/logout", "/auth/password", "/config/device", "/updates/reboot",
-                         HEATING_PLAN, HEATING_COMFORT, HEATING_FLOW, HEATING_HANDOVER, HEATING_TRV, CONFIG_BACKUP,
+                         HEATING_PLAN, HEATING_COMFORT, HEATING_FLOW, HEATING_HANDOVER, HEATING_PLAN_MODE,
+                         HEATING_TRV, CONFIG_BACKUP,
                          LOGGING, BOILER_DISPLAY, BLUETOOTH, *BOILER_SETTINGS_POSTS, SHELLY_CONFIG, SHELLY_CIRCUIT,
                          BOILER_MATCH_ACKNOWLEDGE, *RECORDING_POSTS))
 
@@ -711,7 +716,10 @@ class ControllerClient:
                     raise ControllerPasswordChangeRequired()
                 if response.status in (401, 403):
                     raise ControllerLinkError("controller_auth_failed")
-                if path in (HEATING_PLAN, HEATING_COMFORT, HEATING_FLOW, HEATING_HANDOVER, HEATING_TRV) and response.status in (400, 409, 413, 503, 507):
+                if path == HEATING_PLAN_MODE and response.status == 404:
+                    raise ControllerLinkError("controller_update_required")  # firmware without the planner
+                if path in (HEATING_PLAN, HEATING_COMFORT, HEATING_FLOW, HEATING_HANDOVER, HEATING_PLAN_MODE,
+                            HEATING_TRV) and response.status in (400, 409, 413, 503, 507):
                     raise HeatingPlanRejected(response.status, await _error_name(response))
                 if path in SHELLY_PATHS and response.status in (400, 404, 409, 503):
                     name = await _error_name(response) if response.status != 404 or method == "POST" else ""
@@ -850,6 +858,15 @@ class ControllerClient:
             raise ControllerLinkError("controller_request_invalid")
         raw, _, _ = await self._request("POST", HEATING_HANDOVER, document={"thermostat_disconnected": disconnected})
         return _decode(raw)
+
+    async def async_plan_mode(self, mode):
+        """POST the plan mode ("planning": the owner lets the E32 plan the heating; "checking": back to checking);
+        returns the E32's answer (its plan with "mode"). A refusal raises HeatingPlanRejected (400 invalid_request,
+        409 plan_not_ready, 503 save_unconfirmed); firmware without the planner raises controller_update_required."""
+        if mode not in ("checking", "planning"):
+            raise ControllerLinkError("controller_request_invalid")
+        raw, _, _ = await self._request("POST", HEATING_PLAN_MODE, document={"mode": mode})
+        return _decode(raw) if raw else {}
 
     async def async_flow_settings(self, change=None):
         """GET the flow options, or POST a partial change; returns the stored options.

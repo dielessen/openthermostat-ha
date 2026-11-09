@@ -607,7 +607,7 @@ _SECTIONS = {
     "heating": ("Rooms", "Ruimtes", "Pomieszczenia"),
     "flow": ("Water temperature", "Watertemperatuur", "Temperatura wody"),
     "boiler_display": ("Boiler model", "Ketelmodel", "Model kotła"),
-    "learned": ("What the thermostat has learned", "Wat de thermostaat heeft geleerd", "Czego nauczył się termostat"),
+    "learned": ("What the E32 has learned", "Wat de E32 heeft geleerd", "Czego nauczył się E32"),
 }
 _FIELDS = {
     "hostname": ("Device name", "Apparaatnaam", "Nazwa urządzenia"),
@@ -657,7 +657,7 @@ _FIELDS = {
     "tuning": ("Comfort and boiler care", "Comfort en zorg voor de ketel", "Komfort i dbałość o kocioł"),
     "tuning_manual": ("Comfort and boiler care: set by you", "Comfort en zorg voor de ketel: door jou ingesteld",
                       "Komfort i dbałość o kocioł: ustawione przez ciebie"),
-    "learned": ("What the thermostat has learned", "Wat de thermostaat heeft geleerd", "Czego nauczył się termostat"),
+    "learned": ("What the E32 has learned", "Wat de E32 heeft geleerd", "Czego nauczył się E32"),
 }
 _REENTER = {
     "wifi_password": ("Wi-Fi password", "Wifi-wachtwoord", "Hasło Wi-Fi"),
@@ -672,9 +672,9 @@ _WARNINGS = {
     "unknown_key": ("Skipped, not known by this firmware: {v}", "Overgeslagen, onbekend voor deze firmware: {v}",
                     "Pominięto, nieznane dla tego oprogramowania: {v}"),
     "invalid_value": ("Invalid value: {v}", "Ongeldige waarde: {v}", "Nieprawidłowa wartość: {v}"),
-    "learned_skipped": ("What the thermostat learned could not be read from this backup; it keeps learning from what it has.",
-                        "Wat de thermostaat geleerd heeft kon niet uit deze back-up worden gelezen; hij leert verder met wat hij al weet.",
-                        "Nie udało się odczytać z kopii tego, czego nauczył się termostat; uczy się dalej na podstawie tego, co już wie."),
+    "learned_skipped": ("What the E32 learned could not be read from this backup; it keeps learning from what it has.",
+                        "Wat de E32 geleerd heeft kon niet uit deze back-up worden gelezen; hij leert verder met wat hij al weet.",
+                        "Nie udało się odczytać z kopii tego, czego nauczył się E32; uczy się dalej na podstawie tego, co już wie."),
     "interface_kept": ("The connection type stays as it is.", "Het verbindingstype blijft zoals het is.",
                        "Typ połączenia pozostaje bez zmian."),
     "listen_port_kept": ("The web page port stays the same.", "De poort van de webpagina blijft gelijk.",

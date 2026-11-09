@@ -20,12 +20,13 @@ This integration does not work on its own. You need:
 - A **[BBQKees Gateway E32 V2](https://bbqkees-electronics.nl/product/gateway-e32-v2-ethernet-wifi-edition-v2/)**,
   connected to your boiler.
 - The **OpenThermostat firmware** on that gateway. You install it once over USB;
-  HACS does not do that for you. See
+  the Marketplace does not do that for you. See
   [installing the firmware](https://github.com/dielessen/open_thermostat/blob/main/docs/INSTALL.md#2-install-the-firmware-on-the-e32-first-time-over-usb).
   The gateway usually comes with EMS-ESP, which the firmware replaces, so
   [make a backup first](https://github.com/dielessen/open_thermostat/blob/main/docs/FLASHING.md#make-a-full-backup-first).
 - A boiler that speaks **EMS Classic (EMS 1.0)**: most Nefit, Buderus, Bosch,
-  Junkers and Worcester boilers. Newer EMS+ boilers are planned for version 1.1.
+  Junkers and Worcester boilers. Newer EMS+ boilers are read, and controlled once
+  their model is verified.
 - An **MQTT broker** (for example the Mosquitto add-on) and the MQTT integration.
 - **Home Assistant 2026.10.0 or newer.**
 
@@ -53,27 +54,27 @@ program when Home Assistant is offline.
 
 These use made-up example data, not a real home.
 
-![The OpenThermostat dashboard in Home Assistant: the house card, the rooms, today and the house](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-rc5.png)
+![The OpenThermostat dashboard in Home Assistant: the house card, the rooms, today and the house](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-120.png)
 
-![The week planner card in Home Assistant](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-week-card-rc5.png)
+![The week planner card in Home Assistant](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-week-card-120.png)
 
-![What the thermostat has learned, per room](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-home-learned-rc5.png)
+![What the thermostat has learned, per room](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-home-learned-120.png)
 
 <details>
 <summary>More screenshots</summary>
 
-![The Boiler tab: what the boiler does now, then what you need first](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-boiler-rc5.png)
+![The Boiler tab: what the boiler does now, then what you need first](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-boiler-120.png)
 
-![The Learning tab: what the E32 knows, the heating curve and yesterday in figures](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-learning-rc5.png)
+![The Learning tab: what the E32 knows, the heating curve and yesterday in figures](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-learning-120.png)
 
-![The E32 Overview with rooms and the boiler](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-overview-rc5.png)
+![The E32 Overview with rooms and the boiler](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-overview-120.png)
 
-![A room with its week program on the E32](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-rooms-rc5.png)
+![A room with its week program on the E32](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-rooms-120.png)
 
-![The E32 Boiler page](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-boiler-rc5.png)
+![The E32 Boiler page](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-boiler-120.png)
 
-<img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-phone-dark-rc5.png" alt="The dashboard on a phone in the dark theme" width="320">
-<img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-overview-phone-dark-rc5.png" alt="The E32 Overview on a phone in the dark theme" width="320">
+<img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-phone-dark-120.png" alt="The dashboard on a phone in the dark theme" width="320">
+<img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-overview-phone-dark-120.png" alt="The E32 Overview on a phone in the dark theme" width="320">
 
 </details>
 
@@ -83,11 +84,14 @@ These use made-up example data, not a real home.
    your MQTT broker. The
    [installation guide](https://github.com/dielessen/open_thermostat/blob/main/docs/INSTALL.md#2-install-the-firmware-on-the-e32-first-time-over-usb)
    explains how.
-2. In Home Assistant, open **HACS**, the three dots at the top right, then
-   **Custom repositories**. Add `https://github.com/dielessen/openthermostat-ha`
-   with type **Integration**.
-3. Search for **OpenThermostat** in HACS, choose **Download** and restart Home
-   Assistant.
+2. In Home Assistant, open **Settings → Marketplace**, choose **Add from
+   link** at the top right and enter `https://github.com/dielessen/openthermostat-ha`
+   (type **Integration** if it asks).
+3. Search the Marketplace for **OpenThermostat**, choose **Install** and restart
+   Home Assistant.
+
+On Home Assistant 2026.10 and older, do steps 2 and 3 in **HACS** (custom
+repository, then **Download**).
 4. Go to **Settings → Devices & services → Add integration → OpenThermostat**
    and follow the steps.
 
@@ -95,9 +99,9 @@ The E32 then guides you further. If your old thermostat is still connected, it
 first runs beside it for a while without touching the boiler. Otherwise it
 starts with a short boiler test. It only controls your boiler after you confirm.
 
-**Test versions** (such as `1.0.0rc7`) are not shown by default. To install one,
-open OpenThermostat in HACS, choose **Download** and pick the version under
-**Need a different version?**.
+**Test versions** (such as `1.0.0rc7`) are not shown by default. In HACS (Home
+Assistant 2026.10 and older) you can pick one under **Need a different
+version?**.
 
 ## Help and more information
 

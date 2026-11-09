@@ -95,8 +95,8 @@ TEXT = {
                      "{hours} hours. Check that the radiators or floor heating get warm and that the highest water "
                      "temperature (on the boiler and on the E32 Home page) is high enough.",
         "session_lost": "The E32 is online, but Home Assistant has had no working connection with it for more "
-                        "than {minutes} minutes, so rooms get no new targets from Home Assistant. Open the "
-                        "integration and choose Connect E32 again if it does not recover.",
+                        "than {minutes} minutes, so rooms get no new targets from Home Assistant. If it does not "
+                        "recover by itself, open the integration: Configure → E32 connection.",
         "short_cycling_persists": "The burner keeps switching on and off too often, even after the E32 lengthened its "
                                   "rest. Have the boiler's settings checked, for example by your installer.",
     },
@@ -128,8 +128,8 @@ TEXT = {
                      "temperatuur. Kijk of de radiatoren of de vloerverwarming warm worden en of de hoogste "
                      "watertemperatuur (op de ketel en op de E32-pagina Huis) hoog genoeg is.",
         "session_lost": "De E32 is online, maar Home Assistant heeft al meer dan {minutes} minuten geen werkende "
-                        "verbinding met hem, dus de ruimtes krijgen geen nieuwe doelen uit Home Assistant. Open de "
-                        "integratie en kies opnieuw Connect E32 als het niet vanzelf herstelt.",
+                        "verbinding met hem, dus de ruimtes krijgen geen nieuwe gewenste temperaturen uit Home Assistant. "
+                        "Herstelt het niet vanzelf, open dan de integratie: Configureren → E32-verbinding.",
         "short_cycling_persists": "De brander slaat nog steeds te vaak aan en uit, ook nu de E32 de rusttijd heeft "
                                   "verlengd. Laat de instellingen van de ketel nakijken, bijvoorbeeld door je installateur.",
     },
@@ -160,7 +160,7 @@ TEXT = {
                      "najwyższa temperatura wody (na kotle i na stronie E32 Home) jest wystarczająco wysoka.",
         "session_lost": "E32 jest online, ale Home Assistant od ponad {minutes} minut nie ma z nim działającego "
                         "połączenia, więc pomieszczenia nie dostają nowych temperatur docelowych z Home Assistant. "
-                        "Otwórz integrację i ponownie wybierz Połącz E32, jeśli połączenie samo nie wróci.",
+                        "Jeśli połączenie samo nie wróci, otwórz integrację: Konfiguruj → Połączenie z E32.",
         "short_cycling_persists": "Palnik nadal zbyt często się włącza, mimo że E32 wydłużył przerwę między startami. "
                                   "Zleć sprawdzenie ustawień kotła, na przykład instalatorowi.",
     },

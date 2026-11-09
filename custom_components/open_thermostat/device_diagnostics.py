@@ -64,13 +64,45 @@ def decode_heartbeat(payload):
     cpu = beat.get("cpu_deci_c")
     if cpu is not None and (type(cpu) is not int or not -400 <= cpu <= 1500):
         return None
-    return valid({"mem_free": beat.get("heap_free"), "mem_min_free": beat.get("heap_min_free"),
-                  "mem_max_alloc": beat["heap_max_alloc"], "temperature": None,
-                  "cpu_temperature": None if cpu is None else cpu / 10, "uptime": beat.get("uptime_s")})
+    value = valid({"mem_free": beat.get("heap_free"), "mem_min_free": beat.get("heap_min_free"),
+                   "mem_max_alloc": beat["heap_max_alloc"], "temperature": None,
+                   "cpu_temperature": None if cpu is None else cpu / 10, "uptime": beat.get("uptime_s")})
+    return {**value, "mqtt": mqtt_counters(beat.get("mqtt"))} if value is not None else None
+
+
+# The heartbeat's MQTT figures (1.1.1, P1 HA-3), kept as attributes of "Device uptime" for the soak criteria.
+# Per minute (not in the history: they change every heartbeat) and since the E32 started (in the history: they
+# change only when something happens).
+MQTT_MINUTE = ("messages", "bytes", "queue_peak_bytes", "latency_avg_ms", "latency_max_ms")
+MQTT_TOTAL = ("rejected", "telemetry_dropped")
+
+
+def mqtt_counters(value):
+    """The validated ``mqtt`` block of a heartbeat: {name: count}, None without one."""
+    if type(value) is not dict:
+        return None
+    out = {key: value.get(key) for key in (*MQTT_MINUTE, *MQTT_TOTAL)
+           if type(value.get(key)) is int and 0 <= value[key] <= 2**32 - 1}
+    disconnects = value.get("disconnects") if type(value.get("disconnects")) is dict else {}
+    for key in ("stalled", "socket_error"):
+        if type(disconnects.get(key)) is int and 0 <= disconnects[key] <= 2**32 - 1:
+            out[f"disconnects_{key}"] = disconnects[key]
+    return out or None
+
+
+def mqtt_attributes(counters, peak=None):
+    """The "Device uptime" attributes of one heartbeat's counters; ``peak``: the highest queue peak seen so far."""
+    if not counters:
+        return {}
+    minute = {f"mqtt_{key}_last_minute" if key in ("messages", "bytes") else f"mqtt_{key}": counters[key]
+              for key in MQTT_MINUTE if key in counters}
+    totals = {f"mqtt_{key}": counters[key] for key in (*MQTT_TOTAL, "disconnects_stalled", "disconnects_socket_error")
+              if key in counters}
+    return {**minute, **totals, **({"mqtt_queue_peak_bytes_max": peak} if peak is not None else {})}
 
 
 async def async_setup_device_diagnostics(hass, entry, async_add_entities, **add_options):
-    from .sensor import HUB_METRICS, HubMetric
+    from .sensor import HUB_METRICS, HubMetric, UptimeMetric
     state = hass.data[DOMAIN][entry.entry_id]
     runtime = state["v1_runtime"]
     if not runtime.enabled:
@@ -81,10 +113,11 @@ async def async_setup_device_diagnostics(hass, entry, async_add_entities, **add_
     prefix = entry.data[CONF_TOPIC_PREFIX]
     topic_base = connection.prefix
     # E32 has no RTC temperature sensor; firmware always sends null for it.
-    entities = [HubMetric(prefix, "device_status", metric, entry.entry_id)
+    entities = [(UptimeMetric if metric == "uptime" else HubMetric)(prefix, "device_status", metric, entry.entry_id)
                 for metric in HUB_METRICS["device_status"] if metric != "rtc_temperature"]
     async_add_entities(entities, **add_options)
     online = False
+    peak = {"max": None}  # the highest MQTT queue peak since Home Assistant started (HA-3)
     received = None      # (monotonic receipt of the last packet, current until)
     available = False
 
@@ -125,7 +158,12 @@ async def async_setup_device_diagnostics(hass, entry, async_add_entities, **add_
             # A new live packet also proves liveness after an HA-only restart.
             online = True
             available = True
+            counters = payload.get("mqtt")
+            if counters and "queue_peak_bytes" in counters:
+                peak["max"] = max(peak["max"] or 0, counters["queue_peak_bytes"])
             for entity in entities:
+                if counters is not None and entity._metric == "uptime":
+                    entity.mqtt_attributes = mqtt_attributes(counters, peak["max"])
                 entity.update_payload(payload, online)
         return receive
 

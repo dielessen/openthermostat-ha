@@ -568,19 +568,45 @@ def sync_issues(hass, entry, hub, raised):
         raised.add(issue)
 
 
+TRV_ABSENT_CONFIRM_S = 600  # R-C-02: two plan messages without ``trv`` at least this far apart mean "no valves"
+
+
+def _valves_gone(hub):
+    """True once two plan messages at least TRV_ABSENT_CONFIRM_S apart had no ``trv`` (R-C-02).
+
+    Firmware 1.1.0 leaves ``trv`` out of fw/config/plan once the last valve is removed (later firmware sends
+    an empty list). It also leaves it out during start-up, so one such plan proves nothing; the firmware
+    sends its plan on every change and at least once an hour. Counts only while the heating document has no
+    valve block either; a plan that lists ``trv`` or a heating document with one starts again.
+    """
+    heating = hub.heating if type(hub.heating) is dict else {}
+    if "trv" in hub.config or hub.config_received is None or type(heating.get("trv")) is dict:
+        hub.trv_missing_since = None
+        return False
+    if hub.trv_missing_since is None:
+        hub.trv_missing_since = hub.config_received
+        return False
+    return hub.config_received - hub.trv_missing_since >= TRV_ABSENT_CONFIRM_S
+
+
 @callback
 def remove_stale_entities(hass, entry, hub):
     """Remove the valve entities of rooms the E32 no longer lists with valves (fw/config/plan ``trv``).
 
-    Only while the E32 is online and its plan known: an offline E32 never removes anything. A plan
+    Only while the E32 is online and its plan known: an offline E32 never removes anything. One plan
     without a ``trv`` list says nothing about the valves (R4-04: the firmware leaves the key out while its
-    status has no valve block, for example during start-up), so it keeps every valve entity; only an
-    explicit list removes the rooms it leaves out, an empty one all of them.
+    status has no valve block, for example during start-up), so it keeps every valve entity; an explicit
+    list removes the rooms it leaves out, an empty one all of them. Older firmware never sends an empty
+    list: a ``trv`` missing from two plan messages at least 10 minutes apart counts as one (_valves_gone).
     """
     if not hub.fresh or hub.config is None:
         return
     listed = hub.config.get("trv")
-    if type(listed) is not list:
+    if type(listed) is list:
+        hub.trv_missing_since = None
+    elif _valves_gone(hub):
+        listed = []
+    else:
         return
     keep = set(listed)
     head = f"{hub.prefix}_e32_room_"

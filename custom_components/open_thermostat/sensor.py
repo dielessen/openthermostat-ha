@@ -83,7 +83,14 @@ HUB_DIVISORS = {
     "boiler_current_hot_water_temperature": 10,
 }
 # Whole kB; hours to 0.01 h, so the frontend's "1h 16m" has its minutes.
-HUB_PRECISION = {"memory_free": 0, "memory_min_free": 0, "memory_max_alloc": 0, "uptime": 2}
+HUB_PRECISION = {"memory_free": 0, "memory_min_free": 0, "memory_max_alloc": 0, "uptime": 1}
+# 1.1.1 (P1 HA-2): the E32's diagnostics in steps, so the recorder stores a row per real change, not per heartbeat
+# (uptime was 60 rows an hour, free memory 55): memory in whole kB, the uptime in steps of 0.1 h (6 minutes; a drop
+# still shows every restart).
+HUB_STEPS = {"memory_free": 1, "memory_min_free": 1, "memory_max_alloc": 1, "uptime": 0.1}
+
+# Pushed over MQTT: nothing to poll, no actions to limit (R4-15).
+PARALLEL_UPDATES = 0
 
 
 async def _cleanup_stale(hass, entry):
@@ -153,6 +160,12 @@ async def async_setup_entry(
             from .e32_backup_entities import async_setup_sensors as async_setup_backup_sensors
             # the last E32 settings backup (only with a stored E32 connection)
             await _optional_step("backup sensor", async_setup_backup_sensors, hass, entry, async_add_entities)
+            from .learned_store import async_setup_learned_store
+            # Repairs when the E32 could not keep what it learned (learned_store telemetry, E32 1.1.1, R-E-04)
+            await _optional_step("learned store", async_setup_learned_store, hass, entry)
+            from .last_restart import async_setup_sensor as async_setup_last_restart
+            # "Last restart" (fw/state/boot, E32 1.1.1): when the E32 started and why
+            await _optional_step("last restart", async_setup_last_restart, hass, entry, async_add_entities)
             from .e32_boiler_settings_entities import async_setup_sensors as async_setup_boiler_settings
             # "Boiler settings writes", once the E32 sends fw/telemetry/boiler_settings (track W)
             await _optional_step("boiler settings", async_setup_boiler_settings, hass, entry, async_add_entities)
@@ -714,13 +727,16 @@ class HubMetric(SensorEntity):
             }
         if self._metric == "boiler_burner_power" and isinstance(value, (int, float)) and not 0 <= value <= 100:
             value = None
+        if self._topic == "device_status" and self._metric == "uptime" and getattr(self, "mqtt_attributes", None):
+            self._attr_extra_state_attributes = dict(self.mqtt_attributes)  # P1 HA-3: the heartbeat's MQTT figures
         self.update_value(value, online)
 
     def update_value(self, value: object, online: bool) -> None:
         if self._legacy_compat:
             value = None
         self._attr_native_value = (
-            value / self._divisor
+            _stepped(value / self._divisor, HUB_STEPS.get(self._metric)) if self._topic == "device_status"
+            and finite_number(value) else value / self._divisor
             if finite_number(value)
             else value if self._metric in {"boiler_display_code", "boiler_service_code", "boiler_protocol_version"}
                 and isinstance(value, str) and value else None
@@ -728,6 +744,24 @@ class HubMetric(SensorEntity):
         self._attr_available = online and not self._legacy_compat
         if self.entity_id is not None:
             self.async_write_ha_state()
+
+
+class UptimeMetric(HubMetric):
+    """"Device uptime" with the heartbeat's MQTT figures (P1 HA-3); the per-minute ones change every heartbeat,
+    so they are live only, never a recorder row (HA-2)."""
+
+    _unrecorded_attributes = frozenset({"mqtt_messages_last_minute", "mqtt_bytes_last_minute", "mqtt_queue_peak_bytes",
+                                        "mqtt_latency_avg_ms", "mqtt_latency_max_ms"})
+
+
+def _stepped(value, step):
+    """value down to a multiple of step (the uptime) or to the nearest one (memory); unchanged without a step."""
+    import math
+    if step is None:
+        return value
+    if step < 1:
+        return round(math.floor(value / step + 1e-9) * step, 1)
+    return round(value / step) * step
 
 
 class RoomName(SensorEntity):

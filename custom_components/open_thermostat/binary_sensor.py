@@ -36,6 +36,9 @@ BOILER_STATES = {
     "boiler_pump_venting": ("pumpVenting", "Boiler pump venting", None),
 }
 
+# Pushed over MQTT: nothing to poll, no actions to limit (R4-15).
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,

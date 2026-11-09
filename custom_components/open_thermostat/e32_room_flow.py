@@ -92,12 +92,12 @@ REJECTIONS = {"invalid_sources": "e32_rejected_sources", "invalid_room_name": "e
               "invalid_schedule_limits": "e32_rejected_schedule", "invalid_room_away": "e32_away_invalid"}
 # The one sentence about the boiler's own maximum in the flow-limits form.
 BOILER_MAXIMUM_TEXT = {
-    "en": "Your boiler allows at most {maximum}; the E32 never asks for more. A lower limit here is useful "
-          "for floor heating.",
-    "nl": "Je ketel staat hoogstens {maximum} toe; de E32 vraagt nooit meer. Een lagere grens hier is nuttig "
-          "bij vloerverwarming.",
-    "pl": "Twój kocioł pozwala najwyżej na {maximum}; E32 nigdy nie żąda więcej. Niższy limit jest tu przydatny "
-          "przy ogrzewaniu podłogowym."}
+    "en": "Boiler maximum: {maximum} (set on the boiler); the E32 never asks for more. A lower limit here is "
+          "useful for floor heating.",
+    "nl": "Maximum van de ketel: {maximum} (ingesteld op de ketel); de E32 vraagt nooit meer. Een lagere grens "
+          "hier is nuttig bij vloerverwarming.",
+    "pl": "Maksimum kotła: {maximum} (ustawione na kotle); E32 nigdy nie żąda więcej. Niższy limit jest tu "
+          "przydatny przy ogrzewaniu podłogowym."}
 FLOW_LIMIT_FIELDS = {"minimum_flow_temperature": "minimum_flow_c", "maximum_flow_temperature": "maximum_flow_c"}
 
 DAYS = {"en": ("mon", "tue", "wed", "thu", "fri", "sat", "sun"),

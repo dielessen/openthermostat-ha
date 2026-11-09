@@ -19,6 +19,8 @@ async def async_get_config_entry_diagnostics(hass, entry):
         result["e32"] = await async_product_diagnostics(hass, entry)
         from .ems_devices import diagnostics as ems_devices
         result["e32"]["ems_devices"] = ems_devices(hass, entry)  # who is on the bus; identities once read
+        from .last_restart import diagnostics as last_restart
+        result["e32"]["last_restart"] = last_restart(hass, entry)  # fw/state/boot (E32 1.1.1), None before
     return scrub(result, ble_aliases(state.get("heating_hub")))
 
 

@@ -1,3 +1,86 @@
+# HA 1.2.0 — notifications, three plain devices, a restart sensor, room models and the E32's heating plan
+<!-- user-release-notes:v2:en -->
+
+Companion of E32 1.2.0; also runs with E32 1.1.0 and 1.0.0. Needs Home
+Assistant 2026.10.0 or newer.
+
+## New
+
+- **Notifications per room and for the house.** Configure → Notifications:
+  choose each person's phone, then switch a room on. Its people get a message
+  when a window or door is open while the room heats, when the room stays cold
+  for over an hour (only those at home), when its sensor goes silent and when
+  the battery of its thermometer or a radiator valve runs low. The house sends
+  problems (boiler fault, the E32 not reporting and back, the E32 waiting for
+  your confirmation, frost protection, low water pressure) and maintenance
+  (boiler maintenance, a new E32 or integration version, a failing settings
+  backup) to people with the tick "Also messages about the house". Off until
+  you switch it on; room messages wait for the morning from 23:00 to 07:00.
+- **Three devices, plain names.** "OpenThermostat E32" keeps the controller,
+  the house, what it learned, gas and diagnostics. The boiler is a device of
+  its own, named after the model you chose ("Nefit EcomLine HRC 22", else
+  "Boiler"), with all its values and settings; a thermostat the E32 hears on
+  the bus is "Thermostat on the boiler bus". Entity IDs and history stay. The
+  seven "Old: ..." energy counters are gone (their history stays). Configure
+  has "Dashboard and name" on the main menu, Smart warm-up and weather
+  compensation as one form, and one name for each thing. New: the sensor "Last
+  restart" (when and why the E32 restarted), two Repairs items when the E32
+  could not keep what it learned, and fewer history rows.
+- **What the E32 reports.** What the E32 learned says from which water
+  temperature your boiler burns steadily, lists all of the latest day's
+  changes and says about how many minutes a late or early morning moves the
+  next warm-up. Missed comfort time follows the E32's own count of rooms below
+  their target. The Boiler view says what the boiler got when it differs from
+  what was asked. Boiler settings can be changed while the E32 heats.
+- **Room models and the heating plan.** What the E32 learned says per room
+  how far its model is ("checking its predictions for Living room, 2 of 3
+  days good"). Home Assistant sends the weather forecast every hour (Configure
+  → Energy and outdoor temperature).
+  With E32 1.2.0 the sensor "Heating plan" and the dashboard's "Today's plan"
+  show what the E32 would plan and why ("Starts at 06:20 with 52 °C water so
+  Living room is 20.5 °C at 09:20 ..."), per purpose warm-up, pre-heat,
+  learning move, hold or coast. The E32 only watches at first. When its
+  predictions have been good for a week, Settings → Repairs asks once "The E32
+  is ready to plan the heating"; nothing changes until you confirm, and a bad
+  spell sends it back to checking. The comfort style (comfort first, balanced,
+  save most) sits beside Smart warm-up.
+
+## Fixed
+
+- **Rooms no longer disappear after one plan read.** A room loses its group,
+  device and entities only after its device is gone, which takes two plan
+  reads at least a minute apart, and never on a plan without rooms.
+- **Valve entities go once the last radiator valve is removed.**
+- **Display code 0P** is no longer a fault without a service number: it reads
+  "Code 0P (meaning not confirmed for this boiler)", without advice.
+- **The help texts follow the E32's renamed Settings page:** System →
+  Settings → Home Assistant → MQTT broker.
+- **Reloading the integration** no longer adds a time-zone check and an E32
+  status read per minute each time.
+- **Boiler settings keep their entities** over a restart once the E32
+  verifies a setting.
+- Smaller fixes: a failing room clean-up is logged and tried again; an odd
+  entity-list topic from the broker raises no error; removing an installation
+  forgets the E32 password the E32 refused.
+
+## Updating
+
+Update under Settings → Updates (the Marketplace, Home Assistant 2026.11 and
+newer; HACS on 2026.10 and older) and restart Home Assistant. Then install E32
+1.2.0 from its Firmware entity and confirm the takeover again (the repair
+"Confirm again that the E32 may control the boiler").
+
+- Entities, IDs and history stay; only the boiler's device changes. Anything
+  customised on an "Old:" counter is disabled, not deleted.
+- Going back to 1.1.0 or 1.0.0 is safe: the new sensors and Repairs items
+  show nothing until the E32 sends them.
+- Notifications are off until you switch them on.
+
+## Limitations
+
+- The plan, models and forecast need E32 1.2.0; on older firmware they are
+  not shown.
+
 # HA 1.1.0 — separate pause delays for doors and windows, boiler settings and recognition, EMS+ values, Shelly floor circuits
 <!-- user-release-notes:v2:en -->
 
@@ -1120,7 +1203,7 @@ Experimental coordinated release for E32 beta.6. Installation is verified separa
   saved room sensor and valves under Advanced settings. Reports retain their HA
   timestamp/age, shared devices appear once, and missing or ambiguous sources
   stay unknown. Reload explicitly refreshes the snapshot; no extra subscriptions
-  or duplicate entities are created. [Scope](DEVICE-BATTERY-SNAPSHOT.md).
+  or duplicate entities are created. [Scope](../engineering/DEVICE-BATTERY-SNAPSHOT.md).
 
 - Select up to eight window and door contacts in the normal room editor or room
   setup wizard. Configure opening/resume delays and maximum report age.

@@ -34,9 +34,11 @@ SAVED_REASONS = frozenset({
     "boiler_setting_put_back", "boiler_setting_not_taken", "boiler_setting_rejected", "boiler_setting_restored",
     "boiler_setting_not_started", "boiler_setting_reverted", "boiler_setting_pending",
     # The tester programme (e32_tester): the bus recording started or stopped, the result written, switched off.
-    "tester_recording_started", "tester_recording_stopped", "tester_shared", "tester_switched_off"})
+    "tester_recording_started", "tester_recording_stopped", "tester_shared", "tester_switched_off",
+    # Configure -> Notifications (notifications_flow).
+    "notifications_saved"})
 UNCHANGED_REASONS = frozenset({"e32_room_unchanged", "care_unchanged", "e32_settings_unchanged",
-                               "boiler_setting_unchanged", "tester_unchanged"})
+                               "boiler_setting_unchanged", "tester_unchanged", "notifications_unchanged"})
 
 # The room list after a save or removal is the Rooms menu with its own text.
 ALIASES = {"e32_rooms_saved": "e32_rooms", "e32_rooms_removed": "e32_rooms"}

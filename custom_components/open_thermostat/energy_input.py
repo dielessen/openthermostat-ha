@@ -21,6 +21,10 @@ price per m³. The price is in Home Assistant's own currency. The room payloads
 Options are stored in the entry options; saving only these keys does not
 reload the integration (see ``__init__._async_options_updated``).
 
+The weather forecast (1.1.1 stage B, optional): a weather entity whose hourly forecast goes to the E32
+every hour (weather_forecast.py); not chosen, the outdoor entity when that is a weather entity. Emptied on
+the form while the outdoor entity is a weather entity, it is stored as off (weather_forecast.FORECAST_OFF).
+
 The water meter stays in Home Assistant (nothing goes to the E32): a flow
 (L/min, L/h, m³/h, gal/min) or a meter reading (L, m³, gal; state class total
 or total increasing). With it, a hot-water round with water flowing is
@@ -42,12 +46,13 @@ CONF_GAS_KWH_PER_M3 = "energy_gas_kwh_per_m3"
 CONF_OUTDOOR = "energy_outdoor_entity"
 CONF_BOILER_KW = "energy_boiler_kw"
 CONF_WATER_METER = "energy_water_meter"
+CONF_FORECAST = "energy_forecast_entity"  # weather_forecast.CONF_FORECAST
 ENERGY_KEYS = (CONF_GAS_METER, CONF_GAS_PRICE_ENTITY, CONF_GAS_PRICE, CONF_GAS_KWH_PER_M3, CONF_OUTDOOR,
-               CONF_BOILER_KW, CONF_WATER_METER)
+               CONF_BOILER_KW, CONF_WATER_METER, CONF_FORECAST)
 # Form field -> option key (short field names read better in the translations).
 FIELDS = {"gas_meter": CONF_GAS_METER, "gas_price_entity": CONF_GAS_PRICE_ENTITY, "gas_price": CONF_GAS_PRICE,
           "gas_kwh_per_m3": CONF_GAS_KWH_PER_M3, "outdoor_entity": CONF_OUTDOOR, "boiler_kw": CONF_BOILER_KW,
-          "water_meter": CONF_WATER_METER}
+          "water_meter": CONF_WATER_METER, "forecast_entity": CONF_FORECAST}
 
 # Meter units: m³ as such, energy units converted with the calorific value.
 VOLUME_UNITS = ("m³", "m3")
@@ -178,6 +183,16 @@ def _check_outdoor(state):
         raise EnergyError("outdoor_entity", "outdoor_unit")
 
 
+def _check_forecast(state):
+    from .weather_forecast import offers_hourly
+    if state is None:
+        raise EnergyError("forecast_entity", "entity_not_found")
+    if state.domain != "weather":
+        raise EnergyError("forecast_entity", "forecast_not_weather")
+    if not offers_hourly(state):
+        raise EnergyError("forecast_entity", "forecast_no_hourly")
+
+
 def _number(values, key, field, limits, code, digits):
     if key in values:
         value = _float(values[key])
@@ -206,6 +221,11 @@ def validate_energy(hass, user_input):
     _number(values, CONF_BOILER_KW, "boiler_kw", BOILER_KW_LIMITS, "boiler_kw_invalid", 1)
     if CONF_WATER_METER in values:
         _check_water_meter(hass.states.get(values[CONF_WATER_METER]))
+    if CONF_FORECAST in values:
+        _check_forecast(hass.states.get(values[CONF_FORECAST]))
+    elif str(values.get(CONF_OUTDOOR, "")).startswith("weather."):
+        from .weather_forecast import FORECAST_OFF
+        values[CONF_FORECAST] = FORECAST_OFF  # emptied: else the outdoor weather entity would be its default
     return values
 
 
@@ -222,6 +242,9 @@ def energy_schema(vol, options, currency_code="EUR"):
     """
     def optional(field):
         current = options.get(FIELDS[field])
+        if field == "forecast_entity":  # not chosen: the outdoor weather entity it uses; off: empty
+            from .weather_forecast import forecast_entity
+            current = forecast_entity(options)
         return vol.Optional(field, description={"suggested_value": current}) if current is not None else vol.Optional(field)
 
     def number(low, high, step, unit):
@@ -235,6 +258,7 @@ def energy_schema(vol, options, currency_code="EUR"):
         optional("gas_kwh_per_m3"): number(GAS_KWH_PER_M3_LIMITS[0], GAS_KWH_PER_M3_LIMITS[1], 0.01, "kWh/m³"),
         optional("outdoor_entity"): selector.EntitySelector({"filter": [
             {"domain": "sensor", "device_class": "temperature"}, {"domain": "weather"}]}),
+        optional("forecast_entity"): selector.EntitySelector({"filter": [{"domain": "weather"}]}),
         optional("boiler_kw"): number(BOILER_KW_LIMITS[0], BOILER_KW_LIMITS[1], 0.1, "kW"),
         optional("water_meter"): selector.EntitySelector({"filter": [{"domain": "sensor"}]}),
     })

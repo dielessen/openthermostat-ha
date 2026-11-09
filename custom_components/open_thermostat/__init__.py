@@ -141,6 +141,8 @@ async def _async_options_updated(hass, entry):
         # Only the optional energy inputs changed: follow them, no reload (no plan review).
         if (forwarder:=state.get("energy_forwarder")) is not None:
             forwarder.reconfigure()
+        if (forecast:=state.get("forecast_forwarder")) is not None:
+            forecast.reconfigure()
         if (advice:=state.get("heating_advice")) is not None:
             advice.reevaluate()
         remember_configuration(hass, entry)
@@ -503,9 +505,13 @@ async def async_setup_entry(hass, entry):
             group_kwargs["config_subentry_id"] = ensure_installation_group(hass, entry)
         dr.async_get(hass).async_get_or_create(
             config_entry_id=entry.entry_id, identifiers={(DOMAIN, entry.data[CONF_TOPIC_PREFIX])},
-            name=E32_DEVICE_NAME, manufacturer=MANUFACTURER, model="OpenThermostat", **group_kwargs)
+            name=E32_DEVICE_NAME, manufacturer=MANUFACTURER, model="E32 V2" if product else "OpenThermostat",
+            **group_kwargs)
         _rename_old_manufacturer(hass, entry)
         if product:
+            # The boiler device (1.1.1): its values and settings are on it, so it exists before they are added.
+            from .ems_devices import ensure_boiler_device
+            ensure_boiler_device(hass, entry, group_kwargs["config_subentry_id"])
             # One group per E32 room on the integration page (before the platforms add entities).
             from .room_groups import async_setup_room_groups
             async_setup_room_groups(hass, entry, group_kwargs["config_subentry_id"])
@@ -527,13 +533,17 @@ async def async_setup_entry(hass, entry):
             # Repairs when the E32's time zone differs from Home Assistant's (e32_system, rc.3).
             from .e32_system import setup_time_zone_check
             try:
-                cleanup.callback(setup_time_zone_check(hass, entry, backups))
+                undo = setup_time_zone_check(hass, entry, backups)
+                cleanup.callback(undo)  # a failed setup
+                entry.async_on_unload(undo)  # unload and reload (R-C-03: pop_all() drops the stack's copy)
             except Exception:  # optional: never blocks the rooms
                 _LOGGER.exception("OpenThermostat %s: the E32 time zone check could not be started", entry.title)
             # The tester programme (boiler_share, E5): the bus recording's status while it is switched on.
             from .boiler_share import setup_tester
             try:
-                cleanup.callback(setup_tester(hass, entry, state))
+                undo = setup_tester(hass, entry, state)
+                cleanup.callback(undo)
+                entry.async_on_unload(undo)
             except Exception:  # optional: never blocks the rooms
                 _LOGGER.exception("OpenThermostat %s: the tester programme could not be started", entry.title)
         if not stale_link:
@@ -593,11 +603,20 @@ async def async_remove_entry(hass, entry):
     # Its insight notifications and the ones the owner dismissed (E32 rc.5, insight.py).
     from .insight import async_remove_insight
     await async_remove_insight(hass, entry.entry_id)
+    # What its notifications kept: the cooldowns and the open episodes (notifications.py).
+    from .notifications import async_remove_notifications
+    await async_remove_notifications(hass, entry.entry_id)
     # What the shared bookkeeping kept for it: the Repairs groups and the information notes (R4-31).
     from .issue_sync import forget_entry
     forget_entry(hass, entry.entry_id)
     from .metrics_reports import async_forget_entry
     await async_forget_entry(hass, entry.entry_id)
+    # The password the E32 refused and the last room-group repair: both outlive a reload on purpose,
+    # not the entry (R-C-07).
+    from .e32_access import clear_rejected
+    from .room_groups import REPAIRS_KEY
+    clear_rejected(hass, entry)
+    hass.data.get(REPAIRS_KEY, {}).pop(entry.entry_id, None)
     # The last installation removed: browsers stop loading the dashboard cards (week_planner).
     if not any(other.entry_id != entry.entry_id for other in hass.config_entries.async_entries(DOMAIN)):
         from .week_planner import async_remove_card_modules

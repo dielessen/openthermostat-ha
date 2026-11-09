@@ -47,7 +47,7 @@ const TEXT = {title: 'Your house', heating: 'Heating', status_heating: 'Heating 
  tap_open: 'Hot water: tap open', keeping_warm: 'Keeping hot water warm', gas_estimate: 'Gas today (estimate)',
  no_warmup: 'no warm-up yesterday', late_hours: '{h} h {m} min late', early_hours: '{h} h {m} min early',
  not_warm: 'not warm within 3 h', yesterday_starts: 'Burner starts per heating hour',
- yesterday_heating: 'Heating energy (estimate)', warm_on_time: '{room}: warm on time', late_h: '{h} h late', early_h: '{h} h early'};
+ yesterday_heating: 'Gas for heating (estimate)', warm_on_time: '{room}: warm on time', late_h: '{h} h late', early_h: '{h} h early'};
 // The warm-on-time sensor's value for a room that did not get warm within 3 hours (the firmware's ArrivalLearner cap).
 const NOT_WARM_MIN = 180;
 const DASH = '—';  // a figure not known yet: the same in every language

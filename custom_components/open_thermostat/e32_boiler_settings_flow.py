@@ -33,13 +33,15 @@ from .e32_boiler_settings import (
 
 TEXTS = "boiler_settings_text"
 
-# The E32's refusal names (docs/RESTAPI.md) → the form error in plain words.
+# The E32's refusal names (docs/RESTAPI.md) → the form error in plain words. Since E32 1.1.1 (K15) a setting can be
+# changed while the E32 drives the boiler; 409 active_heat_owns_boiler now only means a planned restart or a
+# firmware upload is coming (its own text: try again in a minute).
 REFUSALS = {
     "value_out_of_range": "boiler_setting_out_of_range", "unknown_setting": "boiler_setting_out_of_range",
     "invalid_request": "boiler_setting_out_of_range", "above_system_maximum": "boiler_setting_above_maximum",
     "advanced_required": "boiler_setting_advanced", "persistent_writes_off": "boiler_setting_writes_off",
     "settings_writes_unavailable": "boiler_setting_unavailable", "risk_not_accepted": "boiler_settings_confirm",
-    "boiler_not_available": "boiler_setting_not_now", "active_heat_owns_boiler": "boiler_setting_not_now",
+    "boiler_not_available": "boiler_setting_not_now", "active_heat_owns_boiler": "boiler_setting_restarting",
     "boiler_identity_unknown": "boiler_setting_not_now", "settings_transport_fault": "boiler_setting_not_now",
     "unsupported_on_this_boiler": "boiler_setting_unsupported", "check_boiler_first": "boiler_setting_check_boiler",
     "too_soon_for_this_setting": "boiler_setting_too_soon", "daily_limit_reached": "boiler_setting_daily_limit",

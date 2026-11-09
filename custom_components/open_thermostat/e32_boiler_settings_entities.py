@@ -31,8 +31,10 @@ class _BoilerSettingsEntity:
 
     def __init__(self, state, unique_id):
         self._settings = state
+        from .ems_devices import boiler_identifier
         self._attr_unique_id = unique_id
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, state.prefix)})
+        # On the boiler device (1.1.1, V12-26): the boiler's own settings.
+        self._attr_device_info = DeviceInfo(identifiers={boiler_identifier(state.prefix)})
 
     async def async_added_to_hass(self):
         self.async_on_remove(self._settings.add_listener(self.async_write_ha_state))

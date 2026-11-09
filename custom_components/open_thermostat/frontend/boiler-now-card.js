@@ -25,6 +25,7 @@ const CARD = 'boiler_activity.state_attributes.card.state.';
 const TEXT = {title: 'The boiler now', no_data: 'No data from the boiler', boiler: 'Boiler', code: 'Display code {code}: {meaning}',
  code_bare: 'Display code {code}', code_fault: '{severity} · display code {code}', link: 'connection with the boiler: {state}', link_good: 'good',
  link_none: 'none', dhw: 'hot water: {state}', yes: 'yes', no: 'no', flow: 'Water to heating', asked: 'asked {flow} °C',
+ asked_sent: 'asked {flow} °C, sent {sent} °C',
  would_ask: 'E32 would ask {flow} °C', no_request: 'no request', ceiling: 'at most {flow} °C', back: 'Water back',
  difference: 'difference {n} °C', power: 'Burner power', power_off: 'burner off', power_low: 'low fire, calm', power_mid: 'medium fire',
  power_full: 'full fire', starts: 'Starts in the last hour', calm: 'calm', often: 'switching on and off too often', today: 'today {n}',
@@ -194,7 +195,7 @@ class OpenThermostatBoilerNow extends HTMLElement {
  value(id) { const st = this.st(id); return known(st) ? numeric(st.state) : null; }
  // A temperature in the entity's own unit (Home Assistant converts a °C sensor for an imperial house).
  unit(id) { const unit = this.st(id)?.attributes?.unit_of_measurement; return typeof unit === 'string' && unit ? unit : '°C'; }
- inUnit(text, id) { const unit = this.unit(id); return unit !== '°C' && typeof text === 'string' ? text.replace('°C', unit) : text; }
+ inUnit(text, id) { const unit = this.unit(id); return unit !== '°C' && typeof text === 'string' ? text.split('°C').join(unit) : text; }
  moreInfo(entityId) { this.dispatchEvent(new CustomEvent('hass-more-info', {bubbles: true, composed: true, detail: {entityId}})); }
 
  // -- today's burner starts: the statistic of the starts sensor, throttled; never the E32 -------------------------
@@ -367,13 +368,19 @@ class OpenThermostatBoilerNow extends HTMLElement {
   return grid;
  }
  // What is asked of the boiler: the E32's request while it drives the boiler; in the trial run (or before the
- // takeover is confirmed) what it would ask; nothing said without a request sensor.
+ // takeover is confirmed) what it would ask; nothing said without a request sensor. E32 SL-A: what the boiler got
+ // (the request's sent_flow_c, after the boiler's minimum; an attribute in °C) beside it when it differs.
  asked() {
   const st = this.st(this._config.request), flow = known(st) ? numeric(st.state) : null;
   if (flow === null) return null;
   const a = st.attributes || {}, driving = a.mode !== 'shadow' && a.control !== 'awaiting_confirmation';
   if (flow <= 0) return driving ? this.t('no_request') : null;
-  return this.inUnit(this.t(driving ? 'asked' : 'would_ask', {flow: this.number(Math.round(flow))}), this._config.request);
+  const celsius = numeric(a.sent_flow_c), unit = this.unit(this._config.request);
+  const sent = celsius === null || celsius <= 0 ? null : Math.round(unit === '°F' ? celsius * 9 / 5 + 32 : celsius);
+  const values = {flow: this.number(Math.round(flow))};
+  if (driving && sent !== null && sent !== Math.round(flow))
+   return this.inUnit(this.t('asked_sent', {...values, sent: this.number(sent)}), this._config.request);
+  return this.inUnit(this.t(driving ? 'asked' : 'would_ask', values), this._config.request);
  }
  // The most the E32 asks near the target now (the flow document's ceiling_c in effect: Smart warm-up on, the E32
  // driving the boiler); only while it is known.

@@ -12,7 +12,9 @@ Everything the E32 device offers as a control is also here, in Configure
   web session (e32_house.async_change_holidays);
 - Heating and boiler -> Smart warm-up and -> Weather compensation (with the water
   temperature in hard frost under Advanced): the same E32 link as the switches
-  and the select (e32_flow.FlowSettingsLink.async_change).
+  and the select (e32_flow.FlowSettingsLink.async_change). Beside Smart warm-up the
+  comfort style (1.1.1 stage B: comfort first, balanced, save most), only for firmware
+  that has it, as a plain choice with one sentence per option.
 """
 from datetime import timedelta
 
@@ -24,7 +26,8 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .e32_comfort import AWAY_LIMITS, MAX_AWAY_DAYS
-from .e32_flow import DESIGN_FLOW_AUTOMATIC, DESIGN_FLOW_KEY, DESIGN_FLOW_LIMITS, flow_link
+from .e32_flow import (COMFORT_STYLE_KEY, COMFORT_STYLES, DESIGN_FLOW_AUTOMATIC, DESIGN_FLOW_KEY, DESIGN_FLOW_LIMITS,
+                       flow_link)
 from .e32_house import (MODES, async_comfort_state, holiday_periods, holiday_temperature, holiday_until,
                         house_mode, supports_holidays, supports_house_mode)
 from .heating_link import number
@@ -331,6 +334,26 @@ class HouseHeatingSteps:
         except HomeAssistantError as err:
             return None, self._e32_abort_failure(err)
 
+    @staticmethod
+    def _comfort_field(stored):
+        """{the comfort style field} for firmware that has it (1.1.1 stage B), else {}."""
+        if stored.get(COMFORT_STYLE_KEY) not in COMFORT_STYLES:
+            return {}
+        return {vol.Required("comfort_style", default=stored[COMFORT_STYLE_KEY]): selector.SelectSelector({
+            "options": list(COMFORT_STYLES), "translation_key": "comfort_style_choice", "mode": "list"})}
+
+    @staticmethod
+    def _comfort_change(stored, user_input, changes):
+        """Adds the comfort style to ``changes`` when it changed; False for a value the E32 would refuse."""
+        if stored.get(COMFORT_STYLE_KEY) not in COMFORT_STYLES or "comfort_style" not in user_input:
+            return True
+        style = user_input.get("comfort_style")
+        if style not in COMFORT_STYLES:
+            return False
+        if style != stored[COMFORT_STYLE_KEY]:
+            changes[COMFORT_STYLE_KEY] = style
+        return True
+
     async def _heating_save(self, link, changes):
         """None when the E32 stored every change (one field at a time), else the form's error key."""
         for key, value in changes.items():
@@ -338,22 +361,66 @@ class HouseHeatingSteps:
                 return error
         return None
 
+    async def async_step_heating_flow(self, user_input=None):
+        """Smart warm-up and weather compensation in one form (1.1.1, V12-31): the two switches, the water
+        temperature in hard frost under Advanced. The old rows heating_warm_up and heating_weather stay as steps
+        (aliases), so a link to either still works."""
+        link, stored = await self._heating_options()
+        if link is None:
+            return stored
+        design = stored[DESIGN_FLOW_KEY]
+        shown = DESIGN_FLOW_AUTOMATIC if design == 0 else str(design)
+        errors = {}
+        if user_input is not None:
+            warm_up, on = user_input.get("smart_warm_up"), user_input.get("weather_compensation")
+            choice = (user_input.get("advanced") or {}).get("hard_frost_water_temperature", shown)
+            changes = {}
+            if (type(warm_up) is not bool or type(on) is not bool or choice not in DESIGN_CHOICES
+                    or not self._comfort_change(stored, user_input, changes)):
+                errors["base"] = "e32_flow_options_failed"
+            else:
+                if warm_up != stored["apply_learned"]:
+                    changes["apply_learned"] = warm_up
+                if on != stored["weather_curve"]:
+                    changes["weather_curve"] = on
+                wanted = 0 if choice == DESIGN_FLOW_AUTOMATIC else int(choice)
+                if wanted != design:
+                    changes[DESIGN_FLOW_KEY] = wanted
+                if not changes:
+                    return self.async_abort(reason="e32_room_unchanged")
+                if (error := await self._heating_save(link, changes)) is None:
+                    return self.async_abort(reason="e32_flow_options_saved")
+                errors["base"] = error
+        schema = vol.Schema({
+            vol.Required("smart_warm_up", default=stored["apply_learned"]): selector.BooleanSelector(),
+            **self._comfort_field(stored),
+            vol.Required("weather_compensation", default=stored["weather_curve"]): selector.BooleanSelector(),
+            vol.Optional("advanced"): section(vol.Schema({
+                vol.Required("hard_frost_water_temperature", default=shown): selector.SelectSelector({
+                    "options": DESIGN_CHOICES, "translation_key": "flow_design_choice", "mode": "dropdown"}),
+            }), {"collapsed": True}),
+        })
+        return self.async_show_form(step_id="heating_flow", data_schema=schema, errors=errors)
+
     async def async_step_heating_warm_up(self, user_input=None):
         link, stored = await self._heating_options()
         if link is None:
             return stored
         errors = {}
         if user_input is not None:
-            value = user_input.get("smart_warm_up")
-            if type(value) is not bool:
+            value, changes = user_input.get("smart_warm_up"), {}
+            if type(value) is not bool or not self._comfort_change(stored, user_input, changes):
                 errors["base"] = "e32_flow_options_failed"
-            elif value == stored["apply_learned"]:
-                return self.async_abort(reason="e32_room_unchanged")
-            elif (error := await self._heating_save(link, {"apply_learned": value})) is None:
-                return self.async_abort(reason="e32_flow_options_saved")
             else:
+                if value != stored["apply_learned"]:
+                    changes = {"apply_learned": value, **changes}
+                if not changes:
+                    return self.async_abort(reason="e32_room_unchanged")
+                if (error := await self._heating_save(link, changes)) is None:
+                    return self.async_abort(reason="e32_flow_options_saved")
                 errors["base"] = error
-        schema = vol.Schema({vol.Required("smart_warm_up", default=stored["apply_learned"]): selector.BooleanSelector()})
+        schema = vol.Schema({vol.Required("smart_warm_up", default=stored["apply_learned"]): selector.BooleanSelector(),
+                             **self._comfort_field(stored)})
         return self.async_show_form(step_id="heating_warm_up", data_schema=schema, errors=errors)
 
     async def async_step_heating_weather(self, user_input=None):

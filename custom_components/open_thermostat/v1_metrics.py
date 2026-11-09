@@ -35,7 +35,7 @@ async def async_setup_shadow_metrics(hass,entry,async_add_entities):
                     entity._attr_entity_registry_enabled_default=value_gated_enabled_default(
                         hass,entity.unique_id,finite(first.get(HUB_METRICS["ems_metrics"][metric][0]+"V2")))
                 entities.append(entity)
-                if metric in VERSIONED_METRICS:
+                if metric in VERSIONED_METRICS and not is_product(entry):  # 1.1.1 (Q3): no "Old: ..." on an E32
                     old_id=er.async_get(hass).async_get_entity_id(
                         "sensor",DOMAIN,f'{entry.data[CONF_TOPIC_PREFIX]}_hub_{metric}')
                     old=er.async_get(hass).async_get(old_id) if old_id else None

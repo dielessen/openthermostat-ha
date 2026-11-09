@@ -38,6 +38,17 @@ Removing a record keeps the Recorder history and the long-term statistics of
 its entity_id; the entity comes back under the same entity_id (and continues
 those statistics) when the integration provides it again.
 
+"Ready for E32 control" (takeover_readiness) means something only before the takeover. Once the E32
+controls the boiler (mode active, the readiness "not applicable" and no confirmation awaited) its record goes
+the same way (1.1.1, the owner's Q4): only while untouched, never at setup, after that status has lasted
+RETIRED_GRACE_S (note_heating_status); heating_link.wanted_sensors creates it again in a trial run.
+
+The "Old: ..." energy counters (the definition-1 identities ``hub_<metric>`` of the seven versioned metrics)
+are retired in 1.1.1 (the owner's Q3): they were always unavailable, without a state class, kept only to show
+their history. A product entry no longer creates them; an untouched record goes at setup (its history and
+statistics stay in the recorder), a customised one is kept, disabled. The figures live on in "Gas for
+heating" / "Gas for hot water" and, on boilers that send them, the "Estimated energy ..." counters.
+
 E32 rooms: a room that is no longer in the E32 room plan (removed in the HA
 room editor or on the E32's own page) loses its room device and that device's
 entities, but only once a plan has actually been read from the E32 (never on
@@ -270,6 +281,31 @@ def cleanup_retired(hass, entry, prefix, payload):
     return removed
 
 
+# 1.1.1 (Q3): the "Old: ..." counters (sensor.HubMetric definition_version=1), retired for good.
+OLD_COUNTERS_VERSION = "1.1.1"
+
+
+def old_counter_unique_ids(prefix):
+    """The unique IDs of the seven "Old: ..." counters (the definition-1 identity of each versioned metric)."""
+    from .sensor import VERSIONED_METRICS
+    return {f"{prefix}_hub_{metric}" for metric in VERSIONED_METRICS}
+
+
+def readiness_unique_id(prefix):
+    return f"{prefix}_hub_takeover_readiness"
+
+
+def readiness_over(status):
+    """The E32 controls the boiler: mode active, its readiness "not applicable" and no confirmation awaited."""
+    if type(status) is not dict or status.get("mode") != "active":
+        return False
+    readiness = status.get("readiness")
+    if type(readiness) is not dict or readiness.get("state") != "not_applicable":
+        return False
+    active = status.get("active") if type(status.get("active")) is dict else {}
+    return not (active.get("awaiting_confirmation") is True or active.get("state") == "awaiting_confirmation")
+
+
 def comparison_unique_ids(prefix):
     """The unique IDs of the shadow comparison sensors (heating_link.ShadowSensor)."""
     from .heating_link import SHADOW_SENSORS
@@ -288,14 +324,30 @@ def note_heating_status(hass, entry, prefix, status):
     state = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if state is None:
         return
-    if not comparison_over(status):
-        state.pop("comparison_watch", None)
-        return
-    watch = state.setdefault("comparison_watch", {"since": _clock(), "done": False})
-    if watch["done"] or _clock() - watch["since"] < RETIRED_GRACE_S:
-        return
-    watch["done"] = True
-    cleanup_comparison(hass, entry, prefix)
+    for key, over, cleanup in (("comparison_watch", comparison_over(status), cleanup_comparison),
+                               ("readiness_watch", readiness_over(status), cleanup_readiness)):
+        if not over:
+            state.pop(key, None)
+            continue
+        watch = state.setdefault(key, {"since": _clock(), "done": False})
+        if watch["done"] or _clock() - watch["since"] < RETIRED_GRACE_S:
+            continue
+        watch["done"] = True
+        cleanup(hass, entry, prefix)
+
+
+def cleanup_readiness(hass, entry, prefix):
+    """Remove this entry's untouched "Ready for E32 control" record; returns its entity IDs."""
+    registry = er.async_get(hass)
+    removed = []
+    for record in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if record.platform == DOMAIN and record.unique_id == readiness_unique_id(prefix) and untouched(record):
+            registry.async_remove(record.entity_id)
+            removed.append(record.entity_id)
+    if removed:
+        _LOGGER.info("Removed %s: the E32 controls the boiler, so \"Ready for E32 control\" no longer applies. Its "
+                     "history is kept; it comes back in a trial run", ", ".join(removed))
+    return removed
 
 
 def cleanup_comparison(hass, entry, prefix):
@@ -324,11 +376,13 @@ def _reporting_fields(hass, entry):
     return frozenset(index for index in cache.records if plausible(cache, index))
 
 
-def stale_reason(record, prefix, legacy, reporting_ids, zones):
+def stale_reason(record, prefix, legacy, reporting_ids, zones, old_counters=frozenset()):
     """Why this record is no longer provided, or None when it still is (or may be)."""
     uid = record.unique_id
     if uid in legacy:
         return "legacy_hub"
+    if uid in old_counters:
+        return "old_counter_retired"
     if retired_reason(record, prefix) is not None:
         return None  # decided later, once the metrics have been seen (note_metrics)
     if uid.startswith(f"{prefix}_boiler_fields_v1_"):
@@ -359,7 +413,8 @@ def cleanup_stale_entities(hass, entry, prefix):
              if subentry.subentry_type == "zone"}
     records = [record for record in er.async_entries_for_config_entry(registry, entry.entry_id)
                if record.platform == DOMAIN]
-    reasons = {record.entity_id: stale_reason(record, prefix, legacy, reporting_ids, zones)
+    old_counters = old_counter_unique_ids(prefix)
+    reasons = {record.entity_id: stale_reason(record, prefix, legacy, reporting_ids, zones, old_counters)
                for record in records}
     # F28: of an EMS+ / Classic pair that carries one physical value, only the
     # record that stays (the one the user has) is kept; the other is a duplicate.
@@ -375,7 +430,7 @@ def cleanup_stale_entities(hass, entry, prefix):
         if untouched(record):
             registry.async_remove(record.entity_id)
             removed.append(f"{record.entity_id} ({reason})")
-        elif reason == "legacy_hub" and record.disabled_by is None:
+        elif reason in ("legacy_hub", "old_counter_retired") and record.disabled_by is None:
             registry.async_update_entity(record.entity_id, disabled_by=_INTEGRATION)
     if removed:
         _LOGGER.info("Removed %d OpenThermostat entities this installation no longer provides: %s. "

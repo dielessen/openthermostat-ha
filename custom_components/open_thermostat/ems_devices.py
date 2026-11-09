@@ -15,11 +15,20 @@ of them. The owner's Nefit EcomLine Classic HRC 22, behind a Bosch EasyControl
 Adapter, reports product 206, which the reference calls "Ecomline Excellent".
 The boiler is named after the model the owner chose on the E32 Boiler page
 (``display_model`` in the retained fw/config/boiler_profile, the names of
-public/boilers/catalog-v1.json); without a choice it gets a neutral translated
-name with the brand and product number ("Nefit boiler (product 206) (0x08)").
+public/boilers/catalog-v1.json): "Nefit EcomLine HRC 22"; without a choice it is
+"Boiler" / "Ketel" / "Kocioł" (1.1.1, the owner's Q1: no bus address or product
+number in a name the owner reads every day; they are the model and model ID).
 This holds for every boiler product number, also one with a single reference
 name: 206 has one too and is still wrong. The device follows a later choice in
 place, whichever of the two retained topics arrives first.
+
+The boiler device holds the boiler's values and settings (1.1.1, V12-26): the
+boiler fields, Boiler recognition, the boiler settings and "Changing boiler
+settings". It exists from the start of a product entry with its fallback name
+(ensure_boiler_device), before the E32 reports its bus list, so those entities
+always have their device; the bus list fills in the manufacturer, model and
+version later. A thermostat the E32 hears on the bus is "Thermostat on the boiler
+bus" (with its bus address only when there are two).
 
 A device taken off the bus (2026-11-01: the owner's tado at 0x17) stays in the
 E32's list until the E32 restarts; one missing from complete lists (StaleDevices)
@@ -48,6 +57,7 @@ FULL_LIST_UPTIME_S = 15 * 60
 STALE_AFTER_S = 24 * 3600
 CHECK_INTERVAL = timedelta(minutes=10)
 ROLES = {8: "boiler", 16: "thermostat", 23: "thermostat"}
+BOILER_ADDRESS = 8
 BRANDS = {1: "Bosch", 2: "Junkers", 3: "Buderus", 4: "Nefit", 5: "Sieger", 11: "Worcester", 13: "IVT"}
 _PRODUCTS = None
 
@@ -109,10 +119,42 @@ def profile_model(payload):
     return model if type(model) is str and DISPLAY_MODEL.fullmatch(model) else None
 
 
-def describe(device, model=None):
+def boiler_identifier(prefix):
+    """The device registry identifier of this E32's boiler (its bus address 0x08)."""
+    return (DOMAIN, f"{prefix}_ems_{BOILER_ADDRESS:02x}")
+
+
+def boiler_device_info(prefix):
+    """The device_info that puts an entity on the boiler device (ensure_boiler_device made it)."""
+    from homeassistant.helpers.device_registry import DeviceInfo
+    return DeviceInfo(identifiers={boiler_identifier(prefix)})
+
+
+@callback
+def ensure_boiler_device(hass, entry, subentry_id=None):
+    """The boiler device of a product entry, created with its translated fallback name when missing.
+
+    Via the E32 device and in the installation group like the other bus devices. An existing device (named after
+    the chosen model, or by the user) is left as it is. Returns the device, or None without the E32 device.
+    """
+    prefix = entry.data[CONF_TOPIC_PREFIX]
+    registry = dr.async_get(hass)
+    hub = registry.async_get_device_by_identifier((DOMAIN, prefix), entry.entry_id)
+    if hub is None:
+        return None
+    existing = registry.async_get_device_by_identifier(boiler_identifier(prefix), entry.entry_id)
+    if existing is not None:
+        return existing
+    options = {"config_subentry_id": subentry_id} if subentry_id else {}
+    return registry.async_get_or_create(config_entry_id=entry.entry_id, identifiers={boiler_identifier(prefix)},
+                                        translation_key="ems_boiler", via_device_id=hub.id, **options)
+
+
+def describe(device, model=None, thermostats=1):
     """name, manufacturer and model of a device with a known product.
 
     model: the boiler model chosen on the E32 (a catalog id); it names the boiler only.
+    thermostats: how many thermostats the bus list has (two get their bus address in the name).
     """
     product = device["product_id"]
     if product is None:
@@ -124,17 +166,21 @@ def describe(device, model=None):
     if role == "boiler":
         chosen = reference["boiler_models"].get(model) if type(model) is str else None
         if chosen is not None:
-            return {"name": f"{chosen['name']} ({address})", "manufacturer": chosen["brand"],
+            return {"name": chosen["name"], "manufacturer": chosen["brand"],
                     "model": chosen["name"].removeprefix(chosen["brand"] + " ")}
-        # A product number does not say which boiler model this is: a neutral name.
-        return {"manufacturer": brand or "EMS", "model": f"EMS product {product}",
-                "translation_key": "ems_boiler_brand" if brand else "ems_boiler",
-                "translation_placeholders": {"address": address, "product": str(product),
-                                             **({"brand": brand} if brand else {})}}
+        # A product number does not say which boiler model this is: a neutral name ("Boiler").
+        return {"manufacturer": brand or "EMS", "model": f"EMS product {product}", "translation_key": "ems_boiler",
+                "translation_placeholders": {}}
     candidates = reference["devices"].get(str(product), [])
     matched = [c for c in candidates if c["type"] == role] if role else candidates
     known = matched[0] if len(matched) == 1 else None  # product IDs are reused between categories
     described = {"manufacturer": brand or "EMS", "model": known["name"] if known else f"EMS {product}"}
+    if role == "thermostat":
+        # "Thermostat on the boiler bus"; its type is the model (1.1.1, Q1).
+        if thermostats > 1:
+            return {**described, "translation_key": "ems_thermostat_address",
+                    "translation_placeholders": {"address": address}}
+        return {**described, "translation_key": "ems_thermostat", "translation_placeholders": {}}
     if known is not None:
         return {**described, "name": f"{brand + ' ' if brand else ''}{known['name']} ({address})"}
     # Not in the reference (or ambiguous): a translated generic name (strings.json "device").
@@ -151,8 +197,10 @@ def sync_devices(hass, entry, devices, subentry_id=None, model=None):
     registry = dr.async_get(hass)
     hub = registry.async_get_device_by_identifier((DOMAIN, prefix), entry.entry_id)
     done = []
+    thermostats = sum(1 for device in devices if ROLES.get(device["address"]) == "thermostat"
+                      and device["product_id"] is not None)
     for device in devices:
-        described = describe(device, model)
+        described = describe(device, model, thermostats)
         if described is None:
             continue
         identifier = (DOMAIN, f"{prefix}_ems_{device['address']:02x}")
@@ -163,7 +211,8 @@ def sync_devices(hass, entry, devices, subentry_id=None, model=None):
             options["name"] = described["name"]
         else:
             options["translation_key"] = described["translation_key"]
-            options["translation_placeholders"] = described["translation_placeholders"]
+            if described["translation_placeholders"]:
+                options["translation_placeholders"] = described["translation_placeholders"]
         registry.async_get_or_create(
             config_entry_id=entry.entry_id, identifiers={identifier}, manufacturer=described["manufacturer"],
             model=described["model"], model_id=str(device["product_id"]), sw_version=device["version"], **options)
@@ -223,7 +272,8 @@ class StaleDevices:
         gone = {}
         for device in dr.async_entries_for_config_entry(registry, self.entry.entry_id):
             address = device_address(prefix, device)
-            if address is not None and address not in present:
+            # The boiler device stays: it holds the boiler's entities, also while the bus list lacks it.
+            if address is not None and address != BOILER_ADDRESS and address not in present:
                 gone[address] = device
         self.missing = {address: self.missing.get(address, now) for address in gone}
         for address, since in list(self.missing.items()):

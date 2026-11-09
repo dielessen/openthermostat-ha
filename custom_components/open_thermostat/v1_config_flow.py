@@ -138,6 +138,8 @@ class V1FlowMixin:
             self, schema, user_input), errors=errors)
 
     async def async_step_shadow(self, user_input=None):
+        """Not offered in the UI since 1.1.1 (V12-33: no menu leads here, its texts are gone); kept as the
+        programmatic shadow-entry path the entry-identity tests use."""
         # Generated once per flow, not a shared owner identity or a redraw nonce.
         if not hasattr(self, "_shadow_adapter_id"):
             self._shadow_adapter_id = uuid.uuid4().hex

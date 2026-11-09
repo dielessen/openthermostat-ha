@@ -54,6 +54,8 @@ STEP_TIMEOUT_S = 45.0
 SAME_RESULT_S = 120
 # A boiler value from the boiler fields is shown again this often on the setting entities.
 REFRESH_S = 30
+# Registry option (under DOMAIN) of a read-only boiler value disabled while its setting has an entity (V12-30).
+TWIN_OF = "twin_of_setting"
 
 
 @dataclass(frozen=True)
@@ -496,6 +498,10 @@ class BoilerSettingsState:
             from .e32_boiler_settings_entities import ENTITY_CLASSES
             entity = self._entities[setting] = ENTITY_CLASSES[kind](self, setting)
             add([entity], **options)
+        if self.telemetry is None:
+            # Not received yet (a start: the retained message follows the subscription). Which settings are
+            # verified is unknown, so the records stay; the first message runs this again (R-C-04).
+            return
         registry = er.async_get(self.hass)
         wanted = {self.unique_id(s) for s in verified}
         for record in er.async_entries_for_config_entry(registry, self.entry.entry_id):
@@ -503,6 +509,39 @@ class BoilerSettingsState:
                 registry.async_remove(record.entity_id)
         for setting in [s for s in self._entities if s not in verified]:
             del self._entities[setting]
+        self.sync_twins(verified)
+
+    @callback
+    def sync_twins(self, verified):
+        """The read-only boiler value of a setting that has its own entity is disabled by the integration (1.1.1,
+        V12-30: one entity per setting); it comes back once the setting has no entity any more.
+
+        Only while the read-only record is untouched and enabled; the mark (TWIN_OF in its options) says it was this
+        integration, so a record the user disabled is never enabled again.
+        """
+        from .boiler_fields import INDEX_BY_NAME, concept
+        from .native_entity_cleanup import untouched
+        from .v1_boiler_fields import field_unique_id
+        registry = er.async_get(self.hass)
+        for setting, row in ROWS.items():
+            index = INDEX_BY_NAME.get(row.field)
+            if index is None:
+                continue
+            for member in concept(index):
+                entity_id = registry.async_get_entity_id("sensor", DOMAIN, field_unique_id(self.prefix, member))
+                record = registry.async_get(entity_id) if entity_id else None
+                if record is None or record.config_entry_id != self.entry.entry_id:
+                    continue
+                options = record.options.get(DOMAIN, {})
+                if setting in verified:
+                    if record.disabled_by is None and untouched(record):
+                        registry.async_update_entity(entity_id, disabled_by=er.RegistryEntryDisabler.INTEGRATION)
+                        registry.async_update_entity_options(entity_id, DOMAIN, {**options, TWIN_OF: setting})
+                elif options.get(TWIN_OF):
+                    if record.disabled_by is er.RegistryEntryDisabler.INTEGRATION:
+                        registry.async_update_entity(entity_id, disabled_by=None)
+                    registry.async_update_entity_options(
+                        entity_id, DOMAIN, {k: v for k, v in options.items() if k != TWIN_OF})
 
     def value(self, setting):
         """The setting's value now (the boiler fields the E32 reads), or None."""
