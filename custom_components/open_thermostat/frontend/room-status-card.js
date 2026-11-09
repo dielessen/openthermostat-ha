@@ -16,11 +16,11 @@ const KEY = 'component.open_thermostat.entity.sensor.room_reason.state_attribute
 // The tone of each reason: the colour of the disc and of the word chip.
 const TONE = {warm_up: 'heat', heating: 'heat', wants_heat: 'heat', boost: 'heat', away_return: 'heat', window_open: 'warn', window_pending: 'warn',
  no_measurement: 'error', hot_water: 'info', boiler_pause: 'info', temporary: 'info', holiday: 'away', away: 'away', room_away: 'away',
- house_away: 'away', warm_enough: 'ok', off: 'off'};
+ house_away: 'away', follow: 'info', warm_enough: 'ok', off: 'off'};
 // The reason in one word (state_attributes.chip): the English last resort, key for key as strings.json.
 const CHIP = {off: 'Off', window_open: 'Paused', window_pending: 'Pausing soon', no_measurement: 'No measurement', hot_water: 'Waiting',
  boiler_pause: 'Waiting', warm_up: 'Warming up', away_return: 'Warming up', holiday: 'Holiday', away: 'Away', room_away: 'Away',
- house_away: 'Away', boost: 'Boost', temporary: 'Temporary', heating: 'Heating', wants_heat: 'Wants heat', warm_enough: 'At temperature'};
+ house_away: 'Away', boost: 'Boost', temporary: 'Temporary', follow: 'Heats along', heating: 'Heating', wants_heat: 'Wants heat', warm_enough: 'At temperature'};
 // The card's other words (state_attributes.card): the same, for the chips beside the reason's word.
 const WORDS = {smart_on: 'Smart warm-up on', home: 'At home', away: 'Away', holiday: 'Holiday', window_open: 'Window open',
  door_open: 'Door open', window_pending: 'Window open, pausing soon', door_pending: 'Door open, pausing soon'};

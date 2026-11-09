@@ -190,7 +190,8 @@ class ChooseE32PasswordRepairFlow(RepairsFlow):
         self._issue_id, self._data = issue_id, data if isinstance(data, dict) else {}
 
     async def async_step_init(self, user_input=None):
-        return await self.async_step_choose_password(user_input)
+        # Home Assistant opens a repair with data={"issue_id": ...} as this step's input: never a submitted form.
+        return await self.async_step_choose_password()
 
     async def async_step_choose_password(self, user_input=None):
         import asyncio

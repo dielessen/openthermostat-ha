@@ -423,7 +423,8 @@ class BoilerSettingFailedRepairFlow(RepairsFlow):
         self._issue_id, self._data = issue_id, data if isinstance(data, dict) else {}
 
     async def async_step_init(self, user_input=None):
-        return await self.async_step_boiler_setting_checked(user_input)
+        # Home Assistant opens a repair with data={"issue_id": ...} as this step's input: never a submitted form.
+        return await self.async_step_boiler_setting_checked()
 
     async def async_step_boiler_setting_checked(self, user_input=None):
         from .controller_link import BOILER_SETTINGS_CONFIRM, BoilerSettingsRejected, ControllerLinkError

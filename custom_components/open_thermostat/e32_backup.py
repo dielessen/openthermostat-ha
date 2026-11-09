@@ -648,6 +648,8 @@ _FIELDS = {
     "rooms": ("Rooms", "Ruimtes", "Pomieszczenia"),
     "room_settings": ("Room settings", "Instellingen van de ruimtes", "Ustawienia pomieszczeń"),
     "minimum_flow_c": ("Lowest water temperature", "Laagste watertemperatuur", "Najniższa temperatura wody"),
+    "minimum_flow_automatic": ("Lowest water temperature: automatic", "Laagste watertemperatuur: automatisch",
+                               "Najniższa temperatura wody: automatycznie"),
     "maximum_flow_c": ("Highest water temperature", "Hoogste watertemperatuur", "Najwyższa temperatura wody"),
     "weather_curve": ("Weather compensation", "Weerafhankelijke regeling", "Kompensacja pogodowa"),
     "apply_learned": ("Smart warm-up", "Slim opwarmen", "Inteligentne nagrzewanie"),

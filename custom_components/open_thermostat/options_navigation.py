@@ -36,7 +36,9 @@ SAVED_REASONS = frozenset({
     # The tester programme (e32_tester): the bus recording started or stopped, the result written, switched off.
     "tester_recording_started", "tester_recording_stopped", "tester_shared", "tester_switched_off",
     # Configure -> Notifications (notifications_flow).
-    "notifications_saved"})
+    "notifications_saved",
+    # Configure -> E32 devices -> Shelly devices (e32_devices, 1.3): back on the list, with what was done.
+    "shelly_device_added", "shelly_device_removed", "shelly_valve_added", "shelly_valves_removed"})
 UNCHANGED_REASONS = frozenset({"e32_room_unchanged", "care_unchanged", "e32_settings_unchanged",
                                "boiler_setting_unchanged", "tester_unchanged", "notifications_unchanged"})
 

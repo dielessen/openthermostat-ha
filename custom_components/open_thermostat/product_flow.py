@@ -258,6 +258,7 @@ from .e32_system import SystemOptionsSteps  # noqa: E402
 from .e32_boiler_model import BoilerModelSteps  # noqa: E402
 from .e32_boiler_settings_flow import BoilerSettingsSteps  # noqa: E402
 from .e32_bluetooth import BluetoothOptionsSteps  # noqa: E402
+from .e32_devices import DevicesOptionsSteps  # noqa: E402
 from .options_house_heating import HouseHeatingSteps  # noqa: E402
 from .options_navigation import MenuNavigation  # noqa: E402
 from .e32_shelly import CircuitOptionsSteps  # noqa: E402
@@ -265,7 +266,7 @@ from .e32_tester import TesterSteps  # noqa: E402
 from .notifications_flow import NotificationOptionsSteps  # noqa: E402
 
 
-class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingSteps, CircuitOptionsSteps, TesterSteps, E32RestoreSteps, CareOptionsSteps, SystemOptionsSteps, BoilerModelSteps, BoilerSettingsSteps, BluetoothOptionsSteps, ComfortOptionsSteps, E32RoomFlow, LegacyRoomsSteps, ControllerSetupFlow, ShadowOptionsFlow,
+class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingSteps, CircuitOptionsSteps, TesterSteps, E32RestoreSteps, CareOptionsSteps, SystemOptionsSteps, BoilerModelSteps, BoilerSettingsSteps, BluetoothOptionsSteps, DevicesOptionsSteps, ComfortOptionsSteps, E32RoomFlow, LegacyRoomsSteps, ControllerSetupFlow, ShadowOptionsFlow,
                          ProductRoomFlow):
     """One central options entrypoint, using the same room editor and native Store.
 
@@ -582,11 +583,10 @@ class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingS
 
     async def async_step_advanced_settings(self, user_input=None):
         from .e32_link import legacy_rooms_pending, legacy_zones
-        from .room_plan import uses_e32_rooms
         entry = self.config_entry
-        e32 = uses_e32_rooms(entry)
-        # Dashboard and name are on the main menu for an E32 room plan (1.1.1, Q6). "Installation status" counts
-        # and checks the older Home Assistant rooms only: with the E32 room plan it is shown while such rooms are left.
+        e32 = not old_room_route(entry)
+        # Dashboard and name are on the main menu unless the old room route is (1.1.1, Q6). "Check the old rooms"
+        # counts and checks the old Home Assistant rooms only: it is shown while such rooms are left (1.3, Q7).
         options = [] if e32 else ["general"]
         if not e32 or legacy_zones(entry):
             options.append("configuration_status")
@@ -603,8 +603,9 @@ class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingS
             options.append("e32_restore")
         from .e32_system import link_for
         if link_for(self.hass, entry) is not None:
-            # The E32's system log and time zone (e32_system), as on its System pages.
-            options += ["ble_sensors", "e32_logging", "e32_time_zone"]
+            # The E32's system log and time zone (e32_system), as on its System pages. Its Bluetooth sensors are under
+            # E32 devices on the main menu since 1.3.
+            options += ["e32_logging", "e32_time_zone"]
             # The tester programme (e32_tester, E5): off by default; share what the E32 heard from the boiler.
             options.append("tester")
         from .entity_id_tidy import async_undo_available
@@ -673,18 +674,28 @@ def main_menu(entry):
     """Configure's top level, in the order a user needs it, without duplicates.
 
     E32 room plan (connected): Rooms, House, Heating and boiler, Energy and outdoor temperature,
-    Notifications, E32 connection, Dashboard and name, Advanced and diagnostics (1.1.1, the owner's Q6: Dashboard
-    and name on the main menu, its last row before Advanced). A new installation whose E32 is not connected yet
+    Notifications, E32 connection, E32 devices, Dashboard and name, Advanced and diagnostics (1.1.1, the owner's Q6:
+    Dashboard and name on the main menu, its last row before Advanced; 1.3: E32 devices, the Bluetooth sensors and
+    the Shelly devices as on the E32's page System → Devices). A new installation whose E32 is not connected yet
     starts with E32 connection (rooms and heating need it).
     Older installations on the Home Assistant room route keep their menu.
     """
-    from .room_plan import has_room_plan, uses_e32_rooms
+    from .room_plan import has_room_plan
     if has_room_plan(entry):
         return ["e32_rooms", "house", "heating_boiler", "energy", "notifications", "controller_connection",
-                "general", "advanced_settings"]
-    if uses_e32_rooms(entry):
+                "e32_devices", "general", "advanced_settings"]
+    if not old_room_route(entry):
         return ["controller_connection", "energy", "general", "advanced_settings"]
     return ["room_settings", "controller_connection", "energy", "installation", "advanced_settings"]
+
+
+def old_room_route(entry):
+    """True while Configure offers the old Home Assistant room route (1.3, Q7): an installation from before beta.19
+    that is not connected to an E32 room plan and still has an old Home Assistant room. Without one it gets the menu
+    of a new installation (E32 connection first; Connect E32 then links the room plan)."""
+    from .e32_link import legacy_zones
+    from .room_plan import uses_e32_rooms
+    return not uses_e32_rooms(entry) and bool(legacy_zones(entry))
 
 
 ProductOptionsFlow.wrap_steps()

@@ -911,6 +911,7 @@
     "e32_room_state": {
       "options": {
         "active": "Aan",
+        "follow": "Alleen meeverwarmen",
         "inactive": "Uit (geen warmtevraag)"
       }
     },
@@ -1038,16 +1039,17 @@
     "e32_room_list_text": {
       "options": {
         "inactive": "inactief",
+        "follow": "alleen meeverwarmen",
         "contacts": "raam-/deurcontacten: {count}",
         "none": "Nog geen ruimtes."
       }
     },
     "configuration_status_text": {
       "options": {
-        "confirmed": "Configuratie bevestigd",
-        "unconfirmed": "Configuratie nog niet bevestigd",
+        "confirmed": "Instellingen bevestigd",
+        "unconfirmed": "Instellingen nog niet bevestigd",
         "calculations_on": "Berekeningen aan; het E32-overzicht toont wie de ketel regelt",
-        "calculations_off": "Berekeningen uit; geen aansturing",
+        "calculations_off": "Berekeningen uit; er wordt niets geregeld",
         "step": "stap",
         "review_limits": "Controleer kamergrenzen en programmadoelen.",
         "capabilities_unavailable": "Eigenschappen niet beschikbaar; controleer de kraanverbinding.",
@@ -1197,6 +1199,13 @@
         "comfort": "Comfort eerst: vooral op tijd warm; dat mag iets meer gas kosten.",
         "balanced": "In balans: op tijd warm met zo weinig branderstarts en gas als past.",
         "save": "Zuinigst: zo weinig gas en branderstarts als kan; een ruimte kan even iets koeler zijn."
+      }
+    },
+    "shelly_kind": {
+      "options": {
+        "switch": "Plug: schakelt de vloerpomp",
+        "probes": "The Pill: temperatuursondes op de leidingen",
+        "gateway": "BLU Gateway: Shelly BLU TRV-radiatorkranen"
       }
     }
   },
@@ -1348,11 +1357,10 @@
           "energy": "Energie en buitentemperatuur",
           "notifications": "Meldingen",
           "controller_connection": "E32-verbinding",
+          "e32_devices": "E32-apparaten",
           "advanced_settings": "Geavanceerd en diagnose",
-          "room_settings": "Ruimtes beheren",
-          "installation": "Installatie instellen",
-          "configuration_status": "Is alles verbonden?",
-          "graph_prepare": "Ruimteplan herstellen",
+          "room_settings": "Oude Home Assistant-ruimtes",
+          "installation": "Verwarming van de oude ruimtes",
           "back": "← Terug",
           "done": "Klaar",
           "general": "Dashboard en naam"
@@ -1420,8 +1428,8 @@
         }
       },
       "installation": {
-        "title": "Verwarmingsinstallatie instellen",
-        "description": "Eén installatie voor je E32 en ruimtes. Je kunt alles instellen terwijl de E32 of de ketel niet verbonden is. Opslaan zet de verwarming niet aan.",
+        "title": "Verwarming van de oude ruimtes",
+        "description": "De naam van deze installatie en de verwarming van de ruimtes die op de oude manier in Home Assistant zijn ingesteld. Je kunt dit wijzigen terwijl de E32 of de ketel niet verbonden is. Opslaan zet de verwarming niet aan.",
         "data": {
           "name": "Naam installatie",
           "create_dashboard": "OpenThermostat-dashboard tonen",
@@ -1431,43 +1439,43 @@
         "data_description": {
           "name": "Een herkenbare naam in Home Assistant. Hernoemen verandert geen apparaatidentiteiten.",
           "create_dashboard": "Voegt een eigen dashboard toe. Je bestaande dashboards blijven behouden.",
-          "weather_enabled": "Past het waterdoel aan het buitenweer aan. Geldt centraal; vereist een bruikbare bron en passend profiel.",
-          "outdoor_source": "Kies een echte buitentemperatuursensor of weerentiteit. Bij uitval geldt het geavanceerde uitvalbeleid."
+          "weather_enabled": "De watertemperatuur volgt de buitentemperatuur: kouder buiten, warmer water. Vraagt een bron voor de buitentemperatuur.",
+          "outdoor_source": "Een buitentemperatuursensor of een weerentiteit. Als die niets meer meldt, geldt de keuze onder Geavanceerd."
         },
         "sections": {
           "advanced": {
             "name": "Geavanceerd",
             "data": {
-              "stale_policy": "Gedrag bij oude buitenmeting",
-              "minimum_supply_temperature": "Minimale aanvoertemperatuur",
-              "maximum_supply_temperature": "Maximale aanvoertemperatuur",
-              "fixed_fallback_temperature": "Vaste terugvaltemperatuur",
-              "curve_0": "Stooklijn bij 20 °C buiten",
-              "curve_1": "Stooklijn bij 15 °C buiten",
-              "curve_2": "Stooklijn bij 10 °C buiten",
-              "curve_3": "Stooklijn bij 5 °C buiten",
-              "curve_4": "Stooklijn bij 0 °C buiten",
-              "curve_5": "Stooklijn bij -5 °C buiten",
-              "curve_6": "Stooklijn bij -10 °C buiten",
-              "curve_7": "Stooklijn bij -15 °C buiten",
-              "curve_8": "Stooklijn bij -20 °C buiten",
-              "outdoor_maximum_age_seconds": "Maximale meetleeftijd buitenbron"
+              "stale_policy": "Als de buitentemperatuur niets meer meldt",
+              "minimum_supply_temperature": "Laagste watertemperatuur",
+              "maximum_supply_temperature": "Hoogste watertemperatuur",
+              "fixed_fallback_temperature": "Watertemperatuur zonder buitentemperatuur (alleen bij die keuze)",
+              "curve_0": "Watertemperatuur bij 20 °C buiten",
+              "curve_1": "Watertemperatuur bij 15 °C buiten",
+              "curve_2": "Watertemperatuur bij 10 °C buiten",
+              "curve_3": "Watertemperatuur bij 5 °C buiten",
+              "curve_4": "Watertemperatuur bij 0 °C buiten",
+              "curve_5": "Watertemperatuur bij -5 °C buiten",
+              "curve_6": "Watertemperatuur bij -10 °C buiten",
+              "curve_7": "Watertemperatuur bij -15 °C buiten",
+              "curve_8": "Watertemperatuur bij -20 °C buiten",
+              "outdoor_maximum_age_seconds": "Buitentemperatuur te oud na"
             },
             "data_description": {
-              "minimum_supply_temperature": "Laagste gevraagde watertemperatuur van dit circuit. Dit is geen ruimtetemperatuur.",
-              "maximum_supply_temperature": "Hoogste gevraagde watertemperatuur. Geldt voor alle gekoppelde radiatoren; kies grenzen die bij je installatie passen.",
-              "outdoor_maximum_age_seconds": "Na deze tijd zonder geldige buitenmeting geldt het uitvalbeleid. Dit is geen meetinterval.",
-              "stale_policy": "Blokkeer vraag die een buitenmeting nodig heeft, of gebruik een expliciete begrensde vaste terugvaltemperatuur.",
-              "fixed_fallback_temperature": "Alleen voor vaste terugval. Moet binnen de watergrenzen liggen; bij blokkeerbeleid leeg laten.",
-              "curve_0": "Waterdoel op punt 1 van de stooklijn. Moet binnen de grenzen liggen en richting kouder weer niet dalen.",
-              "curve_1": "Waterdoel op punt 2 van de stooklijn. Moet binnen de grenzen liggen en richting kouder weer niet dalen.",
-              "curve_2": "Waterdoel op punt 3 van de stooklijn. Moet binnen de grenzen liggen en richting kouder weer niet dalen.",
-              "curve_3": "Waterdoel op punt 4 van de stooklijn. Moet binnen de grenzen liggen en richting kouder weer niet dalen.",
-              "curve_4": "Waterdoel op punt 5 van de stooklijn. Moet binnen de grenzen liggen en richting kouder weer niet dalen.",
-              "curve_5": "Waterdoel op punt 6 van de stooklijn. Moet binnen de grenzen liggen en richting kouder weer niet dalen.",
-              "curve_6": "Waterdoel op punt 7 van de stooklijn. Moet binnen de grenzen liggen en richting kouder weer niet dalen.",
-              "curve_7": "Waterdoel op punt 8 van de stooklijn. Moet binnen de grenzen liggen en richting kouder weer niet dalen.",
-              "curve_8": "Waterdoel op punt 9 van de stooklijn. Moet binnen de grenzen liggen en richting kouder weer niet dalen."
+              "minimum_supply_temperature": "De laagste watertemperatuur die de E32 aan de ketel mag vragen, geen ruimtetemperatuur.",
+              "maximum_supply_temperature": "De hoogste watertemperatuur die de E32 aan de ketel mag vragen; kies er een die bij je radiatoren past.",
+              "outdoor_maximum_age_seconds": "Na deze tijd zonder nieuwe buitentemperatuur geldt de keuze hierboven.",
+              "stale_policy": "Geen warmte vragen die de buitentemperatuur nodig heeft, of een vaste watertemperatuur gebruiken.",
+              "fixed_fallback_temperature": "Alleen bij een vaste watertemperatuur; binnen de grenzen hierboven.",
+              "curve_0": "Watertemperatuur bij deze buitentemperatuur. Binnen de grenzen, en nooit lager dan bij een warmere buitentemperatuur.",
+              "curve_1": "Watertemperatuur bij deze buitentemperatuur. Binnen de grenzen, en nooit lager dan bij een warmere buitentemperatuur.",
+              "curve_2": "Watertemperatuur bij deze buitentemperatuur. Binnen de grenzen, en nooit lager dan bij een warmere buitentemperatuur.",
+              "curve_3": "Watertemperatuur bij deze buitentemperatuur. Binnen de grenzen, en nooit lager dan bij een warmere buitentemperatuur.",
+              "curve_4": "Watertemperatuur bij deze buitentemperatuur. Binnen de grenzen, en nooit lager dan bij een warmere buitentemperatuur.",
+              "curve_5": "Watertemperatuur bij deze buitentemperatuur. Binnen de grenzen, en nooit lager dan bij een warmere buitentemperatuur.",
+              "curve_6": "Watertemperatuur bij deze buitentemperatuur. Binnen de grenzen, en nooit lager dan bij een warmere buitentemperatuur.",
+              "curve_7": "Watertemperatuur bij deze buitentemperatuur. Binnen de grenzen, en nooit lager dan bij een warmere buitentemperatuur.",
+              "curve_8": "Watertemperatuur bij deze buitentemperatuur. Binnen de grenzen, en nooit lager dan bij een warmere buitentemperatuur."
             }
           }
         },
@@ -1542,31 +1550,31 @@
         }
       },
       "room_settings": {
-        "title": "Ruimtes beheren",
+        "title": "Oude Home Assistant-ruimtes",
         "data": {
           "room": "Ruimte",
           "action": "Wat wil je doen?"
         },
         "data_description": {
-          "room": "Kies een bestaande ruimte. Aanpassen behoudt de identiteit en het programma.",
-          "action": "Pas de inrichting aan of verwijder alleen deze ruimte en haar koppelingen."
+          "room": "Een van de oude Home Assistant-ruimtes. Bij wijzigen blijft het weekprogramma behouden.",
+          "action": "Wijzig de instellingen, of verwijder alleen deze ruimte."
         },
-        "description": "Voeg ruimtes van deze installatie toe, wijzig ze of verwijder ze."
+        "description": "Deze ruimtes zijn op de oude manier in Home Assistant ingesteld. Wijzig of verwijder er hier een. Nieuwe ruimtes maak je op de E32: verbind hem onder E32-verbinding en voeg ze toe onder Ruimtes. Daarna draagt Geavanceerd en diagnose → Oude Home Assistant-ruimtes verwijderen deze ruimtes over aan de E32."
       },
       "remove_room": {
         "title": "{name} verwijderen?",
-        "description": "Verwijdert deze ruimte, haar programma en haar eigen radiatorgroepkoppelingen. Gedeelde groepen, fysieke apparaten en Recorderhistorie blijven behouden. Een actieve regeling moet eerst worden gestopt. Annuleren verandert niets.",
+        "description": "Verwijdert deze oude Home Assistant-ruimte en haar weekprogramma. Sensoren, thermostaten en radiatorkranen blijven in Home Assistant, met hun geschiedenis. Dit kan alleen terwijl de berekeningen voor deze ruimtes uit staan (Oude ruimtes controleren laat het zien). Annuleren verandert niets.",
         "data": {
-          "confirm_remove": "Deze ruimte en haar eigen koppelingen verwijderen"
+          "confirm_remove": "Deze ruimte verwijderen"
         },
         "data_description": {
-          "confirm_remove": "Bevestigt alleen het verwijderen van de configuratie. Er wordt geen apparaat- of ketelcommando verstuurd."
+          "confirm_remove": "Verandert alleen de instellingen in Home Assistant: er gaat niets naar een kraan of de ketel."
         },
         "submit": "Ruimte verwijderen"
       },
       "configuration_status": {
-        "title": "Is alles verbonden?",
-        "description": "Ingestelde ruimtes: **{rooms}**\n\nE32: **{connection}**\n\nRegeling: **{runtime}**\n\nOpgeslagen betekent nog niet dat de E32 de instellingen heeft overgenomen. Je kunt ruimtes ook instellen als hij niet verbonden is.\n\n**Controle opgeslagen kraandoelen**\n\n{actuator_checks}\n\nDit vergelijkt wat de kranen melden dat ze kunnen; het bewijst geen kraanstand.\n\n**Wat betekenen deze controles?**\nConfiguratie bevestigd: de E32 heeft het opgeslagen ruimteplan teruggestuurd. Berekeningen aan: de E32 rekent de warmtevraag uit; hij regelt de ketel pas nadat je bent overgestapt. Controle kraandoelen: vergelijkt de opgeslagen temperaturen met de grenzen die de kranen melden, en meldt verschillen. Geen van deze controles bewijst dat een kraan opent of de ketel stopt; kijk daarvoor bij de kraan of de ketel zelf.",
+        "title": "Oude ruimtes controleren",
+        "description": "Oude Home Assistant-ruimtes: **{rooms}**\n\nE32: **{connection}**\n\nBerekeningen: **{runtime}**\n\n**De opgeslagen kraandoelen**\n\n{actuator_checks}\n\nDit vergelijkt de opgeslagen temperaturen met wat elke kraan meldt dat ze kan; het laat niet zien of een kraan opengaat. Kijk daarvoor bij de kraan zelf.\n\n**Wat de regels betekenen**\nInstellingen bevestigd: de E32 heeft de opgeslagen instellingen teruggestuurd. Berekeningen aan: de E32 rekent uit hoeveel warmte deze ruimtes nodig hebben; de ketel regelt hij pas nadat je bent overgestapt.",
         "submit": "Sluiten"
       },
       "program": {
@@ -1636,24 +1644,32 @@
       },
       "advanced_settings": {
         "title": "Geavanceerd en diagnose",
-        "description": "{saved}De tijdzone en het systeemlogboek van de E32, namen van Bluetooth-sensoren, een back-up terugzetten, entiteits-ID's opruimen en controles. Dagelijkse instellingen, ook Dashboard en naam, staan in het hoofdmenu.",
+        "description": "{saved}De tijdzone en het systeemlogboek van de E32, een back-up terugzetten, entiteits-ID's opruimen en controles. Dagelijkse instellingen, ook Dashboard en naam, staan in het hoofdmenu.",
         "menu_options": {
-          "configuration_status": "Is alles verbonden?",
-          "installation_source": "Ruimte-instellingen van de E32 controleren",
-          "graph_status": "Toegepast ruimteplan bekijken",
-          "graph_prepare": "Ruimteplan herstellen",
+          "configuration_status": "Oude ruimtes controleren",
+          "graph_status": "Status van de oude ruimtes op de E32",
+          "graph_prepare": "Oude ruimtes op de E32 herstellen",
           "legacy_rooms": "Oude Home Assistant-ruimtes verwijderen",
-          "installation": "Watergrenzen van het oude ruimteprofiel",
+          "installation": "Grenzen watertemperatuur van de oude ruimtes",
           "entity_ids": "Entiteit-ID's opruimen",
           "entity_ids_undo": "Opruimen van entiteit-ID's terugzetten",
           "e32_restore": "Instellingen terugzetten op deze E32",
-          "ble_sensors": "Bluetooth-sensoren",
           "e32_logging": "Systeemlog van de E32",
           "e32_time_zone": "Tijdzone van de E32",
           "back": "← Terug",
           "done": "Klaar",
           "general": "Dashboard en naam",
           "tester": "Testerprogramma"
+        }
+      },
+      "e32_devices": {
+        "title": "E32-apparaten",
+        "description": "{saved}De sensoren en apparaten waar de E32 zelf mee praat, ook zonder Home Assistant: hetzelfde als op de pagina Systeem → Apparaten van de E32.\n\n**Op de ketelbus:** {bus}",
+        "menu_options": {
+          "ble_sensors": "Bluetooth-sensoren",
+          "shelly_devices": "Shelly-apparaten",
+          "back": "← Terug",
+          "done": "Klaar"
         }
       },
       "edit_room": {
@@ -1698,8 +1714,8 @@
         "description": "De E32 is verbonden ({rooms} ruimte(s)). Ruimtes voeg je toe of wijzig je onder Configureren → Ruimtes. Home Assistant schakelt geen verwarmingsuitgangen in."
       },
       "installation_connected": {
-        "title": "Installatie-instellingen — verbonden E32",
-        "description": "Wijzig de installatienaam en gedeelde watertemperatuurgrenzen. Opslaan controleert het volledige plan via de bestaande E32-verbinding. Gekoppelde radiatorcircuits volgen deze grenzen; eigen circuitgrenzen blijven behouden. Opgeslagen stooklijnpunten blijven binnen de nieuwe grenzen. Weersafhankelijke regeling wordt door het huidige verbonden profiel nog niet ondersteund. Opslaan schakelt geen ketel- of kraanopdrachten in. Nieuwe watergrenzen kunnen de E32 kort opnieuw verbinden of herstarten; naam- en dashboardwijzigingen schrijven geen apparaatinstellingen.",
+        "title": "Grenzen watertemperatuur van de oude ruimtes",
+        "description": "De laagste en hoogste watertemperatuur voor de ruimtes die op de oude manier in Home Assistant zijn ingesteld, en de naam van de installatie. Opslaan controleert het geheel met de E32; als de grenzen veranderen, kan de E32 even opnieuw verbinden of herstarten. Een nieuwe naam of dashboardkeuze verandert alleen Home Assistant. Opslaan zet de regeling van de ketel of de kranen nooit aan.",
         "data": {
           "name": "Naam installatie",
           "create_dashboard": "OpenThermostat-dashboard tonen"
@@ -1712,12 +1728,12 @@
           "advanced": {
             "name": "Geavanceerd",
             "data": {
-              "minimum_supply_temperature": "Minimale aanvoertemperatuur",
-              "maximum_supply_temperature": "Maximale aanvoertemperatuur"
+              "minimum_supply_temperature": "Laagste watertemperatuur",
+              "maximum_supply_temperature": "Hoogste watertemperatuur"
             },
             "data_description": {
-              "minimum_supply_temperature": "Laagste gevraagde watertemperatuur van dit circuit. Dit is geen ruimtetemperatuur.",
-              "maximum_supply_temperature": "Hoogste gevraagde watertemperatuur. Geldt voor alle gekoppelde radiatoren; kies grenzen die bij je installatie passen."
+              "minimum_supply_temperature": "De laagste watertemperatuur die de E32 aan de ketel mag vragen, geen ruimtetemperatuur.",
+              "maximum_supply_temperature": "De hoogste watertemperatuur die de E32 aan de ketel mag vragen; kies er een die bij je radiatoren past."
             }
           }
         },
@@ -1762,7 +1778,7 @@
         },
         "data_description": {
           "name": "De naam die je in Home Assistant en op de E32 ziet. Maximaal 40 tekens (minder met accenten of emoji); hernoemen behoudt de ruimte en haar geschiedenis.",
-          "state": "Aan: de ruimte kan warmte vragen. Uit: de ruimte vraagt geen warmte. Voor een tijdelijke stop vult u hieronder \"Uit tot\" in.",
+          "state": "Aan: de ruimte kan warmte vragen. Alleen meeverwarmen: de ruimte houdt de gewenste temperatuur en de radiatorkranen gaan ervoor open, maar ze vraagt nooit warmte; ze warmt mee zolang de ketel voor andere ruimtes stookt. Uit: de ruimte vraagt geen warmte. Voor een tijdelijke stop vult u hieronder \"Uit tot\" in.",
           "emitter": "Radiatoren of vloerverwarming. Vloerverwarming warmt langzaam op en wil koeler water, dus elk type krijgt een eigen watertemperatuur.",
           "ha_sources": "Thermostaten of temperatuursensoren (°C of °F) in Home Assistant die deze ruimte meten. De eerste met een actuele waarde wordt gebruikt; de andere zijn reserve. Sleep om de volgorde te wijzigen.",
           "ble_sources": "Sensoren die aan de E32 zelf gekoppeld zijn; ze blijven werken zonder Home Assistant.",
@@ -1828,7 +1844,7 @@
             "data_description": {
               "valves": "Hun thermostaat-entiteiten (climate), hoogstens 4 per ruimte. Aansturen staat uit tot je het hieronder aanzet.\n\n{valve_routes}",
               "kept": "Zigbee2MQTT-kranen die op de E32 staan maar die Home Assistant (niet meer) kent. Ze blijven werken zoals ze zijn; vink er een uit om hem te verwijderen.",
-              "gateway_valves": "De Shelly BLU TRV's van de BLU Gateway van de E32 in deze ruimte (een kraan voeg je aan zijn gateway toe op de Shelly-pagina van de E32). Daarmee tot 8 kranen per ruimte.",
+              "gateway_valves": "De Shelly BLU TRV's van de BLU Gateway van de E32 in deze ruimte (een kraan voeg je aan zijn gateway toe onder E32-apparaten → Shelly-apparaten, of op de pagina Systeem → Apparaten van de E32). Daarmee tot 8 kranen per ruimte.",
               "loop_valves": "Welke van de gekozen kranen op de vloerverdeler zitten (kraan van een vloergroep): die zet de E32 zelf open en dicht. De andere zijn radiatorkranen.",
               "keep_open": "Deze radiator openhouden als weg voor het water: de E32 houdt deze radiatorkraan open zolang er geen andere weg voor het water open is (tot je weet dat de ketel een bypass heeft). Niet voor een kraan van een vloergroep.",
               "control": "Aan: deze kranen volgen de ruimte (alleen zolang de E32 de ketel zelf aanstuurt). Uit: de kranen houden hun eigen instellingen en er gaat niets naar ze toe.",
@@ -1839,13 +1855,15 @@
       },
       "e32_flow_limits": {
         "title": "Grenzen van de watertemperatuur",
-        "description": "De laagste en hoogste temperatuur van het water dat de ketel naar de radiatoren en vloer stuurt, voor alle ruimtes samen. {boiler} {error}",
+        "description": "De laagste en hoogste temperatuur van het water dat de ketel naar de radiatoren en vloer stuurt, voor alle ruimtes samen. {minimum_now} {boiler} {error}",
         "data": {
+          "minimum_flow_automatic": "Laagste watertemperatuur: automatisch",
           "minimum_flow_temperature": "Laagste watertemperatuur",
           "maximum_flow_temperature": "Hoogste watertemperatuur"
         },
         "data_description": {
-          "minimum_flow_temperature": "De laagste watertemperatuur die de E32 vraagt zolang hij verwarmt ({minimum_range}).",
+          "minimum_flow_automatic": "Aan: de E32 zoekt de laagste watertemperatuur zelf uit, met wat hij leert over je ketel en huis (nooit onder 30 °C). Uit: de waarde hieronder.",
+          "minimum_flow_temperature": "Alleen gebruikt als automatisch uit staat: de laagste watertemperatuur die de E32 vraagt zolang hij verwarmt ({minimum_range}).",
           "maximum_flow_temperature": "De hoogste watertemperatuur die de E32 ooit vraagt ({maximum_range}, boven de laagste). Vloerverwarming zonder mengklep: meestal hoogstens 45–50 °C. Radiatoren: op koude dagen vaak 60–75 °C."
         }
       },
@@ -2135,7 +2153,7 @@
       },
       "ble_sensors": {
         "title": "Bluetooth-sensoren",
-        "description": "{saved}De Bluetooth-sensoren die aan de E32 gekoppeld zijn. Geef ze hier een andere naam of vergeet ze; verzamel eerst alle wijzigingen en sla ze samen op: na opslaan start de E32 één keer opnieuw, ongeveer 30 seconden later, om ze te gebruiken. Een nieuwe sensor koppelen (zoeken en sleutel) doe je op de pagina Bluetooth-sensoren van de E32, bij de sensor. Welke ruimte een sensor meet stel je per ruimte in onder Ruimtes.\n\n{sensors}\n\n{pending}",
+        "description": "{saved}De Bluetooth-sensoren die aan de E32 gekoppeld zijn. Geef ze hier een andere naam of vergeet ze; verzamel eerst alle wijzigingen en sla ze samen op: na opslaan start de E32 één keer opnieuw, ongeveer 30 seconden later, om ze te gebruiken. Een nieuwe sensor koppelen (zoeken en sleutel) doe je op de pagina Systeem → Apparaten van de E32, bij de sensor. Welke ruimte een sensor meet stel je per ruimte in onder Ruimtes.\n\n{sensors}\n\n{pending}",
         "menu_options": {
           "ble_rename": "Een sensor hernoemen",
           "ble_forget": "Een sensor vergeten",
@@ -2174,6 +2192,82 @@
         },
         "data_description": {
           "confirm": "Vink aan om te bevestigen."
+        }
+      },
+      "shelly_devices": {
+        "title": "Shelly-apparaten",
+        "description": "{saved}De plug van de vloerpomp, The Pill met zijn temperatuursondes en de BLU Gateway van de radiatorkranen. De E32 praat er zelf mee over je thuisnetwerk, ook zonder Home Assistant.\n\n{devices}\n\nDe rol van de sondes van The Pill, kranen zoeken bij de gateway, en de naam, het adres of het wachtwoord van een apparaat stel je in op de pagina Systeem → Apparaten van de E32.",
+        "menu_options": {
+          "shelly_add": "Apparaat toevoegen",
+          "shelly_valve_add": "Kraan toevoegen aan een BLU Gateway",
+          "shelly_valve_remove": "Kranen verwijderen",
+          "shelly_remove": "Apparaat verwijderen",
+          "back": "← Terug",
+          "done": "Klaar"
+        }
+      },
+      "shelly_add": {
+        "title": "Shelly-apparaat toevoegen",
+        "description": "Stel het apparaat eerst in met de Shelly-app: je wifi, een wachtwoord en de cloud uit. Geef het een vast adres in je router (een DHCP-reservering), zodat de E32 het altijd vindt. Vul daarna hier zijn adres in: de E32 vraagt het apparaat wie het is, dat duurt tot 16 seconden.",
+        "data": {
+          "ip": "IP-adres"
+        },
+        "data_description": {
+          "ip": "Bijvoorbeeld 192.168.1.40."
+        },
+        "submit": "Verbinding testen"
+      },
+      "shelly_add_device": {
+        "title": "Wat doet het?",
+        "description": "Gevonden op {ip}: Shelly {model}, firmware {version}.",
+        "data": {
+          "kind": "Wat doet het?",
+          "label": "Naam",
+          "password": "Wachtwoord van het apparaat"
+        },
+        "data_description": {
+          "kind": "Voorgesteld op basis van wat het apparaat zegt te zijn; pas het aan als het iets anders doet.",
+          "label": "De naam die de E32 en Home Assistant tonen, hoogstens 32 tekens.",
+          "password": "Het wachtwoord dat je in de Shelly-app hebt ingesteld. Het gaat alleen naar de E32, die er een vingerafdruk van bewaart; Home Assistant bewaart het niet. Laat het leeg als het apparaat er geen heeft."
+        },
+        "submit": "Apparaat toevoegen"
+      },
+      "shelly_remove": {
+        "title": "Apparaat verwijderen",
+        "description": "De E32 leest en schakelt het apparaat niet meer. De kranen van een BLU Gateway blijven in hun ruimtes tot je ze onder Ruimtes verwijdert. Een plug die de pomp van een verwarmingscircuit schakelt, kan pas weg als de pomp uit het circuit is gehaald (op de E32: Huis → Verwarming).",
+        "data": {
+          "device": "Apparaat",
+          "confirm": "Dit apparaat verwijderen"
+        },
+        "data_description": {
+          "device": "Het apparaat dat de E32 moet vergeten.",
+          "confirm": "Vink aan om te bevestigen: de E32 leest en schakelt het niet meer."
+        }
+      },
+      "shelly_valve_add": {
+        "title": "Kraan toevoegen",
+        "description": "Koppel de kraan eerst in de Shelly-app aan de gateway. Voeg hem dan hier toe met zijn nummer: de eerste is meestal 200, de volgende 201 enzovoort. De ruimte van de kraan kies je onder Ruimtes → de ruimte → Radiatorkranen.",
+        "data": {
+          "gateway": "Welke BLU Gateway",
+          "valve": "Kraannummer",
+          "name": "Naam"
+        },
+        "data_description": {
+          "gateway": "De gateway waaraan de kraan gekoppeld is.",
+          "valve": "Het nummer dat de gateway de kraan gaf, van 200 tot 299.",
+          "name": "Niet verplicht, bijvoorbeeld Badkamer."
+        }
+      },
+      "shelly_valve_remove": {
+        "title": "Kranen verwijderen",
+        "description": "De E32 leest en stuurt deze kranen niet meer. Een kraan in een ruimte blijft daar tot je hem verwijdert onder Ruimtes → de ruimte → Radiatorkranen.\n\nNu in een ruimte:\n{rooms}",
+        "data": {
+          "valves": "Kranen",
+          "confirm": "Deze kranen verwijderen"
+        },
+        "data_description": {
+          "valves": "De kranen die de E32 moet vergeten; hun gateway houdt ze gekoppeld.",
+          "confirm": "Vink aan om te bevestigen: de E32 leest en stuurt deze kranen niet meer."
         }
       },
       "house_mode": {
@@ -2371,7 +2465,7 @@
           "circuit": "Verwarmingscircuit"
         },
         "data_description": {
-          "circuit": "De circuits stel je in op de Shelly-pagina van de E32."
+          "circuit": "De circuits stel je in op de pagina Huis → Verwarming van de E32."
         }
       },
       "heating_circuit": {
@@ -2383,7 +2477,7 @@
           "run_on_max_minutes": "Hoogstens nalopen (minuten)"
         },
         "data_description": {
-          "pump_control": "Aan: de E32 zet de pomp zelf aan en uit, maar alleen zolang hij de ketel regelt. Uit: hij laat alleen zien wat hij zou doen. Dezelfde schakelaar als op de Shelly-pagina van de E32.",
+          "pump_control": "Aan: de E32 zet de pomp zelf aan en uit, maar alleen zolang hij de ketel regelt. Uit: hij laat alleen zien wat hij zou doen. Dezelfde schakelaar als op de pagina Huis → Verwarming van de E32.",
           "max_supply_c": "Blijft het water naar de vloer 2 minuten lang 5 °C boven deze waarde, dan zet de E32 de pomp uit: de mengklep laat te heet water door. 50 °C is gebruikelijk voor een vloer. Dezelfde instelling als op de Home-pagina van de E32, Verwarmingscircuits.",
           "run_on_max_minutes": "Na de warmte loopt de pomp door zolang het water naar de vloer nog minstens 2 °C warmer is dan het water terug, zodat de vloer de restwarmte opneemt. Hij stopt eerder zodra dat verschil weg is of een ruimte warm genoeg is; dit is het langst dat hij naloopt. 30 minuten is gebruikelijk. Daarvoor zijn beide watersondes nodig."
         }
@@ -2730,7 +2824,26 @@
       "notification_invalid": "Iets in het formulier klopte niet. Probeer het opnieuw.",
       "notification_kinds_needed": "Kies minstens één bericht, of zet de meldingen uit.",
       "forecast_not_weather": "Kies een weerentiteit (weather.…) voor de verwachting.",
-      "forecast_no_hourly": "Deze weerentiteit geeft geen verwachting per uur. Kies een andere, of laat het veld leeg."
+      "forecast_no_hourly": "Deze weerentiteit geeft geen verwachting per uur. Kies een andere, of laat het veld leeg.",
+      "shelly_ip_invalid": "Vul het adres in als vier getallen, bijvoorbeeld 192.168.1.40.",
+      "shelly_ip_duplicate": "Een ander apparaat in de lijst heeft dit adres.",
+      "shelly_connect_failed": "Op dit adres antwoordt niets. Controleer het adres en of het apparaat op hetzelfde netwerk zit.",
+      "shelly_timeout": "Het apparaat antwoordde niet op tijd. Probeer het opnieuw.",
+      "shelly_auth_required": "Het apparaat vraagt een wachtwoord voordat het zegt wat het is. Controleer het adres.",
+      "shelly_not_a_shelly": "Dit adres antwoordt niet als een Shelly-apparaat van de derde generatie.",
+      "shelly_probe_busy": "Er loopt al een test. Probeer het zo opnieuw.",
+      "shelly_duplicate_device": "Dit apparaat staat al in de lijst.",
+      "shelly_full": "De E32 heeft geen ruimte voor dit apparaat: hij neemt hoogstens 6 Shelly-apparaten. Verwijder een apparaat of gebruik kortere namen.",
+      "shelly_label_invalid": "Gebruik een naam van hoogstens 32 tekens.",
+      "shelly_password_invalid": "Gebruik een wachtwoord van hoogstens 64 tekens, zonder accenten.",
+      "shelly_password_needed": "Het apparaat heeft een wachtwoord: vul het in, zodat de E32 ermee kan praten.",
+      "shelly_pump_in_use": "Een verwarmingscircuit gebruikt deze plug voor zijn pomp. Haal de pomp eerst uit het circuit (op de E32: Huis → Verwarming).",
+      "shelly_probe_in_use": "Een verwarmingscircuit gebruikt een sonde van dit apparaat. Pas eerst het circuit aan (op de E32: Huis → Verwarming).",
+      "shelly_valve_invalid": "Gebruik het nummer van de kraan, van 200 tot 299.",
+      "shelly_valve_duplicate": "Dit kraannummer staat al in de lijst.",
+      "shelly_valve_name_invalid": "Gebruik een kraannaam van hoogstens 32 tekens, zonder aanhalingstekens of backslashes.",
+      "shelly_valves_full": "Een gateway neemt hoogstens 5 kranen.",
+      "shelly_rejected": "De E32 weigerde dit ({error}). Er is niets opgeslagen."
     },
     "abort": {
       "comfort_saved": "De comfortinstellingen zijn opgeslagen en gelden meteen.",
@@ -2813,7 +2926,7 @@
       "e32_logging_saved": "De instellingen van het systeemlog zijn opgeslagen op de E32.",
       "e32_time_zone_saved": "De E32 gebruikt nu {zone}. Hij start één keer opnieuw; de verwarming gaat na ongeveer een minuut verder.",
       "boiler_model_saved": "De E32 toont nu {model}. Het ketelapparaat in Home Assistant heeft die naam gekregen.",
-      "ble_none": "Er is nog geen Bluetooth-sensor aan de E32 gekoppeld. Koppel er eerst een op de pagina Bluetooth-sensoren van de E32.",
+      "ble_none": "Er is nog geen Bluetooth-sensor aan de E32 gekoppeld. Koppel er eerst een op de pagina Systeem → Apparaten van de E32.",
       "ble_changed": "De Bluetooth-sensoren zijn intussen op de E32 gewijzigd. Er is niets opgeslagen; open Bluetooth-sensoren opnieuw.",
       "ble_saved": "Opgeslagen op de E32. Hij start over ongeveer 30 seconden opnieuw om de wijzigingen te gebruiken.",
       "ble_saved_restart_later": "Opgeslagen op de E32. Hij start opnieuw om de wijzigingen te gebruiken zodra een update of keteltest klaar is.",
@@ -2834,7 +2947,7 @@
       "boiler_setting_pending": "De E32 is nog bezig met {setting}. Kijk over een minuut weer bij Ketelinstellingen.",
       "boiler_setting_unchanged": "Niets veranderd: {setting} is al {value}.",
       "boiler_setting_failed": "Terugzetten niet bevestigd: controleer de ketel. {setting} hoort weer {before} te zijn, maar de ketel bevestigde het niet. Kijk het na op de ketel; Instellingen → Reparaties zegt wat je daarna doet.",
-      "heating_circuits_none": "De E32 meldt geen verwarmingscircuit met een pomp. Stel er eerst een in op de Shelly-pagina van de E32.",
+      "heating_circuits_none": "De E32 meldt geen verwarmingscircuit met een pomp. Stel er eerst een in op de pagina Huis → Verwarming van de E32.",
       "heating_circuit_saved": "Opgeslagen op de E32.",
       "tester_unchanged": "Niets veranderd.",
       "tester_recording_started": "Opname loopt: de E32 houdt de nieuwste {minutes} minuten berichten van je ketel tot je stopt of Deel resultaat kiest.",
@@ -2846,7 +2959,12 @@
       "notifications_saved": "Meldingen opgeslagen.",
       "notifications_unchanged": "Niets veranderd.",
       "notifications_no_people": "Er zijn nog geen personen in Home Assistant. Voeg een persoon toe onder Instellingen → Personen en kies daarna hier de telefoon.",
-      "notifications_no_rooms": "De E32 heeft nog geen ruimtes gemeld. Voeg ruimtes toe onder Configureren → Ruimtes, wacht even en probeer het opnieuw."
+      "notifications_no_rooms": "De E32 heeft nog geen ruimtes gemeld. Voeg ruimtes toe onder Configureren → Ruimtes, wacht even en probeer het opnieuw.",
+      "shelly_unsupported": "Deze E32 kan niet met Shelly-apparaten werken. Daarvoor is een E32 V2 met firmware 1.1 of nieuwer nodig.",
+      "shelly_device_added": "{name} toegevoegd.",
+      "shelly_device_removed": "{name} verwijderd.",
+      "shelly_valve_added": "{name} toegevoegd.",
+      "shelly_valves_removed": "Kranen verwijderd: {count}."
     },
     "progress": {
       "controller_connect": "Verbinden met de E32…",
@@ -2866,6 +2984,12 @@
               "eco": "Eco",
               "sleep": "Nacht"
             }
+          },
+          "warming_up_for": {
+            "name": "Opwarmen voor"
+          },
+          "scheduled_target": {
+            "name": "Geplande gewenste temperatuur"
           }
         }
       }
@@ -2964,6 +3088,7 @@
           "house_away": "Afwezig: iedereen is weg",
           "boost": "Boost actief",
           "temporary": "Tijdelijke temperatuur",
+          "follow": "Verwarmt mee",
           "heating": "Verwarmt",
           "wants_heat": "Vraagt warmte",
           "warm_enough": "Warm genoeg",
@@ -2994,11 +3119,14 @@
               "boost_until": "Boost tot {until}",
               "temporary": "Tijdelijk {target} °C",
               "temporary_until": "Tijdelijk {target} °C tot {until}",
+              "follow": "Verwarmt mee: vraagt zelf nooit warmte",
+              "follow_frost": "Verwarmt mee; onder 8 °C vraagt hij warmte",
               "heating": "Verwarmt: {temperature} → {target} °C",
               "wants_heat": "Vraagt warmte: {temperature} → {target} °C",
               "warm_enough": "Warm genoeg: {temperature} °C (gewenst {target} °C)",
               "no_heat_needed": "Geen warmte nodig",
-              "warm_up": "Slim opwarmen: nu al verwarmen voor {time} ({target} °C)"
+              "warm_up": "Slim opwarmen: nu al verwarmen voor {time} ({target} °C)",
+              "warm_up_for": "Opwarmen voor {time}"
             }
           },
           "presence": {
@@ -3043,6 +3171,7 @@
               "house_away": "Afwezig",
               "boost": "Boost actief",
               "temporary": "Tijdelijk",
+              "follow": "Verwarmt mee",
               "heating": "Verwarmt",
               "wants_heat": "Vraagt warmte",
               "warm_enough": "Op temperatuur"
@@ -4498,6 +4627,7 @@
         "name": "Verwarmen",
         "state": {
           "active": "Aan",
+          "follow": "Alleen meeverwarmen",
           "inactive": "Uit"
         }
       },
@@ -4589,7 +4719,8 @@
         },
         "abort": {
           "room_programs_done": "Elke ruimte heeft al een weekprogramma.",
-          "e32_rooms_unavailable": "De ruimtes zijn nu niet van de E32 te lezen. Probeer het zo opnieuw."
+          "e32_rooms_unavailable": "De ruimtes zijn nu niet van de E32 te lezen. Probeer het zo opnieuw.",
+          "e32_write_failed": "De E32 nam de wijziging niet aan ({error}). Probeer het zo nog eens."
         }
       },
       "description": "Deze ruimtes hebben nog geen weekprogramma: {rooms}. Kies Oplossen om ze het standaardprogramma te geven. Je kunt het later aanpassen in de weekplanner."
@@ -4643,6 +4774,10 @@
     "device_own_schedule": {
       "title": "{device} lijkt een eigen programma te draaien",
       "description": "Het doel van {device} (ruimte {room}) veranderde op meerdere dagen vanzelf op hetzelfde tijdstip. Zet het eigen programma uit (handmatige stand), zodat het weekprogramma van de E32 beslist; het apparaat volgt het dan, en eraan draaien verandert de ruimte tot het volgende schakelpunt."
+    },
+    "setting_device_write_failed": {
+      "title": "{device} neemt de temperatuur van de ruimte niet aan",
+      "description": "Home Assistant kon {device}, het instelapparaat van {room}, drie keer achter elkaar niet instellen. Laatste poging: {error}\n\nKijk of het apparaat aan staat en op verwarmen, of het een gewenste temperatuur aanneemt (een thermostaat met alleen een bereik krijgt de onderste waarde) en of het nog bestaat onder Instellingen → Apparaten en diensten → Entiteiten. Deze melding verdwijnt vanzelf zodra het instellen weer lukt. Een ander apparaat kies je bij Instelapparaat in de instellingen van de ruimte (Configureren → Ruimtes)."
     },
     "legacy_metrics_history": {
       "title": "Keteltellers zijn vernieuwd",
@@ -4829,7 +4964,7 @@
     },
     "valve_offline": {
       "title": "Radiatorkraan meldt zich niet in {room}",
-      "description": "Al meer dan twee uur geen melding in {room}: {valves}. Controleer de batterij en de verbinding van de kraan (Zigbee of de BLU Gateway). De ruimte blijft verwarmen op haar andere temperatuurbronnen; een kraan regelt zelf door naar de laatste gewenste temperatuur."
+      "description": "Al meer dan twee uur geen melding in {room}: {valves}. Controleer de batterij en de verbinding van de kraan (Zigbee of de BLU Gateway). De ruimte blijft verwarmen op haar andere temperatuurbronnen; een kraan blijft open- en dichtgaan voor de laatste gewenste temperatuur die hij kreeg."
     },
     "valve_single_source": {
       "title": "{room} hangt af van één temperatuurbron",
@@ -4942,11 +5077,11 @@
     },
     "circuit_pump_wrong_device": {
       "title": "{circuit}: er antwoordt een ander apparaat op het adres van de Plug",
-      "description": "Op het adres van de Shelly Plug van de pomp antwoordt nu een ander apparaat, dus de E32 stuurt het niets. Geef de Plug een vast adres (DHCP-reservering) in je router, of vul zijn nieuwe adres in op de Shelly-pagina van de E32."
+      "description": "Op het adres van de Shelly Plug van de pomp antwoordt nu een ander apparaat, dus de E32 stuurt het niets. Geef de Plug een vast adres (DHCP-reservering) in je router, of vul zijn nieuwe adres in op de pagina Systeem → Apparaten van de E32."
     },
     "circuit_pump_password": {
       "title": "{circuit}: de Plug weigert het wachtwoord van de E32",
-      "description": "De Shelly Plug van de pomp weigert het wachtwoord dat de E32 ervoor heeft. Vul het wachtwoord van de Plug opnieuw in op de Shelly-pagina van de E32."
+      "description": "De Shelly Plug van de pomp weigert het wachtwoord dat de E32 ervoor heeft. Vul het wachtwoord van de Plug opnieuw in op de pagina Systeem → Apparaten van de E32."
     },
     "circuit_pump_no_power": {
       "title": "{circuit}: de pomp neemt geen stroom",
@@ -4970,7 +5105,7 @@
     },
     "valve_not_found": {
       "title": "Radiatorkraan niet gevonden bij de BLU Gateway in {room}",
-      "description": "De BLU Gateway kent deze kranen niet (meer), of ze zijn er niet aan gekoppeld: {valves}. Koppel de kraan opnieuw in de Shelly-app en controleer of hij met zijn gateway op de Shelly-pagina van de E32 staat, of haal hem uit de ruimte."
+      "description": "De BLU Gateway kent deze kranen niet (meer), of ze zijn er niet aan gekoppeld: {valves}. Koppel de kraan opnieuw in de Shelly-app en controleer of hij met zijn gateway op de pagina Systeem → Apparaten van de E32 staat, of haal hem uit de ruimte."
     },
     "boiler_other_boiler": {
       "title": "Er hangt een andere ketel aan",
@@ -5006,6 +5141,10 @@
       "description": "{name}: het testerprogramma staat aan, maar deze E32-firmware kan nog geen busopname maken. Werk de E32 bij (Firmware-update). Je kunt het resultaat ook zonder opname delen, of het testerprogramma uitzetten: Configureren → Geavanceerd en diagnose → Testerprogramma."
     },
     "learned_not_saved": {
+      "title": "De E32 kon niet opslaan wat hij geleerd heeft",
+      "description": "{name}: de E32 kon niet opslaan wat hij geleerd heeft voor {missing} van zijn {of} ruimtes. De E32 heeft {free} vrije plekken in zijn instellingengeheugen en houdt er {reserve} vrij voor zijn eigen instellingen; wat hij geleerd heeft, heeft er {needed} nodig. Hij houdt het in zijn geheugen tot er weer plaats is, maar een herstart vóór die tijd verliest het. Nu niets te doen; blijft dit dagen staan, open dan op de E32 Systeem → Diagnose en deel de diagnose. Deze melding verdwijnt na de volgende volledige opslag."
+    },
+    "learned_not_saved_no_counts": {
       "title": "De E32 kon niet opslaan wat hij geleerd heeft",
       "description": "{name}: de E32 kon niet opslaan wat hij geleerd heeft voor {missing} van zijn {of} ruimtes. Hij houdt het in zijn geheugen tot er weer plaats is, maar een herstart vóór die tijd verliest het. Nu niets te doen; blijft dit dagen staan, open dan op de E32 Systeem → Diagnose en deel de diagnose. Deze melding verdwijnt na de volgende volledige opslag."
     },

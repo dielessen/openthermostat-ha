@@ -58,7 +58,7 @@ from .e32_comfort import (DELAY_LIMITS, ComfortError, comfort_options, contact_d
                           validate_room_persons, with_room_contacts, with_room_persons)
 from .heating_link import TEMPERATURE_UNITS, celsius, heating_hub, label, number
 from .native_form import retained_input_schema
-from .room_plan import LATEST_UNTIL, LINK_ERRORS, has_room_plan, plan_room, until_datetime
+from .room_plan import LATEST_UNTIL, LINK_ERRORS, follows, has_room_plan, plan_room, until_datetime
 from . import room_away
 
 MAX_ROOMS = 8
@@ -99,6 +99,38 @@ BOILER_MAXIMUM_TEXT = {
     "pl": "Maksimum kotła: {maximum} (ustawione na kotle); E32 nigdy nie żąda więcej. Niższy limit jest tu "
           "przydatny przy ogrzewaniu podłogowym."}
 FLOW_LIMIT_FIELDS = {"minimum_flow_temperature": "minimum_flow_c", "maximum_flow_temperature": "maximum_flow_c"}
+# Plan item 1 (E32 with "minimum_flow_automatic" in its plan): the lowest water temperature automatic (the
+# default; the E32 keeps 30 °C as the hard lower bound and its learned floors decide above it) or set by you.
+MINIMUM_AUTOMATIC_KEY = "minimum_flow_automatic"
+MINIMUM_AUTOMATIC_FIELD = "minimum_flow_automatic"
+STANDARD_MINIMUM_FLOW_C = 30  # RoomPlan::defaultMinimumFlowC
+# The form's line about the lowest water temperature in effect (fw/telemetry/flow "minimum_flow"), EN/NL/PL;
+# the same words as the E32's House page.
+MINIMUM_NOW_TEXT = {
+    "en": {"standard": "Lowest water temperature now: {value} (standard).",
+           "own": "Lowest water temperature now: {value} (set by you).",
+           "learned": "Lowest water temperature now: {value} (learned)."},
+    "nl": {"standard": "Laagste watertemperatuur nu: {value} (standaard).",
+           "own": "Laagste watertemperatuur nu: {value} (door jou ingesteld).",
+           "learned": "Laagste watertemperatuur nu: {value} (geleerd)."},
+    "pl": {"standard": "Najniższa temperatura wody teraz: {value} (standardowa).",
+           "own": "Najniższa temperatura wody teraz: {value} (ustawiona przez ciebie).",
+           "learned": "Najniższa temperatura wody teraz: {value} (wyuczona)."}}
+
+
+def minimum_flow_now(summary):
+    """(°C, "standard" | "own" | "learned", automatic) of the lowest water temperature the E32 applies now
+    (fw/telemetry/flow "minimum_flow", plan item 1), or None from firmware without it."""
+    flow = summary.get("flow") if type(summary) is dict else None
+    minimum = flow.get("minimum_flow") if type(flow) is dict else None
+    if type(minimum) is not dict:
+        return None
+    value, automatic, source = minimum.get("c"), minimum.get("automatic"), minimum.get("source")
+    if type(value) not in (int, float) or type(value) is bool or type(automatic) is not bool:
+        return None
+    if source in ("boiler", "steady"):
+        return value, "learned", automatic
+    return value, "standard" if automatic else "own", automatic
 
 DAYS = {"en": ("mon", "tue", "wed", "thu", "fri", "sat", "sun"),
         "nl": ("ma", "di", "wo", "do", "vr", "za", "zo")}
@@ -374,7 +406,9 @@ class E32RoomFlow:
         """One line per room; ``texts``: selector.e32_room_list_text in the user's language (async_flow_texts)."""
         lines = []
         for room in plan["rooms"]:
-            inactive = "" if room.get("state") == "active" else f" ({texts['inactive']})"
+            # E32 1.3: a room on Heat along only says so (an older text table: English, async_flow_texts).
+            inactive = ("" if room.get("state") == "active" else f" ({texts['follow']})" if room.get("state") == "follow"
+                        else f" ({texts['inactive']})")
             sources = ", ".join(self._e32_source_label(s) for s in room.get("sources", []))
             contacts = len(room_contacts(self.config_entry, room["id"]))
             window = "; " + texts["contacts"].replace("{count}", str(contacts)) if contacts else ""
@@ -425,27 +459,44 @@ class E32RoomFlow:
         second confirming save (a warning, not a block: the boiler caps anyway).
         The options are written first (their own record on the E32), then the limits.
         """
-        plan = self._e32_plan
+        plan = self._e32_plan  # read when the form opened: what it shows
         unit = self._unit()
         current = {key: plan.get(key) for key in FLOW_LIMIT_FIELDS.values()}
+        tick = type(plan.get(MINIMUM_AUTOMATIC_KEY)) is bool  # plan item 1: an E32 that has the choice
+        if tick:
+            current[MINIMUM_AUTOMATIC_KEY] = plan[MINIMUM_AUTOMATIC_KEY]
         boiler = self._boiler_maximum()
-        errors, placeholders = {}, {"error": "", "boiler": "", **self._flow_ranges(unit)}
+        errors, placeholders = {}, {"error": "", "boiler": "", **self._flow_ranges(unit), "minimum_now": ""}
+        from .heating_advice import language
         if boiler is not None:
-            from .heating_advice import language
             placeholders["boiler"] = BOILER_MAXIMUM_TEXT[language(self.hass)].format(
                 maximum=f"{flow_shown(boiler, unit):g} {unit}")
+        now = minimum_flow_now(getattr(getattr(self._e32_link(), "hub", None), "summary", None)) if tick else None
+        if now is not None:
+            placeholders["minimum_now"] = MINIMUM_NOW_TEXT[language(self.hass)][now[1]].format(
+                value=f"{flow_shown(round(now[0]), unit):g} {unit}")
         if user_input is not None:
+            automatic = tick and user_input.get(MINIMUM_AUTOMATIC_FIELD) is True
             try:
                 values = [float(user_input[field]) for field in FLOW_LIMIT_FIELDS]
                 low, high = (flow_celsius(v, unit) for v in values)
             except (KeyError, TypeError, ValueError):
                 low = high = None
+            if automatic and (low is None or not FLOW_MINIMUM_C[0] <= low <= FLOW_MINIMUM_C[1]):
+                low = STANDARD_MINIMUM_FLOW_C  # not used while automatic: whatever the field holds
+            # Plan item 1b: only what the user changed in this form goes to the E32 (against what it showed),
+            # so a limit changed on the E32's own page while the form was open stays.
+            wanted = {MINIMUM_AUTOMATIC_KEY: automatic} if tick else {}
+            if not automatic:
+                wanted["minimum_flow_c"] = low
+            wanted["maximum_flow_c"] = high
+            edits = {key: value for key, value in wanted.items() if current.get(key) != value}
             if low is None or high is None or not (FLOW_MINIMUM_C[0] <= low <= FLOW_MINIMUM_C[1]
                                                    and FLOW_MAXIMUM_C[0] <= high <= FLOW_MAXIMUM_C[1]):
                 errors["base"] = "e32_flow_limits_invalid"
-            elif low >= high:
+            elif (STANDARD_MINIMUM_FLOW_C if automatic else low) >= high:
                 errors["base"] = "e32_flow_limits_order"
-            elif current == {"minimum_flow_c": low, "maximum_flow_c": high}:
+            elif not edits:
                 return self.async_abort(reason="e32_room_unchanged")
             else:
                 warnings = {}
@@ -458,7 +509,7 @@ class E32RoomFlow:
                     self._e32_flow_warned = (low, high)  # the same values once more: save
                     errors.update(warnings)
                 else:
-                    return await self._e32_save_flow_limits(low, high, errors, placeholders)
+                    return await self._e32_save_flow_limits(edits, errors, placeholders, current)
         return self._e32_flow_form(current, unit, user_input, errors, placeholders)
 
     @staticmethod
@@ -478,26 +529,31 @@ class E32RoomFlow:
         return {"minimum_range": span(FLOW_MINIMUM_C), "maximum_range": span(FLOW_MAXIMUM_C),
                 "floor_maximum": f"{flow_shown(FLOOR_FLOW_WARNING_C, unit)} {unit}"}
 
-    async def _e32_save_flow_limits(self, low, high, errors, placeholders):
+    async def _e32_save_flow_limits(self, edits, errors, placeholders, current):
+        """Writes only ``edits`` (the fields the user changed) on top of the plan the E32 holds now."""
         def change(stored):
             candidate = deepcopy(stored)
-            candidate["minimum_flow_c"], candidate["maximum_flow_c"] = low, high
+            candidate.update(edits)
             return candidate
+
+        def confirm(stored):
+            # Automatic: the E32 sets the minimum to its standard itself; the rest as asked.
+            return all(stored.get(key) == value for key, value in edits.items())
         link = self._e32_link()
         if link is None:
             return self.async_abort(reason="e32_rooms_unavailable")
         try:
-            await link.async_change_plan(change, lambda stored: (
-                stored.get("minimum_flow_c"), stored.get("maximum_flow_c")) == (low, high))
+            stored = await link.async_change_plan(change, confirm)
         except HomeAssistantError as err:
             key, extra = self._e32_failure(err)
             if key in ABORTS:
                 return self.async_abort(reason=key, description_placeholders={"room": "", **extra})
             errors["base"] = key
             placeholders.update(extra)
-            return self._e32_flow_form({"minimum_flow_c": low, "maximum_flow_c": high}, self._unit(),
-                                       None, errors, placeholders)
+            return self._e32_flow_form({**current, **edits}, self._unit(), None, errors, placeholders)
         unit = self._unit()
+        stored = stored if type(stored) is dict else {**current, **edits}
+        low, high = stored.get("minimum_flow_c"), stored.get("maximum_flow_c")
         return self.async_abort(reason="e32_flow_limits_saved", description_placeholders={
             "minimum": f"{flow_shown(low, unit)}", "maximum": f"{flow_shown(high, unit)}", "unit": unit})
 
@@ -508,6 +564,9 @@ class E32RoomFlow:
             if type(default[field]) not in (int, float) or type(default[field]) is bool:
                 default[field] = fallback
         fields = {}
+        if type(current.get(MINIMUM_AUTOMATIC_KEY)) is bool:  # plan item 1: the tick first, the value under it
+            fields[vol.Required(MINIMUM_AUTOMATIC_FIELD, default=current[MINIMUM_AUTOMATIC_KEY])] = \
+                selector.BooleanSelector()
         for field, (low, high) in (("minimum_flow_temperature", FLOW_MINIMUM_C),
                                    ("maximum_flow_temperature", FLOW_MAXIMUM_C)):
             fields[vol.Required(field, default=flow_shown(default[field], unit))] = selector.NumberSelector({
@@ -878,7 +937,7 @@ class E32RoomFlow:
         defaults = self._e32_defaults(room)
         name = valid_name(user_input.get("name"))
         state, emitter = user_input.get("state"), user_input.get("emitter")
-        if state not in ("active", "inactive") or emitter not in ("floor", "radiator"):
+        if state not in self._e32_states(room) or emitter not in ("floor", "radiator"):
             raise FlowError("e32_rejected", error="invalid_room")
         known = {(s.get("type"), s.get("id")) for s in room.get("sources", [])}
         ha, ble = [], []
@@ -954,6 +1013,13 @@ class E32RoomFlow:
 
     def _e32_away_supported(self):
         return room_away.supported(getattr(self, "_e32_plan", None))
+
+    def _e32_states(self, room):
+        """The room states the form offers: E32 1.3's "follow" (Heat along only) only for an E32 that names it
+        (plan.room_follow.v1; older firmware refuses the state), or for a room already on it."""
+        if follows(getattr(self, "_e32_plan", None)) or (room or {}).get("state") == "follow":
+            return ["active", "follow", "inactive"]
+        return ["active", "inactive"]
 
     def _e32_room_away(self, user_input, room, defaults):
         """The submitted own away temperature (the form's "persons" section) as centi-°C; None: the house value."""
@@ -1158,7 +1224,7 @@ class E32RoomFlow:
         fields = {
             vol.Required("name", default=d["name"]): str,
             vol.Required("state", default=d["state"]): selector.SelectSelector({
-                "options": ["active", "inactive"], "translation_key": "e32_room_state"}),
+                "options": self._e32_states(room), "translation_key": "e32_room_state"}),
             vol.Optional("inactive_until", description={"suggested_value": d["inactive_until"]}):
                 selector.DateTimeSelector(),
             vol.Required("emitter", default=d["emitter"]): selector.SelectSelector({

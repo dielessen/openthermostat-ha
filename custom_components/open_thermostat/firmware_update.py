@@ -207,6 +207,12 @@ class E32FirmwareUpdate(UpdateEntity):
         device = registry.async_get(self.registry_entry.device_id) if self.registry_entry.device_id else None
         if device is not None and device.sw_version != self._attr_installed_version:
             registry.async_update_device(device.id, sw_version=self._attr_installed_version)
+            # The room devices show the E32's version too (room_device, 1.3).
+            from .room_device import sync_room_devices
+            entry = getattr(self, "_entry", None)
+            hub = self.hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("heating_hub") if entry is not None else None
+            if hub is not None:
+                sync_room_devices(self.hass, entry, hub)
 
     def version_is_newer(self, latest_version, installed_version):
         latest, installed = parse_tag(latest_version), parse_tag(installed_version)

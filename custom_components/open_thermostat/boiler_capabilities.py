@@ -12,8 +12,9 @@ The E32 (after 1.0.1) publishes the retained ``fw/config/boiler_capabilities``
      "settings": {"verified": [ids], "tested": [ids], "more": n}}
 
 The row is named from Home Assistant's own copy of the boiler control table (boiler_control_table.py,
-generated with the firmware's); a row this copy does not know reads "unknown model". The match only
-classifies: nothing here changes how the E32 controls the boiler.
+generated with the firmware's); a boiler outside the rows, or a row this copy does not know, is named by
+EMS-ESP's family name for its product (PRODUCT_NAMES, the Overview's catalogue), else "unknown model". The
+match only classifies: nothing here changes how the E32 controls the boiler.
 
 On the product device, once the topic arrived (older firmware: no entity, nothing logged): the sensor
 "Boiler recognition" (state: not_recognised, read_only, probe_passed, verified, other_boiler; attributes
@@ -215,6 +216,12 @@ def row(doc):
     return (entry[0], entry[1]) if entry else (None, None)
 
 
+def family_name(doc):
+    """EMS-ESP's family name for the document's product (boiler_control_table.PRODUCT_NAMES), or None."""
+    from .boiler_control_table import PRODUCT_NAMES
+    return PRODUCT_NAMES.get(doc.get("product")) if doc else None
+
+
 def table_current(doc):
     """Whether the E32's table is the one this Home Assistant ships (None: the E32 did not say)."""
     from .boiler_control_table import TABLE_VERSION
@@ -254,13 +261,14 @@ def reason_text(doc, lang):
 
 
 def boiler_name(doc, lang):
-    """"<model> (product 206, version 2.1)", "Unknown model (product 99)" or "Unknown model"."""
+    """"<model> (product 206, version 2.1)": the row's model, else EMS-ESP's family name for the product ("Nefit
+    TopLine / Buderus Logamax plus GB162 (product 115, version 3.6)"), else "Unknown model (product 99)" or "Unknown model"."""
     t = TEXT[_lang(lang)]
     _, model = row(doc)
     parts = [t["product"].format(product=doc["product"])] if doc and doc.get("product") is not None else []
     if doc and doc.get("version"):
         parts.append(t["version"].format(version=doc["version"]))
-    name = model or t["unknown_model"]
+    name = model or family_name(doc) or t["unknown_model"]
     return f"{name} ({', '.join(parts)})" if parts else name
 
 
@@ -326,7 +334,8 @@ class BoilerRecognitionSensor(SensorEntity):
         from .learned_overview import language
         lang = language(self.hass)
         row_id, model = row(doc)
-        return {"product": doc["product"], "version": doc["version"], "family": doc["family"], "model": model,
+        return {"product": doc["product"], "version": doc["version"], "family": doc["family"],
+                "model": model or family_name(doc),
                 "profile": row_id, "route": doc["route"], "reason": doc["reason"], "reason_text": reason_text(doc, lang),
                 "sentence": state_sentence(doc, lang), "confirmed": doc["confirmed"],
                 "capabilities": doc["capabilities"], "settings_verified": doc["settings"]["verified"],
@@ -404,7 +413,8 @@ class OtherBoilerRepairFlow(RepairsFlow):
         self._issue_id, self._data = issue_id, data if isinstance(data, dict) else {}
 
     async def async_step_init(self, user_input=None):
-        return await self.async_step_confirm_boiler(user_input)
+        # Home Assistant opens a repair with data={"issue_id": ...} as this step's input: never a submitted form.
+        return await self.async_step_confirm_boiler()
 
     async def async_step_confirm_boiler(self, user_input=None):
         from homeassistant.helpers import issue_registry as ir

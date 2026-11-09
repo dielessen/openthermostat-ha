@@ -147,11 +147,10 @@
           "energy": "Energy and outdoor temperature",
           "notifications": "Notifications",
           "controller_connection": "E32 connection",
+          "e32_devices": "E32 devices",
           "advanced_settings": "Advanced and diagnostics",
-          "room_settings": "Manage rooms",
-          "installation": "Installation settings",
-          "configuration_status": "Is everything connected?",
-          "graph_prepare": "Repair room plan",
+          "room_settings": "Old Home Assistant rooms",
+          "installation": "Heating of the old rooms",
           "back": "← Back",
           "done": "Done",
           "general": "Dashboard and name"
@@ -219,8 +218,8 @@
         }
       },
       "installation": {
-        "title": "Set up your heating installation",
-        "description": "One installation for your E32 and rooms. You can set everything up while the E32 or boiler is disconnected. Saving does not start heating.",
+        "title": "Heating of the old rooms",
+        "description": "The name of this installation and the heating of the rooms set up in Home Assistant the old way. You can change it while the E32 or the boiler is not connected. Saving does not start heating.",
         "data": {
           "name": "Installation name",
           "create_dashboard": "Show the OpenThermostat dashboard",
@@ -230,43 +229,43 @@
         "data_description": {
           "name": "A recognisable name in Home Assistant. Renaming does not change device identities.",
           "create_dashboard": "Adds an optional dashboard. Your own dashboards are preserved.",
-          "weather_enabled": "Adjusts the water target to outdoor conditions. Applies centrally and needs a suitable source and profile.",
-          "outdoor_source": "Choose a real outdoor temperature sensor or weather entity. Missing data follows the advanced fallback policy."
+          "weather_enabled": "The water temperature follows the outdoor temperature: colder outside, warmer water. Needs an outdoor temperature source.",
+          "outdoor_source": "An outdoor temperature sensor or a weather entity. When it stops reporting, the choice under Advanced applies."
         },
         "sections": {
           "advanced": {
             "name": "Advanced",
             "data": {
-              "stale_policy": "When outdoor data expires",
-              "minimum_supply_temperature": "Minimum central supply temperature",
-              "maximum_supply_temperature": "Maximum central supply temperature",
-              "fixed_fallback_temperature": "Fixed fallback supply temperature (only for fixed fallback policy)",
-              "curve_0": "Supply target at 20 °C outdoors",
-              "curve_1": "Supply target at 15 °C outdoors",
-              "curve_2": "Supply target at 10 °C outdoors",
-              "curve_3": "Supply target at 5 °C outdoors",
-              "curve_4": "Supply target at 0 °C outdoors",
-              "curve_5": "Supply target at -5 °C outdoors",
-              "curve_6": "Supply target at -10 °C outdoors",
-              "curve_7": "Supply target at -15 °C outdoors",
-              "curve_8": "Supply target at -20 °C outdoors",
-              "outdoor_maximum_age_seconds": "Maximum outdoor measurement age"
+              "stale_policy": "When the outdoor temperature stops reporting",
+              "minimum_supply_temperature": "Lowest water temperature",
+              "maximum_supply_temperature": "Highest water temperature",
+              "fixed_fallback_temperature": "Water temperature without an outdoor temperature (only with that choice)",
+              "curve_0": "Water temperature at 20 °C outdoors",
+              "curve_1": "Water temperature at 15 °C outdoors",
+              "curve_2": "Water temperature at 10 °C outdoors",
+              "curve_3": "Water temperature at 5 °C outdoors",
+              "curve_4": "Water temperature at 0 °C outdoors",
+              "curve_5": "Water temperature at -5 °C outdoors",
+              "curve_6": "Water temperature at -10 °C outdoors",
+              "curve_7": "Water temperature at -15 °C outdoors",
+              "curve_8": "Water temperature at -20 °C outdoors",
+              "outdoor_maximum_age_seconds": "Outdoor temperature too old after"
             },
             "data_description": {
-              "minimum_supply_temperature": "Lowest requested water temperature for this circuit, not the room temperature.",
-              "maximum_supply_temperature": "Highest requested water temperature. Applies to linked radiators; choose limits appropriate for your installation.",
-              "outdoor_maximum_age_seconds": "After this time without a valid outdoor report, the fallback policy applies. This is not a polling interval.",
-              "stale_policy": "Block demand requiring outdoor data, or use an explicit bounded fixed fallback temperature.",
-              "fixed_fallback_temperature": "Only for fixed fallback. Must be within supply limits; leave empty for the blocking policy.",
-              "curve_0": "Water target at curve point 1. Must stay within limits and not decrease towards colder weather.",
-              "curve_1": "Water target at curve point 2. Must stay within limits and not decrease towards colder weather.",
-              "curve_2": "Water target at curve point 3. Must stay within limits and not decrease towards colder weather.",
-              "curve_3": "Water target at curve point 4. Must stay within limits and not decrease towards colder weather.",
-              "curve_4": "Water target at curve point 5. Must stay within limits and not decrease towards colder weather.",
-              "curve_5": "Water target at curve point 6. Must stay within limits and not decrease towards colder weather.",
-              "curve_6": "Water target at curve point 7. Must stay within limits and not decrease towards colder weather.",
-              "curve_7": "Water target at curve point 8. Must stay within limits and not decrease towards colder weather.",
-              "curve_8": "Water target at curve point 9. Must stay within limits and not decrease towards colder weather."
+              "minimum_supply_temperature": "The lowest water temperature the E32 may ask of the boiler, not a room temperature.",
+              "maximum_supply_temperature": "The highest water temperature the E32 may ask of the boiler; choose one that suits your radiators.",
+              "outdoor_maximum_age_seconds": "After this time without a new outdoor temperature, the choice above applies.",
+              "stale_policy": "Ask no heat that needs the outdoor temperature, or use a fixed water temperature.",
+              "fixed_fallback_temperature": "Only with a fixed water temperature; within the limits above.",
+              "curve_0": "Water temperature at this outdoor temperature. Within the limits, and never lower than at a warmer outdoor temperature.",
+              "curve_1": "Water temperature at this outdoor temperature. Within the limits, and never lower than at a warmer outdoor temperature.",
+              "curve_2": "Water temperature at this outdoor temperature. Within the limits, and never lower than at a warmer outdoor temperature.",
+              "curve_3": "Water temperature at this outdoor temperature. Within the limits, and never lower than at a warmer outdoor temperature.",
+              "curve_4": "Water temperature at this outdoor temperature. Within the limits, and never lower than at a warmer outdoor temperature.",
+              "curve_5": "Water temperature at this outdoor temperature. Within the limits, and never lower than at a warmer outdoor temperature.",
+              "curve_6": "Water temperature at this outdoor temperature. Within the limits, and never lower than at a warmer outdoor temperature.",
+              "curve_7": "Water temperature at this outdoor temperature. Within the limits, and never lower than at a warmer outdoor temperature.",
+              "curve_8": "Water temperature at this outdoor temperature. Within the limits, and never lower than at a warmer outdoor temperature."
             }
           }
         },
@@ -341,31 +340,31 @@
         }
       },
       "room_settings": {
-        "title": "Manage your rooms",
+        "title": "Old Home Assistant rooms",
         "data": {
           "room": "Room",
-          "action": "What would you like to do?"
+          "action": "What do you want to do?"
         },
         "data_description": {
-          "room": "Choose an existing room. Its identity and program are preserved when editing.",
-          "action": "Edit its configuration or remove only this room and its bindings."
+          "room": "One of the old Home Assistant rooms. Changing it keeps its week program.",
+          "action": "Change its settings, or remove only this room."
         },
-        "description": "Add, change or remove the rooms of this installation."
+        "description": "These rooms were set up in Home Assistant, the old way. Change or remove one here. New rooms are made on the E32: connect it under E32 connection and add them under Rooms. Then Advanced and diagnostics → Remove old Home Assistant rooms hands these rooms over to the E32."
       },
       "remove_room": {
         "title": "Remove {name}?",
-        "description": "Removes this room, its program and its own radiator-group bindings. Shared groups, physical devices and Recorder history are preserved. Active control must be stopped first. Cancelling changes nothing.",
+        "description": "Removes this old Home Assistant room and its week program. Sensors, thermostats and radiator valves stay in Home Assistant, with their history. This is possible only while the calculations for these rooms are off (Check the old rooms shows it). Cancelling changes nothing.",
         "data": {
-          "confirm_remove": "Remove this room and its own bindings"
+          "confirm_remove": "Remove this room"
         },
         "data_description": {
-          "confirm_remove": "Only confirms the configuration removal. No device service or boiler command is sent."
+          "confirm_remove": "Changes only the settings in Home Assistant: nothing is sent to a valve or the boiler."
         },
         "submit": "Remove room"
       },
       "configuration_status": {
-        "title": "Is everything connected?",
-        "description": "Configured rooms: **{rooms}**\n\nE32: **{connection}**\n\nControl: **{runtime}**\n\nSaved does not yet mean the E32 has taken the settings over. You can set up rooms while it is not connected.\n\n**Check of the saved valve targets**\n\n{actuator_checks}\n\nThis compares what the valves report they can do; it does not prove a valve's position.\n\n**What do these checks mean?**\nConfiguration confirmed: the E32 sent the saved room plan back. Calculations on: the E32 works out the heat demand; it controls the boiler only after you switch over. Valve-target check: compares the saved temperatures with the limits the valves report, and flags differences. None of these checks proves that a valve opens or the boiler stops; check that at the valve or boiler itself.",
+        "title": "Check the old rooms",
+        "description": "Old Home Assistant rooms: **{rooms}**\n\nE32: **{connection}**\n\nCalculations: **{runtime}**\n\n**The saved valve targets**\n\n{actuator_checks}\n\nThis compares the saved temperatures with what each valve reports it can do; it does not show whether a valve opens. Check that at the valve itself.\n\n**What the lines mean**\nSettings confirmed: the E32 sent the saved settings back. Calculations on: the E32 works out the heat these rooms need; it controls the boiler only after you switch over.",
         "submit": "Close"
       },
       "program": {
@@ -435,24 +434,32 @@
       },
       "advanced_settings": {
         "title": "Advanced and diagnostics",
-        "description": "{saved}The E32 time zone and system log, Bluetooth sensor names, restoring a backup, tidying entity IDs and checks. Everyday settings, also Dashboard and name, are in the main menu.",
+        "description": "{saved}The E32 time zone and system log, restoring a backup, tidying entity IDs and checks. Everyday settings, also Dashboard and name, are in the main menu.",
         "menu_options": {
-          "configuration_status": "Is everything connected?",
-          "installation_source": "Check the E32 room setup",
-          "graph_status": "Inspect applied room plan",
-          "graph_prepare": "Repair room plan",
+          "configuration_status": "Check the old rooms",
+          "graph_status": "Status of the old rooms on the E32",
+          "graph_prepare": "Repair the old rooms on the E32",
           "legacy_rooms": "Remove old Home Assistant rooms",
-          "installation": "Water limits of the old room profile",
+          "installation": "Water temperature limits of the old rooms",
           "entity_ids": "Tidy entity IDs",
           "entity_ids_undo": "Undo the entity ID tidy",
           "e32_restore": "Restore settings to this E32",
-          "ble_sensors": "Bluetooth sensors",
           "e32_logging": "E32 system log",
           "e32_time_zone": "E32 time zone",
           "back": "← Back",
           "done": "Done",
           "general": "Dashboard and name",
           "tester": "Tester program"
+        }
+      },
+      "e32_devices": {
+        "title": "E32 devices",
+        "description": "{saved}The sensors and devices the E32 talks to itself, also without Home Assistant: the same as on the E32's page System → Devices.\n\n**On the boiler bus:** {bus}",
+        "menu_options": {
+          "ble_sensors": "Bluetooth sensors",
+          "shelly_devices": "Shelly devices",
+          "back": "← Back",
+          "done": "Done"
         }
       },
       "edit_room": {
@@ -497,8 +504,8 @@
         "description": "The E32 is connected ({rooms} room(s)). Add or change rooms under Configure → Rooms. Home Assistant does not switch heating outputs on."
       },
       "installation_connected": {
-        "title": "Installation settings — connected E32",
-        "description": "Change the installation name and shared water-temperature limits. Saving verifies the complete plan through the existing E32 connection. Linked radiator circuits follow these limits; custom circuit limits stay unchanged. Stored curve points are kept within the new bounds. Weather compensation is not supported by the current connected profile. Saving does not enable boiler or valve commands. Changing water limits may briefly reconnect or restart the E32; name and dashboard changes do not write device settings.",
+        "title": "Water temperature limits of the old rooms",
+        "description": "The lowest and highest water temperature for the rooms set up in Home Assistant the old way, and the installation name. Saving checks the whole set-up with the E32; when the limits change, the E32 may reconnect or restart for a moment. A new name or dashboard choice changes only Home Assistant. Saving never switches control of the boiler or the valves on.",
         "data": {
           "name": "Installation name",
           "create_dashboard": "Show the OpenThermostat dashboard"
@@ -511,12 +518,12 @@
           "advanced": {
             "name": "Advanced",
             "data": {
-              "minimum_supply_temperature": "Minimum central supply temperature",
-              "maximum_supply_temperature": "Maximum central supply temperature"
+              "minimum_supply_temperature": "Lowest water temperature",
+              "maximum_supply_temperature": "Highest water temperature"
             },
             "data_description": {
-              "minimum_supply_temperature": "Lowest requested water temperature for this circuit, not the room temperature.",
-              "maximum_supply_temperature": "Highest requested water temperature. Applies to linked radiators; choose limits appropriate for your installation."
+              "minimum_supply_temperature": "The lowest water temperature the E32 may ask of the boiler, not a room temperature.",
+              "maximum_supply_temperature": "The highest water temperature the E32 may ask of the boiler; choose one that suits your radiators."
             }
           }
         },
@@ -561,7 +568,7 @@
         },
         "data_description": {
           "name": "The name you see in Home Assistant and on the E32. Up to 40 letters (fewer with accents or emoji); renaming keeps the room and its history.",
-          "state": "On: the room can ask for heat. Off: the room asks for no heat. For a temporary stop, set \"Off until\" below.",
+          "state": "On: the room can ask for heat. Heat along only: the room keeps its target and its radiator valves open for it, but it never asks for heat; it warms while the boiler runs for other rooms. Off: the room asks for no heat. For a temporary stop, set \"Off until\" below.",
           "emitter": "Radiators or floor heating. Floor heating warms up slowly and needs cooler water, so each type gets its own water temperature.",
           "ha_sources": "Thermostats or temperature sensors (°C or °F) in Home Assistant that measure this room. The first one with a fresh value is used; the others are backups. Drag to change the order.",
           "ble_sources": "Sensors paired on the E32 itself; they keep working without Home Assistant.",
@@ -627,7 +634,7 @@
             "data_description": {
               "valves": "Their thermostat (climate) entities, at most 4 per room. Valve control stays off until you switch it on below.\n\n{valve_routes}",
               "kept": "Zigbee2MQTT valves stored on the E32 that Home Assistant does not know (any more). They keep working as they are; deselect one to remove it.",
-              "gateway_valves": "The Shelly BLU TRVs of the E32's BLU Gateway in this room (a valve is added to its gateway on the E32's Shelly page). Up to 8 valves per room with these.",
+              "gateway_valves": "The Shelly BLU TRVs of the E32's BLU Gateway in this room (a valve is added to its gateway under E32 devices → Shelly devices, or on the E32's page System → Devices). Up to 8 valves per room with these.",
               "loop_valves": "Which of the chosen valves sit on the floor manifold (Floor loop valve): the E32 opens and closes them itself. The others are radiator valves.",
               "keep_open": "Keep this radiator open as the water's path: the E32 keeps this radiator valve open while no other way for the water is open (until you know the boiler has a bypass). Not for a floor loop valve.",
               "control": "On: these valves follow the room (only while the E32 controls the boiler itself). Off: the valves keep their own settings and nothing is sent to them.",
@@ -638,13 +645,15 @@
       },
       "e32_flow_limits": {
         "title": "Water temperature limits",
-        "description": "The lowest and highest temperature of the water the boiler sends to the radiators and floor, for all rooms together. {boiler} {error}",
+        "description": "The lowest and highest temperature of the water the boiler sends to the radiators and floor, for all rooms together. {minimum_now} {boiler} {error}",
         "data": {
+          "minimum_flow_automatic": "Lowest water temperature: automatic",
           "minimum_flow_temperature": "Lowest water temperature",
           "maximum_flow_temperature": "Highest water temperature"
         },
         "data_description": {
-          "minimum_flow_temperature": "The lowest water temperature the E32 asks for while it heats ({minimum_range}).",
+          "minimum_flow_automatic": "On: the E32 finds the lowest water temperature itself, from what it learns about your boiler and house (never below 30 °C). Off: the value below.",
+          "minimum_flow_temperature": "Used only with automatic off: the lowest water temperature the E32 asks for while it heats ({minimum_range}).",
           "maximum_flow_temperature": "The highest water temperature the E32 ever asks for ({maximum_range}, above the lowest). Floor heating fed without a mixing valve: usually at most 45–50 °C. Radiators: often 60–75 °C on cold days."
         }
       },
@@ -934,7 +943,7 @@
       },
       "ble_sensors": {
         "title": "Bluetooth sensors",
-        "description": "{saved}The Bluetooth sensors paired with the E32. Rename or forget them here; collect all changes first and save them together: after saving, the E32 restarts once, about 30 seconds later, to use them. Pairing a new sensor (scan and key) is done on the E32's Bluetooth sensors page, next to the sensor. Which room a sensor measures is set per room under Rooms.\n\n{sensors}\n\n{pending}",
+        "description": "{saved}The Bluetooth sensors paired with the E32. Rename or forget them here; collect all changes first and save them together: after saving, the E32 restarts once, about 30 seconds later, to use them. Pairing a new sensor (scan and key) is done on the E32's page System → Devices, next to the sensor. Which room a sensor measures is set per room under Rooms.\n\n{sensors}\n\n{pending}",
         "menu_options": {
           "ble_rename": "Rename a sensor",
           "ble_forget": "Forget a sensor",
@@ -973,6 +982,82 @@
         },
         "data_description": {
           "confirm": "Tick to confirm."
+        }
+      },
+      "shelly_devices": {
+        "title": "Shelly devices",
+        "description": "{saved}The Plug of the floor pump, The Pill with its temperature probes and the BLU Gateway of the radiator valves. The E32 talks to them itself over your home network, also without Home Assistant.\n\n{devices}\n\nThe probe roles of The Pill, looking for valves at the gateway, and a device's name, address or password are set on the E32's page System → Devices.",
+        "menu_options": {
+          "shelly_add": "Add a device",
+          "shelly_valve_add": "Add a valve to a BLU Gateway",
+          "shelly_valve_remove": "Remove valves",
+          "shelly_remove": "Remove a device",
+          "back": "← Back",
+          "done": "Done"
+        }
+      },
+      "shelly_add": {
+        "title": "Add a Shelly device",
+        "description": "First set the device up in the Shelly app: your Wi-Fi, a password and the cloud off. Give it a fixed address in your router (a DHCP reservation), so the E32 always finds it. Then enter its address here: the E32 asks the device who it is, which takes up to 16 seconds.",
+        "data": {
+          "ip": "IP address"
+        },
+        "data_description": {
+          "ip": "For example 192.168.1.40."
+        },
+        "submit": "Test connection"
+      },
+      "shelly_add_device": {
+        "title": "What does it do?",
+        "description": "Found at {ip}: Shelly {model}, firmware {version}.",
+        "data": {
+          "kind": "What does it do?",
+          "label": "Name",
+          "password": "Device password"
+        },
+        "data_description": {
+          "kind": "Proposed from what the device says it is; change it if it does something else.",
+          "label": "The name the E32 and Home Assistant show, up to 32 characters.",
+          "password": "The password you set in the Shelly app. It goes to the E32 only, which keeps a fingerprint of it; Home Assistant does not keep it. Leave it empty if the device has none."
+        },
+        "submit": "Add device"
+      },
+      "shelly_remove": {
+        "title": "Remove a device",
+        "description": "The E32 stops reading and switching the device. The valves of a BLU Gateway stay in their rooms until you remove them under Rooms. A Plug that switches the pump of a heating circuit cannot be removed until the pump is taken out of the circuit (on the E32: Home → Heating settings).",
+        "data": {
+          "device": "Device",
+          "confirm": "Remove this device"
+        },
+        "data_description": {
+          "device": "The device the E32 should forget.",
+          "confirm": "Tick to confirm: the E32 stops reading and switching it."
+        }
+      },
+      "shelly_valve_add": {
+        "title": "Add a valve",
+        "description": "Pair the valve with the gateway in the Shelly app first. Then add it here by its number: the first one is usually 200, the next 201 and so on. Choose the valve's room under Rooms → the room → Radiator valves.",
+        "data": {
+          "gateway": "BLU Gateway",
+          "valve": "Valve number",
+          "name": "Name"
+        },
+        "data_description": {
+          "gateway": "The gateway the valve is paired with.",
+          "valve": "The number the gateway gave the valve, from 200 to 299.",
+          "name": "Optional, for example Bathroom."
+        }
+      },
+      "shelly_valve_remove": {
+        "title": "Remove valves",
+        "description": "The E32 stops reading and driving these valves. A valve in a room stays there until you remove it under Rooms → the room → Radiator valves.\n\nIn a room now:\n{rooms}",
+        "data": {
+          "valves": "Valves",
+          "confirm": "Remove these valves"
+        },
+        "data_description": {
+          "valves": "The valves the E32 should forget; their gateway keeps them paired.",
+          "confirm": "Tick to confirm: the E32 stops reading and driving these valves."
         }
       },
       "house_mode": {
@@ -1170,7 +1255,7 @@
           "circuit": "Circuit"
         },
         "data_description": {
-          "circuit": "The circuits are set up on the E32's Shelly page."
+          "circuit": "The circuits are set up on the E32's page Home → Heating settings."
         }
       },
       "heating_circuit": {
@@ -1182,7 +1267,7 @@
           "run_on_max_minutes": "Run on at most (minutes)"
         },
         "data_description": {
-          "pump_control": "On: the E32 switches the pump on and off itself, but only while it controls the boiler. Off: it only shows what it would do. The same switch as on the E32's Shelly page.",
+          "pump_control": "On: the E32 switches the pump on and off itself, but only while it controls the boiler. Off: it only shows what it would do. The same switch as on the E32's page Home → Heating settings.",
           "max_supply_c": "When the water to the floor stays 5 °C above this for 2 minutes, the E32 switches the pump off: the mixing valve lets too hot water through. 50 °C is usual for a floor. The same setting as on the E32's Home page, Heating circuits.",
           "run_on_max_minutes": "After the heat the pump keeps running while the water to the floor is still at least 2 °C warmer than the water back, so the floor takes up the remaining heat. It stops sooner once that difference is gone or a room is warm enough; this is the longest it runs on. 30 minutes is usual. Needs both water probes."
         }
@@ -1529,7 +1614,26 @@
       "notification_invalid": "Something in the form was not valid. Please try again.",
       "notification_kinds_needed": "Choose at least one message, or switch notifications off.",
       "forecast_not_weather": "Choose a weather entity (weather.…) for the forecast.",
-      "forecast_no_hourly": "This weather entity gives no hourly forecast. Choose another one, or leave the field empty."
+      "forecast_no_hourly": "This weather entity gives no hourly forecast. Choose another one, or leave the field empty.",
+      "shelly_ip_invalid": "Enter the address as four numbers, for example 192.168.1.40.",
+      "shelly_ip_duplicate": "Another device in the list has this address.",
+      "shelly_connect_failed": "Nothing answers at this address. Check the address and that the device is on the same network.",
+      "shelly_timeout": "The device did not answer in time. Try again.",
+      "shelly_auth_required": "The device asks for a password before it says what it is. Check the address.",
+      "shelly_not_a_shelly": "This address does not answer like a Shelly device of the third generation.",
+      "shelly_probe_busy": "A test is already running. Try again in a moment.",
+      "shelly_duplicate_device": "This device is already in the list.",
+      "shelly_full": "The E32 has no room for this device: it takes at most 6 Shelly devices. Remove a device or use shorter names.",
+      "shelly_label_invalid": "Use a name of up to 32 characters.",
+      "shelly_password_invalid": "Use a password of up to 64 characters, without accents.",
+      "shelly_password_needed": "The device has a password: enter it, so the E32 can talk to it.",
+      "shelly_pump_in_use": "A heating circuit uses this plug for its pump. Take the pump out of the circuit first (on the E32: Home → Heating settings).",
+      "shelly_probe_in_use": "A heating circuit uses a probe of this device. Change the circuit first (on the E32: Home → Heating settings).",
+      "shelly_valve_invalid": "Use the valve's number, from 200 to 299.",
+      "shelly_valve_duplicate": "This valve number is already in the list.",
+      "shelly_valve_name_invalid": "Use a valve name of up to 32 characters, without quotes or backslashes.",
+      "shelly_valves_full": "A gateway takes at most 5 valves.",
+      "shelly_rejected": "The E32 refused this ({error}). Nothing was saved."
     },
     "abort": {
       "comfort_saved": "The comfort settings are saved and apply at once.",
@@ -1612,7 +1716,7 @@
       "e32_logging_saved": "The system log settings are saved on the E32.",
       "e32_time_zone_saved": "The E32 now uses {zone}. It restarts once; the heating continues after about a minute.",
       "boiler_model_saved": "The E32 now shows {model}. The boiler device in Home Assistant is named after it.",
-      "ble_none": "No Bluetooth sensor is paired with the E32 yet. Pair one on the E32's Bluetooth sensors page first.",
+      "ble_none": "No Bluetooth sensor is paired with the E32 yet. Pair one on the E32's page System → Devices first.",
       "ble_changed": "The Bluetooth sensors were changed on the E32 meanwhile. Nothing was saved; open Bluetooth sensors again.",
       "ble_saved": "Saved on the E32. It restarts in about 30 seconds to use the changes.",
       "ble_saved_restart_later": "Saved on the E32. It restarts to use the changes as soon as an update or boiler test has finished.",
@@ -1633,7 +1737,7 @@
       "boiler_setting_pending": "The E32 is still busy with {setting}. Look at Boiler settings again in a minute.",
       "boiler_setting_unchanged": "Nothing changed: {setting} is already {value}.",
       "boiler_setting_failed": "Could not put it back: check the boiler. {setting} should be {before} again, but the boiler did not confirm it. Look at it on the boiler; Settings → Repairs says what to do next.",
-      "heating_circuits_none": "The E32 reports no heating circuit with a pump. Set one up on the E32's Shelly page first.",
+      "heating_circuits_none": "The E32 reports no heating circuit with a pump. Set one up on the E32's page Home → Heating settings first.",
       "heating_circuit_saved": "Saved on the E32.",
       "tester_unchanged": "Nothing changed.",
       "tester_recording_started": "Recording: the E32 keeps the newest {minutes} minutes of your boiler's messages until you stop it or choose Share result.",
@@ -1645,7 +1749,12 @@
       "notifications_saved": "Notifications saved.",
       "notifications_unchanged": "Nothing changed.",
       "notifications_no_people": "There are no people in Home Assistant yet. Add a person under Settings → People, then choose their phone here.",
-      "notifications_no_rooms": "The E32 has not reported any rooms yet. Add rooms under Configure → Rooms, wait a moment and try again."
+      "notifications_no_rooms": "The E32 has not reported any rooms yet. Add rooms under Configure → Rooms, wait a moment and try again.",
+      "shelly_unsupported": "This E32 has no Shelly support. Shelly devices need an E32 V2 with firmware 1.1 or newer.",
+      "shelly_device_added": "{name} added.",
+      "shelly_device_removed": "{name} removed.",
+      "shelly_valve_added": "{name} added.",
+      "shelly_valves_removed": "Valves removed: {count}."
     },
     "progress": {
       "controller_connect": "Connecting to the E32…",
@@ -1665,6 +1774,12 @@
               "eco": "Eco",
               "sleep": "Night"
             }
+          },
+          "warming_up_for": {
+            "name": "Warming up for"
+          },
+          "scheduled_target": {
+            "name": "Scheduled target"
           }
         }
       }
@@ -1763,6 +1878,7 @@
           "house_away": "Away: everyone is away",
           "boost": "Boost",
           "temporary": "Temporary temperature",
+          "follow": "Heats along",
           "heating": "Heating",
           "wants_heat": "Wants heat",
           "warm_enough": "Warm enough",
@@ -1793,11 +1909,14 @@
               "boost_until": "Boost until {until}",
               "temporary": "Temporarily {target} °C",
               "temporary_until": "Temporarily {target} °C until {until}",
+              "follow": "Heats along: it never asks for heat itself",
+              "follow_frost": "Heats along; below 8 °C it asks for heat",
               "heating": "Heating: {temperature} → {target} °C",
               "wants_heat": "Wants heat: {temperature} → {target} °C",
               "warm_enough": "Warm enough: {temperature} °C (target {target} °C)",
               "no_heat_needed": "No heat needed",
-              "warm_up": "Smart warm-up: heating early for {time} ({target} °C)"
+              "warm_up": "Smart warm-up: heating early for {time} ({target} °C)",
+              "warm_up_for": "Warming up for {time}"
             }
           },
           "presence": {
@@ -1842,6 +1961,7 @@
               "house_away": "Away",
               "boost": "Boost",
               "temporary": "Temporary",
+              "follow": "Heats along",
               "heating": "Heating",
               "wants_heat": "Wants heat",
               "warm_enough": "At temperature"
@@ -3297,6 +3417,7 @@
         "name": "Heating",
         "state": {
           "active": "On",
+          "follow": "Heat along only",
           "inactive": "Off"
         }
       },
@@ -4288,6 +4409,7 @@
     "e32_room_state": {
       "options": {
         "active": "On",
+        "follow": "Heat along only",
         "inactive": "Off (no heat demand)"
       }
     },
@@ -4415,16 +4537,17 @@
     "e32_room_list_text": {
       "options": {
         "inactive": "inactive",
+        "follow": "heats along only",
         "contacts": "window/door contacts: {count}",
         "none": "No rooms yet."
       }
     },
     "configuration_status_text": {
       "options": {
-        "confirmed": "Configuration confirmed",
-        "unconfirmed": "Configuration not confirmed yet",
+        "confirmed": "Settings confirmed",
+        "unconfirmed": "Settings not confirmed yet",
         "calculations_on": "Calculations on; the E32 Overview shows who controls the boiler",
-        "calculations_off": "Calculations off; no device control",
+        "calculations_off": "Calculations off; nothing is controlled",
         "step": "step",
         "review_limits": "Review room limits and program targets.",
         "capabilities_unavailable": "Capabilities unavailable; check the valve connection.",
@@ -4575,6 +4698,13 @@
         "balanced": "Balanced: warm on time with as few burner starts and as little gas as fit.",
         "save": "Save most: as little gas and as few burner starts as possible; a room may be a little cooler for a moment."
       }
+    },
+    "shelly_kind": {
+      "options": {
+        "switch": "Plug: switches the floor pump",
+        "probes": "The Pill: temperature probes on the pipes",
+        "gateway": "BLU Gateway: Shelly BLU TRV radiator valves"
+      }
     }
   },
   "issues": {
@@ -4589,7 +4719,8 @@
         },
         "abort": {
           "room_programs_done": "Every room already has a week program.",
-          "e32_rooms_unavailable": "The rooms cannot be read from the E32 right now. Try again in a moment."
+          "e32_rooms_unavailable": "The rooms cannot be read from the E32 right now. Try again in a moment.",
+          "e32_write_failed": "The E32 did not accept the change ({error}). Try again in a moment."
         }
       },
       "description": "These rooms have no week program yet: {rooms}. Choose Fix to give them the standard program. You can change it in the week planner."
@@ -4643,6 +4774,10 @@
     "device_own_schedule": {
       "title": "{device} seems to run its own schedule",
       "description": "The target of {device} (room {room}) changed by itself at the same time on several days. Turn off its own schedule (set it to manual mode), so the E32 week program decides; the device then follows it, and turning it changes the room until the next switch point."
+    },
+    "setting_device_write_failed": {
+      "title": "{device} does not take the room's temperature",
+      "description": "Home Assistant could not set {device}, the setting device of {room}, three times in a row. Last attempt: {error}\n\nCheck that the device is on and set to heat, that it takes a target temperature (a thermostat with only a range gets its lower value), and that it still exists under Settings → Devices & services → Entities. This message goes away by itself as soon as setting it works again. To use another device, choose it under Setting device in the room's settings (Configure → Rooms)."
     },
     "legacy_metrics_history": {
       "title": "Boiler counters were renewed",
@@ -4829,7 +4964,7 @@
     },
     "valve_offline": {
       "title": "Radiator valve not reporting in {room}",
-      "description": "Not reporting for more than two hours in {room}: {valves}. Check the battery and the valve's connection (Zigbee or the BLU Gateway). The room keeps heating on its other temperature sources; a valve keeps regulating to the last target temperature it got."
+      "description": "Not reporting for more than two hours in {room}: {valves}. Check the battery and the valve's connection (Zigbee or the BLU Gateway). The room keeps heating on its other temperature sources; a valve keeps opening and closing for the last target temperature it got."
     },
     "valve_single_source": {
       "title": "{room} relies on a single temperature source",
@@ -4942,11 +5077,11 @@
     },
     "circuit_pump_wrong_device": {
       "title": "{circuit}: another device answers at the Plug's address",
-      "description": "Another device now answers at the address of the pump's Shelly Plug, so the E32 sends it nothing. Give the Plug a fixed address (DHCP reservation) in your router, or enter its new address on the E32's Shelly page."
+      "description": "Another device now answers at the address of the pump's Shelly Plug, so the E32 sends it nothing. Give the Plug a fixed address (DHCP reservation) in your router, or enter its new address on the E32's page System → Devices."
     },
     "circuit_pump_password": {
       "title": "{circuit}: the Plug refuses the E32's password",
-      "description": "The pump's Shelly Plug refuses the password the E32 has for it. Enter the Plug's password again on the E32's Shelly page."
+      "description": "The pump's Shelly Plug refuses the password the E32 has for it. Enter the Plug's password again on the E32's page System → Devices."
     },
     "circuit_pump_no_power": {
       "title": "{circuit}: the pump takes no power",
@@ -4970,7 +5105,7 @@
     },
     "valve_not_found": {
       "title": "Radiator valve not found at the BLU Gateway in {room}",
-      "description": "The BLU Gateway does not know these valves (any more), or they are not paired with it: {valves}. Pair the valve again in the Shelly app and check that it is listed with its gateway on the E32's Shelly page, or remove it from the room."
+      "description": "The BLU Gateway does not know these valves (any more), or they are not paired with it: {valves}. Pair the valve again in the Shelly app and check that it is listed with its gateway on the E32's page System → Devices, or remove it from the room."
     },
     "boiler_other_boiler": {
       "title": "A different boiler is connected",
@@ -5006,6 +5141,10 @@
       "description": "{name}: the tester program is on, but this E32 firmware cannot make a bus recording yet. Update the E32 (Firmware update). You can still share the result without one, or switch the tester program off: Configure → Advanced and diagnostics → Tester program."
     },
     "learned_not_saved": {
+      "title": "The E32 could not save what it learned",
+      "description": "{name}: the E32 could not save what it learned for {missing} of its {of} rooms. The E32 has {free} free places in its settings memory and keeps {reserve} free for its own settings; what it learned needs {needed}. It keeps it in memory until there is room again, but a restart before that loses it. Nothing to do now; if this stays for days, open the E32's System → Diagnostics and share the diagnostics. This message disappears after the next complete save."
+    },
+    "learned_not_saved_no_counts": {
       "title": "The E32 could not save what it learned",
       "description": "{name}: the E32 could not save what it learned for {missing} of its {of} rooms. It keeps it in memory until there is room again, but a restart before that loses it. Nothing to do now; if this stays for days, open the E32's System → Diagnostics and share the diagnostics. This message disappears after the next complete save."
     },

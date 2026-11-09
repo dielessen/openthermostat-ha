@@ -8,8 +8,9 @@ or another HA call saved in between), the plan is read again once and the same
 single change is applied to the new revision; nothing else is overwritten.
 
 Entities (product entries with a stored controller connection, one per room
-the E32 telemetry reports): a select (active / inactive), a datetime
-(inactive until) and a number (fallback setpoint). Whole rooms are added,
+the E32 telemetry reports): a select (active / inactive, and E32 1.3's follow:
+"Heat along only", offered only by firmware that names plan.room_follow.v1), a
+datetime (inactive until) and a number (fallback setpoint). Whole rooms are added,
 edited and removed by the "E32 rooms" options flow (e32_room_flow.py) through
 the same writer. Plans read from or confirmed by the E32 remove the devices
 of rooms they no longer have once two reads at least a minute apart miss
@@ -42,7 +43,10 @@ from .room_levels import normalize
 
 _LOGGER = logging.getLogger(__name__)
 
-ROOM_STATES = ["active", "inactive"]
+ROOM_STATES = ["active", "follow", "inactive"]
+# E32 1.3: the plan's state "follow" (Heat along only): the room keeps its target and its valves get it, but it
+# never asks the boiler for heat. Older firmware refuses that state, so it is offered only to firmware naming this.
+FOLLOW_FEATURE = "plan.room_follow.v1"
 RETRY_SECONDS = 60
 SETPOINT_LIMITS = (5.0, 30.0)
 SETPOINT_STEP = 0.5
@@ -81,15 +85,37 @@ def changed_plan(plan, room_id, change):
     return candidate
 
 
+def _remember_follow(room, state):
+    """E32 1.3: a room switched off from Heat along only (or kept off after it) returns to it when it is switched on
+    again ("follow_when_on", see RoomPlan::rememberFollow); a room that is on carries no such mark."""
+    if state == "inactive" and (room.get("state") == "follow" or room.get("follow_when_on") is True):
+        room["follow_when_on"] = True
+    else:
+        room.pop("follow_when_on", None)
+
+
+def on_state(room):
+    """E32 1.3: the state a room that is off returns to when it is switched on: Heat along only when it remembers it."""
+    return "follow" if (room or {}).get("follow_when_on") is True else "active"
+
+
 def set_state(state):
     def change(room):
+        _remember_follow(room, state)
         room["state"] = state
         room["inactive_until"] = 0
     return change
 
 
+def follows(plan):
+    """True when the E32 that answered this plan knows the room state "follow" (Heat along only)."""
+    features = plan.get("features") if type(plan) is dict else None
+    return type(features) is list and FOLLOW_FEATURE in features
+
+
 def set_inactive_until(until):
     def change(room):
+        _remember_follow(room, "inactive")
         room["state"] = "inactive"
         room["inactive_until"] = until
     return change
@@ -491,6 +517,9 @@ class RoomPlanLink:
             # "Choose a temperature source for <room>" goes once the room has a new source.
             from .legacy_room_migration import update_choose_source_issues
             update_choose_source_issues(self.hass, self.entry, plan)
+            # Each room device's model says what the room is (a renamed room, another emitter: 1.3).
+            from .room_device import sync_room_devices
+            sync_room_devices(self.hass, self.entry, self.hub)
         self._follow_up_failed = False  # before notify: its listeners may start the next read
         self.hub.notify()
 
@@ -586,14 +615,24 @@ class PlanRoomEntity(RoomEntity):
 
 
 class RoomStateSelect(PlanRoomEntity, SelectEntity):
-    """The room on or off. A setting (1.0.0rc7): the thermostat's Off/Auto does the same on the Overview."""
+    """The room on or off. A setting (1.0.0rc7): the thermostat's Off/Auto does the same on the Overview.
 
-    _attr_options = ROOM_STATES
+    E32 1.3 adds "follow" (Heat along only), for automations too; offered only while the E32 names it (or the
+    room already is on it).
+    """
+
     _attr_entity_category = EntityCategory.CONFIG
     _unrecorded_attributes = frozenset({"revision"})  # changes with every plan save
 
     def __init__(self, hub, room):
         self._attach_room(hub, room, "state")
+
+    @property
+    def options(self):
+        plan = self.plan.plan if self.plan is not None else None
+        if follows(plan) or self.current_option == "follow":
+            return ROOM_STATES
+        return [state for state in ROOM_STATES if state != "follow"]
 
     @property
     def current_option(self):
@@ -611,7 +650,7 @@ class RoomStateSelect(PlanRoomEntity, SelectEntity):
                 "revision": self.plan.revision}
 
     async def async_select_option(self, option):
-        if option not in ROOM_STATES:
+        if option not in self.options:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="room_state_invalid")
         await self._change(set_state(option))
 

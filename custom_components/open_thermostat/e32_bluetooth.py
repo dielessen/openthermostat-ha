@@ -1,6 +1,7 @@
-"""Configure → Advanced and diagnostics → Bluetooth sensors (rc.3): rename or forget paired sensors.
+"""Configure → E32 devices → Bluetooth sensors (rc.3; under Advanced and diagnostics until 1.3): rename or forget
+paired sensors.
 
-The same list as the E32's Bluetooth sensors page (``GET/POST /config/bluetooth``). Changes are
+The same list as the Bluetooth sensors on the E32's page System → Devices (``GET/POST /config/bluetooth``). Changes are
 collected first and saved together, because every save restarts the E32 about 30 seconds later
 (it reloads its Bluetooth listener): several renames and removals are one save, one restart.
 

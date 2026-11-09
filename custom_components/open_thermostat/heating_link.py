@@ -1652,6 +1652,35 @@ class RoomEntity(HubEntity):
         self._attach(hub, f"e32_room_{self.room_id}_{key}", device)
         self._attr_translation_key = f"room_{key}"
 
+    @property
+    def device_info(self):
+        """The room device with its model ("Room on the E32: radiators") and the E32's version (room_device)."""
+        info = super().device_info
+        entry = getattr(getattr(self, "platform", None), "config_entry", None)
+        if getattr(self, "hass", None) is None or entry is None:
+            return info
+        from .room_device import device_fields
+        try:
+            current = dr.async_get(self.hass).async_get_device_by_identifier(next(iter(info["identifiers"])),
+                                                                             entry.entry_id)
+            fields = device_fields(self.hass, entry.entry_id, self.hub, self.room_id, current)
+        except Exception:  # the model is a label: it never stops the entity from being added
+            _LOGGER.debug("No model for the device of E32 room %s", self.room_id, exc_info=True)
+            return info
+        return DeviceInfo(**{**info, **fields})
+
+    @callback
+    def _follow_name(self):
+        """The device follows the room's name, and its model the room's emitter and the E32's version (1.3)."""
+        super()._follow_name()
+        device = getattr(self, "device_entry", None)
+        if device is not None and self.room is not None:
+            from .room_device import sync_room_device
+            try:
+                sync_room_device(self.hass, self.hub, self.room_id, dr.async_get(self.hass).async_get(device.id))
+            except Exception:  # a label only: never in the way of the entity's state
+                _LOGGER.debug("Could not update the device of E32 room %s", self.room_id, exc_info=True)
+
     async def async_prepare_to_add_to_hass(self):
         """A new entity's ID says the room once.
 
@@ -2264,7 +2293,8 @@ class RoomHeatingStartSensor(RoomEntity, SensorEntity):
     @property
     def native_value(self):
         start = _dict(self.warmup, "optimum_start")
-        if start.get("reason") != "planned":
+        # E32 1.3: a room on Heat along only takes no part in Smart warm-up (the E32 still predicts every room).
+        if start.get("reason") != "planned" or (self.room or {}).get("state") == "follow":
             return None
         if (exact := _utc(start.get("predicted_start_utc"))) is not None:
             # The start the E32 really uses: later by what the free heat gives (rc7, sentences review R1-2).

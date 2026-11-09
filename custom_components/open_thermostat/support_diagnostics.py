@@ -4,6 +4,9 @@ For help with problems: the E32 version and the last update result (from the
 update entity), a summary of the room plan, the last telemetry (heating
 status, summary, learned rooms, plans), the energy inputs and what reached
 the E32, the gas counting, the advice and the number of entities per kind.
+Since 1.3 also, read out so nobody has to work them out by hand: the setting
+device of each room and what the link did last (``setting_devices``), and what
+the E32 could keep of what it learned (``learned_store``).
 
 Never in the file: passwords, tokens, keys (Bluetooth bind keys, AES keys),
 addresses (the E32's address, IP and MAC addresses, URLs), Wi-Fi names
@@ -232,6 +235,90 @@ def firmware(hass, entry):
     return result
 
 
+def _age(clock, at):
+    return round(clock() - at, 1) if type(at) in (int, float) else None
+
+
+def setting_devices(hass, entry):
+    """Per plan room its setting device and the link's state (e32_setting_device.SettingDevicePusher).
+
+    ``linked``: Home Assistant writes the E32's target to the device (the room has a week program and a setting
+    device). For a linked room: the device's state and target, the target the E32 wants shown now (None: not written
+    now, for example a window pause or a room that is off), the last write (value, seconds ago), a knob change on its
+    way to the E32, how many changes the device made by itself in the last days and whether that looks like its own
+    schedule. Read only; a part that cannot be read is left out, never an error in the download.
+    """
+    from . import e32_setting_device as link
+    state = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    pusher, hub = state.get("setting_device_pusher"), state.get("heating_hub")
+    plan_link = getattr(hub, "plan", None) if hub is not None else None
+    plan = getattr(plan_link, "plan", None) if plan_link is not None else None
+    if type(plan) is not dict:
+        return {"running": pusher is not None, "plan_read": False, "rooms": []}
+    clock = getattr(pusher, "clock", time.monotonic)
+    rooms = []
+    for room in plan.get("rooms") or []:
+        if type(room) is not dict:
+            continue
+        item = {"room_id": room.get("id")}
+        try:
+            device = link.setting_device(room)
+            program = link.has_program(room)
+            item.update(setting_device=device, week_program=program, linked=bool(device and program))
+            if not item["linked"]:
+                item["proposed_device"] = link.proposed_device(room)
+                rooms.append(item)
+                continue
+            device_state = hass.states.get(device)
+            status = (getattr(hub, "rooms", None) or {}).get(room.get("id"))
+            item.update({
+                "device_state": device_state.state if device_state is not None else None,
+                "device_target_c": link.device_target(hass, device_state),
+                "device_step_c": link.device_step(device_state) if device_state is not None else None,
+                "room_state": (status or {}).get("state"), "setpoint_source": (status or {}).get("setpoint_source"),
+                "e32_target_c": link.SettingDevicePusher.desired(status)})
+            if pusher is not None:
+                pushed = (getattr(pusher, "pushed", None) or {}).get(room.get("id"))
+                pending = (getattr(pusher, "pending", None) or {}).get(room.get("id"))
+                item.update({
+                    "followed": device in (getattr(pusher, "_tracked", None) or ()),
+                    "writing_now": room.get("id") in (getattr(pusher, "_busy", None) or ()),
+                    "last_write": {"entity_id": pushed[0], "target_c": pushed[1], "age_s": _age(clock, pushed[2])}
+                    if pushed else None,
+                    "knob_change_pending": {"target_c": pending[0], "expires_in_s": round(pending[1] - clock(), 1)}
+                    if pending else None,
+                    "changes_by_the_device": len(pusher._recent_unasked(device)),
+                    "own_schedule": pusher._own_schedule(device)})
+        except Exception:  # a diagnostics download never fails on one room
+            item["error"] = "unreadable"
+        rooms.append(item)
+    return {"running": pusher is not None, "plan_read": True, "rooms": rooms}
+
+
+def learned_store(hass, entry):
+    """What the E32 could keep of what it learned (learned_store.py), read out of the summary.
+
+    ``status``: the checked ``learned_store`` part of the summary (None on firmware without it); ``not_saved``: the
+    last save left rooms out (``rooms``) or kept every room but not the rest (``part``); the knowledge figure ("Known
+    about your house") now and before the last E32 restart, a loss at that restart, and the Repairs items raised.
+    """
+    from .learned_store import GROUP, not_saved, store_status
+    state = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    hub, watch = state.get("heating_hub"), state.get("learned_store_watch")
+    status = store_status(getattr(hub, "summary", None)) if hub is not None else None
+    missing = not_saved(status)
+    from homeassistant.helpers import issue_registry as ir
+    head, tail = f"{GROUP}_", f"_{entry.entry_id}"
+    issues = sorted(issue_id.removeprefix(head).removesuffix(tail) for domain, issue_id in ir.async_get(hass).issues
+                    if domain == DOMAIN and issue_id.startswith(head) and issue_id.endswith(tail))
+    loss = getattr(watch, "loss", None)
+    return {"status": status,
+            "not_saved": {"what": missing[0], "rooms_missing": missing[1], "rooms": missing[2]} if missing else None,
+            "knowledge_pct": getattr(watch, "last", None), "knowledge_pct_before_restart": getattr(watch, "before", None),
+            "lost_at_restart": {"before_pct": loss[0], "after_pct": loss[1]} if loss else None,
+            "e32_restarts_seen": getattr(watch, "boots", None), "repairs": issues}
+
+
 def advice(hass, entry):
     state = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
     sensor = state.get("heating_advice")
@@ -250,7 +337,8 @@ async def async_product_diagnostics(hass, entry):
     use = state.get("energy_use")
     return {"firmware": firmware(hass, entry), "plan": plan_summary(hub), "telemetry": telemetry(hub),
             "inputs": inputs(hass, entry, hub), "energy": use.diagnostics() if use is not None else None,
-            "advice": advice(hass, entry), "entities": entity_counts(hass, entry)}
+            "advice": advice(hass, entry), "entities": entity_counts(hass, entry),
+            "setting_devices": setting_devices(hass, entry), "learned_store": learned_store(hass, entry)}
 
 
 def device_summary(entry, device):

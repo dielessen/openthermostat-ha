@@ -87,7 +87,8 @@ class ReconfirmTakeoverRepairFlow(RepairsFlow):
         self._issue, self._data = issue, data
 
     async def async_step_init(self, user_input=None):
-        return await self.async_step_reconfirm_takeover(user_input)
+        # Home Assistant opens a repair with data={"issue_id": ...} as this step's input: never a submitted form.
+        return await self.async_step_reconfirm_takeover()
 
     async def async_step_reconfirm_takeover(self, user_input=None):
         from .controller_link import ControllerLinkError, HeatingPlanRejected

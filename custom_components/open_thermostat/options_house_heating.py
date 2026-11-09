@@ -31,6 +31,7 @@ from .e32_flow import (COMFORT_STYLE_KEY, COMFORT_STYLES, DESIGN_FLOW_AUTOMATIC,
 from .e32_house import (MODES, async_comfort_state, holiday_periods, holiday_temperature, holiday_until,
                         house_mode, supports_holidays, supports_house_mode)
 from .heating_link import number
+from .native_form import remember_shown, shown_value
 
 DESIGN_CHOICES = [DESIGN_FLOW_AUTOMATIC, *(str(c) for c in range(DESIGN_FLOW_LIMITS[0], DESIGN_FLOW_LIMITS[1] + 1))]
 # The E32's refusals of a holiday list (RoomOverrides::command) and of a change made elsewhere -> the form's error.
@@ -127,7 +128,9 @@ class HouseHeatingSteps:
                     except HomeAssistantError:
                         errors["holiday_until"] = "house_holiday_date_invalid"
             if not errors:
-                if mode == current and (mode != "holiday" or until == away.get("until")):
+                # Plan item 1b: unchanged against what the form showed (the E32 may have changed it since).
+                was_mode, was_until = shown_value(self, step_id, (current, away.get("until")))
+                if mode == was_mode and (mode != "holiday" or until == was_until):
                     return self.async_abort(reason="e32_room_unchanged")
                 try:
                     if until is not None:
@@ -153,6 +156,8 @@ class HouseHeatingSteps:
         })
         if user_input is not None:
             schema = self.add_suggested_values_to_schema(schema, user_input)
+        else:
+            remember_shown(self, step_id, (current, away.get("until")))
         return self.async_show_form(step_id=step_id, data_schema=schema, errors=errors,
                                     description_placeholders=placeholders)
 
@@ -303,9 +308,10 @@ class HouseHeatingSteps:
         errors, placeholders = {}, {"error": ""}
         if user_input is not None:
             value = number(user_input.get("holiday_temperature"), *AWAY_LIMITS)
+            was = shown_value(self, "house_holiday_temperature", current)  # plan item 1b
             if value is None:
                 errors["holiday_temperature"] = "house_holiday_temperature_invalid"
-            elif current is not None and float(value) == float(current):
+            elif was is not None and float(value) == float(was):
                 return self.async_abort(reason="e32_room_unchanged")
             else:
                 try:
@@ -316,6 +322,8 @@ class HouseHeatingSteps:
                         getattr(err, "translation_key", None) or "unknown"
                 else:
                     return self.async_abort(reason="house_mode_saved")
+        if user_input is None:
+            remember_shown(self, "house_holiday_temperature", current)
         schema = vol.Schema({vol.Required("holiday_temperature", default=current if current is not None else 15.0):
                              selector.NumberSelector({"min": AWAY_LIMITS[0], "max": AWAY_LIMITS[1], "step": 0.5, "mode": "box",
                                                       "unit_of_measurement": "°C"})})
@@ -343,16 +351,28 @@ class HouseHeatingSteps:
             "options": list(COMFORT_STYLES), "translation_key": "comfort_style_choice", "mode": "list"})}
 
     @staticmethod
-    def _comfort_change(stored, user_input, changes):
-        """Adds the comfort style to ``changes`` when it changed; False for a value the E32 would refuse."""
+    def _comfort_change(stored, user_input, changes, shown=None):
+        """Adds the comfort style to ``changes`` when the user changed it; False for a value the E32 would refuse.
+
+        ``shown``: the options the form showed (plan item 1b): a style left as shown is not sent, so a style
+        chosen on the E32's own page meanwhile stays.
+        """
         if stored.get(COMFORT_STYLE_KEY) not in COMFORT_STYLES or "comfort_style" not in user_input:
             return True
         style = user_input.get("comfort_style")
         if style not in COMFORT_STYLES:
             return False
-        if style != stored[COMFORT_STYLE_KEY]:
+        was = (shown or stored).get(COMFORT_STYLE_KEY, stored[COMFORT_STYLE_KEY])
+        if style != was and style != stored[COMFORT_STYLE_KEY]:
             changes[COMFORT_STYLE_KEY] = style
         return True
+
+    @staticmethod
+    def _option_change(changes, key, value, shown, stored):
+        """Plan item 1b: ``value`` goes to the E32 only when the user changed it against what the form showed
+        (and it is not what the E32 has now): Home Assistant never puts its copy back over an E32 edit."""
+        if value != shown.get(key, stored[key]) and value != stored[key]:
+            changes[key] = value
 
     async def _heating_save(self, link, changes):
         """None when the E32 stored every change (one field at a time), else the form's error key."""
@@ -372,25 +392,24 @@ class HouseHeatingSteps:
         shown = DESIGN_FLOW_AUTOMATIC if design == 0 else str(design)
         errors = {}
         if user_input is not None:
+            was = shown_value(self, "heating_options", stored)
             warm_up, on = user_input.get("smart_warm_up"), user_input.get("weather_compensation")
             choice = (user_input.get("advanced") or {}).get("hard_frost_water_temperature", shown)
             changes = {}
             if (type(warm_up) is not bool or type(on) is not bool or choice not in DESIGN_CHOICES
-                    or not self._comfort_change(stored, user_input, changes)):
+                    or not self._comfort_change(stored, user_input, changes, was)):
                 errors["base"] = "e32_flow_options_failed"
             else:
-                if warm_up != stored["apply_learned"]:
-                    changes["apply_learned"] = warm_up
-                if on != stored["weather_curve"]:
-                    changes["weather_curve"] = on
+                self._option_change(changes, "apply_learned", warm_up, was, stored)
+                self._option_change(changes, "weather_curve", on, was, stored)
                 wanted = 0 if choice == DESIGN_FLOW_AUTOMATIC else int(choice)
-                if wanted != design:
-                    changes[DESIGN_FLOW_KEY] = wanted
+                self._option_change(changes, DESIGN_FLOW_KEY, wanted, was, stored)
                 if not changes:
                     return self.async_abort(reason="e32_room_unchanged")
                 if (error := await self._heating_save(link, changes)) is None:
                     return self.async_abort(reason="e32_flow_options_saved")
                 errors["base"] = error
+        remember_shown(self, "heating_options", dict(stored))
         schema = vol.Schema({
             vol.Required("smart_warm_up", default=stored["apply_learned"]): selector.BooleanSelector(),
             **self._comfort_field(stored),
@@ -408,17 +427,20 @@ class HouseHeatingSteps:
             return stored
         errors = {}
         if user_input is not None:
+            was = shown_value(self, "heating_options", stored)
             value, changes = user_input.get("smart_warm_up"), {}
-            if type(value) is not bool or not self._comfort_change(stored, user_input, changes):
+            if type(value) is not bool or not self._comfort_change(stored, user_input, changes, was):
                 errors["base"] = "e32_flow_options_failed"
             else:
-                if value != stored["apply_learned"]:
-                    changes = {"apply_learned": value, **changes}
+                first = {}
+                self._option_change(first, "apply_learned", value, was, stored)
+                changes = {**first, **changes}
                 if not changes:
                     return self.async_abort(reason="e32_room_unchanged")
                 if (error := await self._heating_save(link, changes)) is None:
                     return self.async_abort(reason="e32_flow_options_saved")
                 errors["base"] = error
+        remember_shown(self, "heating_options", dict(stored))
         schema = vol.Schema({vol.Required("smart_warm_up", default=stored["apply_learned"]): selector.BooleanSelector(),
                              **self._comfort_field(stored)})
         return self.async_show_form(step_id="heating_warm_up", data_schema=schema, errors=errors)
@@ -431,22 +453,22 @@ class HouseHeatingSteps:
         shown = DESIGN_FLOW_AUTOMATIC if design == 0 else str(design)
         errors = {}
         if user_input is not None:
+            was = shown_value(self, "heating_options", stored)
             changes = {}
             on = user_input.get("weather_compensation")
             choice = (user_input.get("advanced") or {}).get("hard_frost_water_temperature", shown)
             if type(on) is not bool or choice not in DESIGN_CHOICES:
                 errors["base"] = "e32_flow_options_failed"
             else:
-                if on != stored["weather_curve"]:
-                    changes["weather_curve"] = on
+                self._option_change(changes, "weather_curve", on, was, stored)
                 wanted = 0 if choice == DESIGN_FLOW_AUTOMATIC else int(choice)
-                if wanted != design:
-                    changes[DESIGN_FLOW_KEY] = wanted
+                self._option_change(changes, DESIGN_FLOW_KEY, wanted, was, stored)
                 if not changes:
                     return self.async_abort(reason="e32_room_unchanged")
                 if (error := await self._heating_save(link, changes)) is None:
                     return self.async_abort(reason="e32_flow_options_saved")
                 errors["base"] = error
+        remember_shown(self, "heating_options", dict(stored))
         schema = vol.Schema({
             vol.Required("weather_compensation", default=stored["weather_curve"]): selector.BooleanSelector(),
             vol.Optional("advanced"): section(vol.Schema({

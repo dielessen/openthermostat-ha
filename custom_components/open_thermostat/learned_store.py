@@ -5,14 +5,21 @@ and the save's count were RAM log lines only). The E32 (SL-A, ``LearnedStore::ad
 section 25) now puts a bounded ``learned_store`` part at the top of its summary (``fw/telemetry/summary``)::
 
     "learned_store": {"restored_rooms": n, "restored_parts": n, "rooms": n | null, "saved_rooms": n | null,
-                      "complete": bool | null, "saves": n, "pending_entries": n, "nvs_free_entries": n | null}
+                      "complete": bool | null, "saves": n, "pending_entries": n, "nvs_free_entries": n | null,
+                      "reserve_entries": n | null, "needed_entries": n}
 
 ``restored_*`` are the boot's restore; ``rooms``, ``saved_rooms`` and ``complete`` the last save of this boot
 (null before the first one); ``saves`` the saves this boot; ``pending_entries`` what the frames left in RAM would
-need; ``nvs_free_entries`` the free NVS entries (null when unreadable). Firmware without it raises nothing here.
+need; ``nvs_free_entries`` the free NVS entries (null when unreadable). Since NVS-RESERVE (1.3) also why a part was
+refused: ``reserve_entries``, what the E32 keeps free for its own settings (null when unknown), and
+``needed_entries``, what the first part it could not write needs (0 when nothing is pending). Firmware without
+``learned_store`` raises nothing here.
 
 - ``learned_not_saved``: the last save stored fewer rooms than the plan has (``saved_rooms < rooms``): "the E32
-  could not save what it learned for <n> of its <m> rooms; it keeps it in memory until there is room". A save
+  could not save what it learned for <n> of its <m> rooms; it keeps it in memory until there is room". With the
+  counts (``memory``) a second sentence says why: the free places, those it keeps for its own settings and what
+  the learned record needs. Firmware without them gets the text without that sentence
+  (``learned_not_saved_no_counts``). A save
   that kept every room but not all the rest (``complete`` false: the house and boiler part) raises
   ``learned_not_saved_part``. Either goes once a later save is complete.
 - ``learned_lost_at_restart``: right after an E32 restart, the knowledge figure ("Known about your house", the
@@ -30,7 +37,8 @@ from .issue_sync import clear_issues, sync_issues
 
 GROUP = "learned_store"
 LOSS_POINTS = 30
-COUNTS = ("restored_rooms", "restored_parts", "rooms", "saved_rooms", "saves", "pending_entries", "nvs_free_entries")
+COUNTS = ("restored_rooms", "restored_parts", "rooms", "saved_rooms", "saves", "pending_entries", "nvs_free_entries",
+          "reserve_entries", "needed_entries")
 # The largest believable count: rooms (RoomPlan::maxRooms is 8) and saves (uint16) fit; NVS entries of 4 KB pages too.
 COUNT_MAX = 65535
 
@@ -61,6 +69,18 @@ def not_saved(status):
     return None
 
 
+def memory(status):
+    """{"free", "reserve", "needed"}: the settings memory's free places, those the E32 keeps for its own settings and
+    what the learned record needs (NVS entries), or None when the firmware does not send all three (older firmware)
+    or nothing is pending."""
+    if status is None:
+        return None
+    free, reserve, needed = status["nvs_free_entries"], status.get("reserve_entries"), status.get("needed_entries")
+    if free is None or reserve is None or not needed:
+        return None
+    return {"free": free, "reserve": reserve, "needed": needed}
+
+
 class LearnedStoreWatch:
     """Follows the hub: the last save and the knowledge figure around each E32 restart."""
 
@@ -89,10 +109,13 @@ class LearnedStoreWatch:
             if self.loss is not None and self.loss[0] - figure <= LOSS_POINTS:
                 self.loss = None  # it learned it again
         wanted = {}
-        missing = not_saved(store_status(summary))
+        status = store_status(summary)
+        missing = not_saved(status)
         if missing is not None and missing[0] == "rooms":
-            wanted["not_saved"] = ("learned_not_saved", {"name": self.entry.title, "missing": missing[1],
-                                                         "of": missing[2]})
+            placeholders = {"name": self.entry.title, "missing": missing[1], "of": missing[2]}
+            why = memory(status)
+            wanted["not_saved"] = (("learned_not_saved", {**placeholders, **why}) if why is not None
+                                   else ("learned_not_saved_no_counts", placeholders))
         elif missing is not None:
             wanted["not_saved"] = ("learned_not_saved_part", {"name": self.entry.title})
         if self.loss is not None:

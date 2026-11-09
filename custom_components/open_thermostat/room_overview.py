@@ -18,11 +18,17 @@ HA 1.0.0rc7 (the owner's sketch, "Comfort until 22:30, then Night 18.0 °C"): th
 same sensor carries ``program``, the room's week program now and its next step
 (program_step), computed in Home Assistant from the plan it holds and the E32's
 time zone; the room status card writes it after the sentence.
+
+E32 1.3: a room on "Heat along only" (state ``follow``) says "Heats along" (reason
+``follow``); in Smart warm-up's lead the E32 gives the room the coming target
+(``setpoint_source`` "warmup", ``warmup_for`` the time on its clock) and the room
+says "Warming up for 17:30" (reason ``warm_up``, sentence ``warm_up_for``).
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, time as clock_time, timedelta, timezone
+import re
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import callback
@@ -30,10 +36,10 @@ from homeassistant.core import callback
 from .heating_link import RoomEntity, number
 
 # The room status card's module (served and loaded with the week planner's, week_planner.card_modules).
-CARD_URL = "/open_thermostat/room-status-card-1.2.0.js"
+CARD_URL = "/open_thermostat/room-status-card-1.3.0.js"
 # The Overview's house card (E32 rc.5, frontend/house-card.js): what the boiler does now, today in figures, the day
 # so far and, in a house with one room switched on, that room. The seventh card module, versioned like the others.
-HOUSE_CARD_URL = "/open_thermostat/house-card-1.2.0.js"
+HOUSE_CARD_URL = "/open_thermostat/house-card-1.3.0.js"
 HOUSE_CARD_TYPE = "custom:openthermostat-house"
 # Yesterday's headline figures on the Learning view, large as on the house card (the same module, house-card.js).
 YESTERDAY_CARD_TYPE = "custom:openthermostat-yesterday"
@@ -42,7 +48,7 @@ YESTERDAY_CARD_TYPE = "custom:openthermostat-yesterday"
 # then the mode that sets its target (away, boost); then what it does.
 REASONS = ["off", "window_open", "window_pending", "no_measurement", "hot_water", "boiler_pause",
            "warm_up", "away_return", "holiday", "away", "room_away", "house_away", "boost", "temporary",
-           "heating", "wants_heat", "warm_enough"]
+           "follow", "heating", "wants_heat", "warm_enough"]
 # The sentence of each variant (strings.json state_attributes.line) and the values it uses.
 LINES = {
     "off": (), "window_open": (), "window_open_contact": ("contact", "since"),
@@ -50,6 +56,8 @@ LINES = {
     # E32 1.0.1 names the kind that pauses the room (comfort.opening) when no open contact can be named.
     "window_open_window": (), "window_open_door": (), "window_pending_window": (), "window_pending_door": (),
     "hot_water": (), "boiler_pause": (), "warm_up": ("time", "target"), "away_return": (), "holiday": ("until", "target"),
+    # E32 1.3: Smart warm-up's lead (the room already has the coming target) and a room on Heat along only.
+    "warm_up_for": ("time",), "follow": (), "follow_frost": (),
     "away": ("target",), "room_away": ("target",), "house_away": ("target",),
     "boost": (), "boost_until": ("until",), "temporary": ("target",), "temporary_until": ("target", "until"),
     "heating": ("temperature", "target"), "wants_heat": ("temperature", "target"),
@@ -61,7 +69,7 @@ PRESENCE = ["room_home", "room_away", "house_home", "house_away"]
 # The Boiler view's "Now" card (E32 rc.5, frontend/boiler-now-card.js): what the boiler does now in a band of its
 # colour with its display code in words, the water to the heating and back, the burner power and its starts as large
 # figures. The eighth card module, versioned like the others.
-BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.2.0.js"
+BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.3.0.js"
 BOILER_NOW_CARD_TYPE = "custom:openthermostat-boiler-now"
 
 
@@ -96,13 +104,35 @@ def opening(room):
     return comfort.get("opening") if comfort.get("opening") in ("window", "door") else None
 
 
-def room_reason(room, status=None, contact=None, warmup=None):
+def warmup_rise(room, now, zone):
+    """E32 1.3: the moment a room in Smart warm-up's lead warms up for, or None.
+
+    The E32 names it as a time on its own clock (``warmup_for`` "17:30", while ``setpoint_source`` is "warmup"):
+    the next such moment in its time zone ``zone``, a minute's grace for the rise itself.
+    """
+    room = _dict(room)
+    text = room.get("warmup_for")
+    if (room.get("setpoint_source") != "warmup" or type(text) is not str or not re.fullmatch(r"\d\d:\d\d", text)
+            or not isinstance(now, datetime) or now.tzinfo is None or zone is None):
+        return None
+    hour, minute = int(text[:2]), int(text[3:])
+    if hour > 23 or minute > 59:
+        return None
+    local = now.astimezone(zone)
+    at = datetime.combine(local.date(), clock_time(hour, minute), tzinfo=zone)
+    if at < local - timedelta(minutes=1):
+        at = datetime.combine(local.date() + timedelta(days=1), clock_time(hour, minute), tzinfo=zone)
+    return at.astimezone(timezone.utc)
+
+
+def room_reason(room, status=None, contact=None, warmup=None, rise=None):
     """Why the room heats or not: a RoomReason, or None without a room.
 
     room: one room of the E32 status; status: the house (mode, request, away,
     burner); contact: the OpenContact HA sees open in this room (only used
     while the E32 itself reports the window open or pending; of the kind the
-    E32 names, see RoomReasonSensor._contact).
+    E32 names, see RoomReasonSensor._contact); rise: E32 1.3, the moment the
+    room warms up for while it has Smart warm-up's coming target (warmup_rise).
     """
     if type(room) is not dict:
         return None
@@ -135,6 +165,8 @@ def room_reason(room, status=None, contact=None, warmup=None):
         return reason("hot_water")
     if demand and active and _dict(status.get("request")).get("reason") == "minimum_off":
         return reason("boiler_pause")
+    if room.get("setpoint_source") == "warmup" and mode in (None, "program") and isinstance(rise, datetime):
+        return reason("warm_up", "warm_up_for", time=rise)
     start = _dict(warmup)
     switch = _dict(start.get("next_switch"))
     if (demand and start.get("start_now") is True and start.get("applies") is True and mode in (None, "program")
@@ -157,6 +189,9 @@ def room_reason(room, status=None, contact=None, warmup=None):
         held = mode_target if mode_target is not None else target
         return (reason("temporary", "temporary_until", target=held, until=until) if until
                 else reason("temporary", target=held))
+    if room.get("state") == "follow":  # E32 1.3, Heat along only: its target, never a request of its own
+        # ... except below the frost limit (8 °C), where the E32 asks for heat for it (demand).
+        return reason("follow", "follow_frost") if demand else reason("follow")
     if demand:
         # In shadow mode the old thermostat still runs the boiler: the room wants heat, the E32 does not heat.
         return reason("heating" if active else "wants_heat", temperature=temperature, target=target)
@@ -266,7 +301,8 @@ def program_step(plan_room, now, zone, room=None, away=None):
     if week is None or not isinstance(now, datetime) or now.tzinfo is None:
         return None
     room = _dict(room)
-    if room.get("state") == "inactive" or room.get("setpoint_source") not in (None, "schedule"):
+    # E32 1.3: Smart warm-up's lead ("warmup") still runs the program: its coming step is what it warms up for.
+    if room.get("state") == "inactive" or room.get("setpoint_source") not in (None, "schedule", "warmup"):
         return None
     if _dict(room.get("comfort")).get("mode") not in FOLLOWS_PROGRAM:
         return None
@@ -409,7 +445,13 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
         warmup = self.hub.warmup.get(self.room_id) if type(getattr(self.hub, "warmup", None)) is dict else None
         start = warmup.get("optimum_start") if type(warmup) is dict else None
         contact = self._contact(comfort.get("opening")) if comfort.get("window") in ("open", "pending") else None
-        return room_reason(room, self.hub.status, contact, start)
+        if room.get("setpoint_source") == "warmup":
+            from homeassistant.util import dt as dt_util
+            zone = e32_zone(self.hass, self._entry()) if self.hass is not None else dt_util.get_default_time_zone()
+            rise = warmup_rise(room, datetime.now(timezone.utc), zone)
+        else:
+            rise = None
+        return room_reason(room, self.hub.status, contact, start, rise)
 
     @property
     def native_value(self):

@@ -1,3 +1,83 @@
+# HA 1.3.0 — an E32 devices menu, Heat along only, a visible setting-device link and fixes for the first field tester
+<!-- user-release-notes:v2:en -->
+
+Companion of E32 1.3.0; also runs with E32 1.2.0 and 1.1.0. Needs Home
+Assistant 2026.10.0 or newer.
+
+## New
+
+- **Configure → E32 devices.** One menu for Bluetooth sensors (moved from
+  Advanced) and Shelly devices: add a device by its address (the E32 tests it
+  first), a BLU Gateway's valves, and remove them. A line "On the boiler bus"
+  names the devices the E32 hears. A Shelly device's password goes to the E32
+  and is never kept or shown by Home Assistant.
+- **Heat along only.** The room's Heating choice and Configure → Rooms offer
+  On, Heat along only and Off. With E32 1.3.0 the room keeps its target and
+  its valves, and never asks for heat. During Smart warm-up the room
+  thermostat shows the coming target ("Warming up for 17:30") and the valves
+  follow. On older firmware the option is not offered.
+- **The setting-device link, visible.** A room thermostat with a setting
+  device shows what it last gave it and when, the last value taken from the
+  device's knob, and in plain words why a write failed. Three failed writes in
+  a row raise a repair that says what to check and goes away by itself when a
+  write works. A device that returns from "unavailable" is written to, not taken
+  as a turn of its knob.
+- **The lowest water temperature on automatic.** Configure → Heating and
+  boiler → Water temperature limits has the tick "Lowest water temperature:
+  automatic". The Learning tab says what the E32 tried at lower water, and under
+  the chart of water temperature by outdoor temperature a line says when the
+  lowest water temperature decides. Needs E32 1.3.0.
+- **The valves tile for valves driven by temperature.** A room whose valves do
+  not report an opening shows "Valves" with the temperature they were given,
+  not "Valves open".
+- **Room devices say what the room is:** "Room on the E32: radiators" or
+  "floor heating", with the E32's version, kept right after a rename.
+- **A fuller diagnostics download:** the setting-device link per room and the
+  learned-store figures, without passwords.
+- **The morning check in minutes:** the Learning tab's plan section says
+  "This morning: 6 minutes early" instead of "a little earlier". Needs E32
+  1.3.0.
+
+## Fixed
+
+- **Repairs open with their dialog** (issue #6). Seven repairs acted as if
+  their dialog had been submitted; the room-programs repair crashed with a
+  server error. The week-programme repair also no longer fails when the E32
+  cannot be read.
+- **A thermostat that only offers a temperature range works as setting
+  device** (issue #5), such as the Bosch Room thermostat II through
+  Zigbee2MQTT: the room's target reaches it and a turn of its knob reaches the
+  room.
+- **A setting changed on the E32 is no longer put back.** The Configure forms
+  for the comfort style, the house settings and the water temperature limits
+  send only the fields you changed.
+- **The repair about what the E32 learned** says how many free places the
+  E32's settings memory has and how many it needs.
+- **Old Home Assistant rooms** show in Configure only while an old room exists,
+  in plain words; labels that no menu offered are gone.
+
+## Updating
+
+Update under Settings → Updates (the Marketplace, Home Assistant 2026.11 and
+newer; HACS on 2026.10 and older) and restart Home Assistant. Then install E32
+1.3.0 from its Firmware entity and confirm the takeover again (the repair
+"Confirm again that the E32 may control the boiler").
+
+- Entities, IDs and history stay; the room devices change their model text.
+- Going back to 1.2.0 is safe: the new options and attributes show nothing
+  until the E32 sends them.
+
+## Limitations
+
+- Heat along only, the automatic tick, the learning sentences and the
+  morning check in minutes need E32 1.3.0; on older firmware they are not
+  shown.
+- A setting device gets no target while the E32 has no clock, because its own
+  target would then come back to the E32 as a new base; it follows once the
+  clock is back.
+- Home Assistant's "Add room" for the old way stays for installations from
+  before the E32 rooms.
+
 # HA 1.2.0 — notifications, three plain devices, a restart sensor, room models and the E32's heating plan
 <!-- user-release-notes:v2:en -->
 

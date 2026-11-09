@@ -147,11 +147,10 @@
           "energy": "Energia i temperatura zewnętrzna",
           "notifications": "Powiadomienia",
           "controller_connection": "Połączenie z E32",
+          "e32_devices": "Urządzenia E32",
           "advanced_settings": "Zaawansowane i diagnostyka",
-          "room_settings": "Zarządzaj pomieszczeniami",
-          "installation": "Ustawienia instalacji",
-          "configuration_status": "Czy wszystko jest połączone?",
-          "graph_prepare": "Napraw plan pomieszczeń",
+          "room_settings": "Stare pomieszczenia Home Assistant",
+          "installation": "Ogrzewanie starych pomieszczeń",
           "back": "← Wstecz",
           "done": "Gotowe",
           "general": "Panel i nazwa"
@@ -219,8 +218,8 @@
         }
       },
       "installation": {
-        "title": "Skonfiguruj swoją instalację grzewczą",
-        "description": "Jedna instalacja dla Twojego E32 i pomieszczeń. Wszystko możesz ustawić, gdy E32 lub kocioł jest odłączony. Zapis nie włącza ogrzewania.",
+        "title": "Ogrzewanie starych pomieszczeń",
+        "description": "Nazwa tej instalacji i ogrzewanie pomieszczeń skonfigurowanych w Home Assistant starym sposobem. Możesz to zmienić, gdy E32 lub kocioł nie jest podłączony. Zapis nie włącza ogrzewania.",
         "data": {
           "name": "Nazwa instalacji",
           "create_dashboard": "Pokaż panel OpenThermostat",
@@ -230,43 +229,43 @@
         "data_description": {
           "name": "Rozpoznawalna nazwa w Home Assistant. Zmiana nazwy nie zmienia tożsamości urządzeń.",
           "create_dashboard": "Dodaje opcjonalny panel. Twoje własne panele pozostają bez zmian.",
-          "weather_enabled": "Dopasowuje docelową temperaturę wody do warunków zewnętrznych. Działa centralnie i wymaga odpowiedniego źródła i profilu.",
-          "outdoor_source": "Wybierz prawdziwy czujnik temperatury zewnętrznej lub encję pogody. Przy braku danych obowiązują zaawansowane zasady zastępcze."
+          "weather_enabled": "Temperatura wody zależy od temperatury zewnętrznej: zimniej na zewnątrz, cieplejsza woda. Wymaga źródła temperatury zewnętrznej.",
+          "outdoor_source": "Czujnik temperatury zewnętrznej lub encja pogody. Gdy przestanie raportować, obowiązuje wybór w sekcji Zaawansowane."
         },
         "sections": {
           "advanced": {
             "name": "Zaawansowane",
             "data": {
-              "stale_policy": "Gdy dane zewnętrzne są nieaktualne",
-              "minimum_supply_temperature": "Minimalna centralna temperatura zasilania",
-              "maximum_supply_temperature": "Maksymalna centralna temperatura zasilania",
-              "fixed_fallback_temperature": "Stała zastępcza temperatura zasilania (tylko dla zasady stałej wartości)",
-              "curve_0": "Cel zasilania przy 20 °C na zewnątrz",
-              "curve_1": "Cel zasilania przy 15 °C na zewnątrz",
-              "curve_2": "Cel zasilania przy 10 °C na zewnątrz",
-              "curve_3": "Cel zasilania przy 5 °C na zewnątrz",
-              "curve_4": "Cel zasilania przy 0 °C na zewnątrz",
-              "curve_5": "Cel zasilania przy -5 °C na zewnątrz",
-              "curve_6": "Cel zasilania przy -10 °C na zewnątrz",
-              "curve_7": "Cel zasilania przy -15 °C na zewnątrz",
-              "curve_8": "Cel zasilania przy -20 °C na zewnątrz",
-              "outdoor_maximum_age_seconds": "Maksymalny wiek pomiaru zewnętrznego"
+              "stale_policy": "Gdy temperatura zewnętrzna przestanie raportować",
+              "minimum_supply_temperature": "Najniższa temperatura wody",
+              "maximum_supply_temperature": "Najwyższa temperatura wody",
+              "fixed_fallback_temperature": "Temperatura wody bez temperatury zewnętrznej (tylko przy tym wyborze)",
+              "curve_0": "Temperatura wody przy 20 °C na zewnątrz",
+              "curve_1": "Temperatura wody przy 15 °C na zewnątrz",
+              "curve_2": "Temperatura wody przy 10 °C na zewnątrz",
+              "curve_3": "Temperatura wody przy 5 °C na zewnątrz",
+              "curve_4": "Temperatura wody przy 0 °C na zewnątrz",
+              "curve_5": "Temperatura wody przy -5 °C na zewnątrz",
+              "curve_6": "Temperatura wody przy -10 °C na zewnątrz",
+              "curve_7": "Temperatura wody przy -15 °C na zewnątrz",
+              "curve_8": "Temperatura wody przy -20 °C na zewnątrz",
+              "outdoor_maximum_age_seconds": "Temperatura zewnętrzna za stara po"
             },
             "data_description": {
-              "minimum_supply_temperature": "Najniższa żądana temperatura wody dla tego obiegu, nie temperatura pomieszczenia.",
-              "maximum_supply_temperature": "Najwyższa żądana temperatura wody. Dotyczy przypisanych grzejników; wybierz limity odpowiednie dla Twojej instalacji.",
-              "outdoor_maximum_age_seconds": "Po tym czasie bez prawidłowego odczytu zewnętrznego obowiązuje zasada zastępcza. To nie jest interwał odpytywania.",
-              "stale_policy": "Zablokuj zapotrzebowanie wymagające danych zewnętrznych albo użyj jawnej, ograniczonej stałej temperatury zastępczej.",
-              "fixed_fallback_temperature": "Tylko dla stałej wartości zastępczej. Musi mieścić się w limitach zasilania; dla zasady blokowania zostaw puste.",
-              "curve_0": "Cel temperatury wody w punkcie krzywej 1. Musi mieścić się w limitach i nie maleć wraz z zimniejszą pogodą.",
-              "curve_1": "Cel temperatury wody w punkcie krzywej 2. Musi mieścić się w limitach i nie maleć wraz z zimniejszą pogodą.",
-              "curve_2": "Cel temperatury wody w punkcie krzywej 3. Musi mieścić się w limitach i nie maleć wraz z zimniejszą pogodą.",
-              "curve_3": "Cel temperatury wody w punkcie krzywej 4. Musi mieścić się w limitach i nie maleć wraz z zimniejszą pogodą.",
-              "curve_4": "Cel temperatury wody w punkcie krzywej 5. Musi mieścić się w limitach i nie maleć wraz z zimniejszą pogodą.",
-              "curve_5": "Cel temperatury wody w punkcie krzywej 6. Musi mieścić się w limitach i nie maleć wraz z zimniejszą pogodą.",
-              "curve_6": "Cel temperatury wody w punkcie krzywej 7. Musi mieścić się w limitach i nie maleć wraz z zimniejszą pogodą.",
-              "curve_7": "Cel temperatury wody w punkcie krzywej 8. Musi mieścić się w limitach i nie maleć wraz z zimniejszą pogodą.",
-              "curve_8": "Cel temperatury wody w punkcie krzywej 9. Musi mieścić się w limitach i nie maleć wraz z zimniejszą pogodą."
+              "minimum_supply_temperature": "Najniższa temperatura wody, o jaką E32 może prosić kocioł; nie temperatura pomieszczenia.",
+              "maximum_supply_temperature": "Najwyższa temperatura wody, o jaką E32 może prosić kocioł; wybierz odpowiednią dla Twoich grzejników.",
+              "outdoor_maximum_age_seconds": "Po tym czasie bez nowej temperatury zewnętrznej obowiązuje wybór powyżej.",
+              "stale_policy": "Nie proś o ciepło wymagające temperatury zewnętrznej albo użyj stałej temperatury wody.",
+              "fixed_fallback_temperature": "Tylko przy stałej temperaturze wody; w granicach powyżej.",
+              "curve_0": "Temperatura wody przy tej temperaturze zewnętrznej. W granicach i nigdy niższa niż przy cieplejszej temperaturze zewnętrznej.",
+              "curve_1": "Temperatura wody przy tej temperaturze zewnętrznej. W granicach i nigdy niższa niż przy cieplejszej temperaturze zewnętrznej.",
+              "curve_2": "Temperatura wody przy tej temperaturze zewnętrznej. W granicach i nigdy niższa niż przy cieplejszej temperaturze zewnętrznej.",
+              "curve_3": "Temperatura wody przy tej temperaturze zewnętrznej. W granicach i nigdy niższa niż przy cieplejszej temperaturze zewnętrznej.",
+              "curve_4": "Temperatura wody przy tej temperaturze zewnętrznej. W granicach i nigdy niższa niż przy cieplejszej temperaturze zewnętrznej.",
+              "curve_5": "Temperatura wody przy tej temperaturze zewnętrznej. W granicach i nigdy niższa niż przy cieplejszej temperaturze zewnętrznej.",
+              "curve_6": "Temperatura wody przy tej temperaturze zewnętrznej. W granicach i nigdy niższa niż przy cieplejszej temperaturze zewnętrznej.",
+              "curve_7": "Temperatura wody przy tej temperaturze zewnętrznej. W granicach i nigdy niższa niż przy cieplejszej temperaturze zewnętrznej.",
+              "curve_8": "Temperatura wody przy tej temperaturze zewnętrznej. W granicach i nigdy niższa niż przy cieplejszej temperaturze zewnętrznej."
             }
           }
         },
@@ -341,31 +340,31 @@
         }
       },
       "room_settings": {
-        "title": "Zarządzaj pomieszczeniami",
+        "title": "Stare pomieszczenia Home Assistant",
         "data": {
           "room": "Pomieszczenie",
           "action": "Co chcesz zrobić?"
         },
         "data_description": {
-          "room": "Wybierz istniejące pomieszczenie. Podczas edycji zachowuje ono swoją tożsamość i program.",
-          "action": "Edytuj jego konfigurację albo usuń tylko to pomieszczenie i jego powiązania."
+          "room": "Jedno ze starych pomieszczeń Home Assistant. Zmiana zachowuje jego program tygodniowy.",
+          "action": "Zmień jego ustawienia albo usuń tylko to pomieszczenie."
         },
-        "description": "Dodaj, zmień lub usuń pomieszczenia tej instalacji."
+        "description": "Te pomieszczenia zostały skonfigurowane w Home Assistant starym sposobem. Tutaj możesz jedno z nich zmienić lub usunąć. Nowe pomieszczenia tworzy się w E32: połącz go w Połączenie z E32 i dodaj je w Pomieszczenia. Następnie Zaawansowane i diagnostyka → Usuń stare pomieszczenia Home Assistant przekaże te pomieszczenia do E32."
       },
       "remove_room": {
         "title": "Usunąć {name}?",
-        "description": "Usuwa to pomieszczenie, jego program i jego własne powiązania z grupą grzejników. Wspólne grupy, urządzenia fizyczne i historia Recordera zostają zachowane. Aktywne sterowanie trzeba najpierw zatrzymać. Anulowanie niczego nie zmienia.",
+        "description": "Usuwa to stare pomieszczenie Home Assistant i jego program tygodniowy. Czujniki, termostaty i zawory grzejnikowe pozostają w Home Assistant wraz z historią. Jest to możliwe tylko przy wyłączonych obliczeniach dla tych pomieszczeń (pokazuje to Sprawdź stare pomieszczenia). Anulowanie niczego nie zmienia.",
         "data": {
-          "confirm_remove": "Usuń to pomieszczenie i jego własne powiązania"
+          "confirm_remove": "Usuń to pomieszczenie"
         },
         "data_description": {
-          "confirm_remove": "Potwierdza tylko usunięcie konfiguracji. Nie jest wysyłana żadna usługa urządzenia ani polecenie do kotła."
+          "confirm_remove": "Zmienia tylko ustawienia w Home Assistant: nic nie jest wysyłane do zaworu ani kotła."
         },
         "submit": "Usuń pomieszczenie"
       },
       "configuration_status": {
-        "title": "Czy wszystko jest połączone?",
-        "description": "Skonfigurowane pomieszczenia: **{rooms}**\n\nE32: **{connection}**\n\nSterowanie: **{runtime}**\n\nZapisanie nie oznacza jeszcze, że E32 przejął ustawienia. Pomieszczenia możesz konfigurować także bez połączenia.\n\n**Sprawdzenie zapisanych temperatur zaworów**\n\n{actuator_checks}\n\nPorównuje to, co zawory zgłaszają o swoich możliwościach; nie dowodzi położenia zaworu.\n\n**Co oznaczają te sprawdzenia?**\nKonfiguracja potwierdzona: E32 odesłał zapisany plan pomieszczeń. Obliczenia włączone: E32 oblicza zapotrzebowanie na ciepło; steruje kotłem dopiero po przełączeniu. Sprawdzenie temperatur zaworów: porównuje zapisane temperatury z limitami zgłaszanymi przez zawory i oznacza różnice. Żadne z tych sprawdzeń nie dowodzi, że zawór się otwiera ani że kocioł się zatrzymuje; sprawdź to przy samym zaworze lub kotle.",
+        "title": "Sprawdź stare pomieszczenia",
+        "description": "Stare pomieszczenia Home Assistant: **{rooms}**\n\nE32: **{connection}**\n\nObliczenia: **{runtime}**\n\n**Zapisane temperatury zaworów**\n\n{actuator_checks}\n\nPorównuje to zapisane temperatury z tym, co każdy zawór zgłasza o swoich możliwościach; nie pokazuje, czy zawór się otwiera. Sprawdź to przy samym zaworze.\n\n**Co oznaczają te wiersze**\nUstawienia potwierdzone: E32 odesłał zapisane ustawienia. Obliczenia włączone: E32 oblicza, ile ciepła potrzebują te pomieszczenia; kotłem steruje dopiero po przełączeniu.",
         "submit": "Zamknij"
       },
       "program": {
@@ -435,24 +434,32 @@
       },
       "advanced_settings": {
         "title": "Zaawansowane i diagnostyka",
-        "description": "{saved}Strefa czasowa i dziennik systemowy E32, nazwy czujników Bluetooth, przywracanie kopii zapasowej, porządkowanie identyfikatorów encji i kontrole. Codzienne ustawienia, także Panel i nazwa, są w menu głównym.",
+        "description": "{saved}Strefa czasowa i dziennik systemowy E32, przywracanie kopii zapasowej, porządkowanie identyfikatorów encji i kontrole. Codzienne ustawienia, także Panel i nazwa, są w menu głównym.",
         "menu_options": {
-          "configuration_status": "Czy wszystko jest połączone?",
-          "installation_source": "Sprawdź ustawienia pomieszczeń E32",
-          "graph_status": "Sprawdź zastosowany plan pomieszczeń",
-          "graph_prepare": "Napraw plan pomieszczeń",
+          "configuration_status": "Sprawdź stare pomieszczenia",
+          "graph_status": "Stan starych pomieszczeń w E32",
+          "graph_prepare": "Napraw stare pomieszczenia w E32",
           "legacy_rooms": "Usuń stare pomieszczenia Home Assistant",
-          "installation": "Limity wody starego profilu pomieszczeń",
+          "installation": "Limity temperatury wody starych pomieszczeń",
           "entity_ids": "Uporządkuj identyfikatory encji",
           "entity_ids_undo": "Cofnij porządkowanie identyfikatorów",
           "e32_restore": "Przywróć ustawienia na tym E32",
-          "ble_sensors": "Czujniki Bluetooth",
           "e32_logging": "Dziennik systemowy E32",
           "e32_time_zone": "Strefa czasowa E32",
           "back": "← Wstecz",
           "done": "Gotowe",
           "general": "Panel i nazwa",
           "tester": "Program testerów"
+        }
+      },
+      "e32_devices": {
+        "title": "Urządzenia E32",
+        "description": "{saved}Czujniki i urządzenia, z którymi E32 rozmawia sam, także bez Home Assistant: to samo co na stronie E32 System → Devices.\n\n**Na magistrali kotła:** {bus}",
+        "menu_options": {
+          "ble_sensors": "Czujniki Bluetooth",
+          "shelly_devices": "Urządzenia Shelly",
+          "back": "← Wstecz",
+          "done": "Gotowe"
         }
       },
       "edit_room": {
@@ -497,8 +504,8 @@
         "description": "E32 jest połączony (pomieszczenia: {rooms}). Pomieszczenia dodasz lub zmienisz w Konfiguruj → Pomieszczenia. Home Assistant nie włącza wyjść grzewczych."
       },
       "installation_connected": {
-        "title": "Ustawienia instalacji — połączony E32",
-        "description": "Zmień nazwę instalacji i wspólne limity temperatury wody. Zapisanie weryfikuje cały plan przez istniejące połączenie z E32. Przypisane obiegi grzejnikowe stosują te limity; własne limity obiegów pozostają bez zmian. Zapisane punkty krzywej są utrzymywane w nowych granicach. Bieżący połączony profil nie obsługuje sterowania pogodowego. Zapisanie nie włącza poleceń dla kotła ani zaworów. Zmiana limitów wody może na chwilę ponownie połączyć lub zrestartować E32; zmiany nazwy i panelu nie zapisują ustawień urządzenia.",
+        "title": "Limity temperatury wody starych pomieszczeń",
+        "description": "Najniższa i najwyższa temperatura wody dla pomieszczeń skonfigurowanych w Home Assistant starym sposobem oraz nazwa instalacji. Zapis sprawdza całość z E32; gdy limity się zmienią, E32 może na chwilę ponownie się połączyć lub zrestartować. Nowa nazwa lub wybór panelu zmienia tylko Home Assistant. Zapis nigdy nie włącza sterowania kotłem ani zaworami.",
         "data": {
           "name": "Nazwa instalacji",
           "create_dashboard": "Pokaż panel OpenThermostat"
@@ -511,12 +518,12 @@
           "advanced": {
             "name": "Zaawansowane",
             "data": {
-              "minimum_supply_temperature": "Minimalna centralna temperatura zasilania",
-              "maximum_supply_temperature": "Maksymalna centralna temperatura zasilania"
+              "minimum_supply_temperature": "Najniższa temperatura wody",
+              "maximum_supply_temperature": "Najwyższa temperatura wody"
             },
             "data_description": {
-              "minimum_supply_temperature": "Najniższa żądana temperatura wody dla tego obiegu, nie temperatura pomieszczenia.",
-              "maximum_supply_temperature": "Najwyższa żądana temperatura wody. Dotyczy przypisanych grzejników; wybierz limity odpowiednie dla Twojej instalacji."
+              "minimum_supply_temperature": "Najniższa temperatura wody, o jaką E32 może prosić kocioł; nie temperatura pomieszczenia.",
+              "maximum_supply_temperature": "Najwyższa temperatura wody, o jaką E32 może prosić kocioł; wybierz odpowiednią dla Twoich grzejników."
             }
           }
         },
@@ -561,7 +568,7 @@
         },
         "data_description": {
           "name": "Nazwa widoczna w Home Assistant i na E32. Do 40 liter (mniej przy znakach diakrytycznych lub emoji); zmiana nazwy zachowuje pomieszczenie i jego historię.",
-          "state": "Wł.: pomieszczenie może prosić o ciepło. Wył.: pomieszczenie nie prosi o ciepło. Na tymczasowe wyłączenie ustaw poniżej „Wyłączony do”.",
+          "state": "Wł.: pomieszczenie może prosić o ciepło. Grzeje tylko razem z innymi: pomieszczenie zachowuje swoją temperaturę docelową, a zawory grzejnikowe otwierają się dla niej, ale nigdy nie prosi o ciepło; nagrzewa się, gdy kocioł grzeje dla innych pomieszczeń. Wył.: pomieszczenie nie prosi o ciepło. Na tymczasowe wyłączenie ustaw poniżej „Wyłączony do”.",
           "emitter": "Grzejniki lub ogrzewanie podłogowe. Podłogówka nagrzewa się powoli i potrzebuje chłodniejszej wody, więc każdy rodzaj ma własną temperaturę wody.",
           "ha_sources": "Termostaty lub czujniki temperatury (°C lub °F) w Home Assistant, które mierzą to pomieszczenie. Używany jest pierwszy ze świeżą wartością; pozostałe są zapasowe. Przeciągnij, aby zmienić kolejność.",
           "ble_sources": "Czujniki sparowane bezpośrednio z E32; działają także bez Home Assistant.",
@@ -627,7 +634,7 @@
             "data_description": {
               "valves": "Ich encje termostatu (climate), najwyżej 4 na pomieszczenie. Sterowanie jest wyłączone, dopóki nie włączysz go poniżej.\n\n{valve_routes}",
               "kept": "Zawory Zigbee2MQTT zapisane na E32, których Home Assistant nie zna (już). Działają dalej bez zmian; odznacz zawór, aby go usunąć.",
-              "gateway_valves": "Shelly BLU TRV bramki BLU Gateway E32 w tym pomieszczeniu (zawór dodaje się do jego bramki na stronie Shelly w E32). Razem z nimi do 8 zaworów na pomieszczenie.",
+              "gateway_valves": "Shelly BLU TRV bramki BLU Gateway E32 w tym pomieszczeniu (zawór dodaje się do jego bramki w Urządzenia E32 → Urządzenia Shelly albo na stronie E32 System → Devices). Razem z nimi do 8 zaworów na pomieszczenie.",
               "loop_valves": "Które z wybranych zaworów są na rozdzielaczu podłogowym (zawór pętli podłogowej): E32 sam je otwiera i zamyka. Pozostałe to zawory grzejnikowe.",
               "keep_open": "Zostaw ten grzejnik otwarty jako drogę dla wody: E32 trzyma ten zawór otwarty, dopóki żadna inna droga dla wody nie jest otwarta (dopóki nie wiesz, że kocioł ma obejście). Nie dla zaworu pętli podłogowej.",
               "control": "Wł.: te zawory podążają za pomieszczeniem (tylko gdy E32 sam steruje kotłem). Wył.: zawory zachowują własne ustawienia i nic do nich nie jest wysyłane.",
@@ -638,13 +645,15 @@
       },
       "e32_flow_limits": {
         "title": "Limity temperatury wody",
-        "description": "Najniższa i najwyższa temperatura wody, którą kocioł wysyła do grzejników i podłogi, dla wszystkich pomieszczeń razem. {boiler} {error}",
+        "description": "Najniższa i najwyższa temperatura wody, którą kocioł wysyła do grzejników i podłogi, dla wszystkich pomieszczeń razem. {minimum_now} {boiler} {error}",
         "data": {
+          "minimum_flow_automatic": "Najniższa temperatura wody: automatycznie",
           "minimum_flow_temperature": "Najniższa temperatura wody",
           "maximum_flow_temperature": "Najwyższa temperatura wody"
         },
         "data_description": {
-          "minimum_flow_temperature": "Najniższa temperatura wody, o jaką E32 prosi podczas grzania ({minimum_range}).",
+          "minimum_flow_automatic": "Włączone: E32 sam ustala najniższą temperaturę wody na podstawie tego, czego uczy się o kotle i domu (nigdy poniżej 30 °C). Wyłączone: wartość poniżej.",
+          "minimum_flow_temperature": "Używana tylko przy wyłączonym trybie automatycznym: najniższa temperatura wody, o jaką E32 prosi podczas grzania ({minimum_range}).",
           "maximum_flow_temperature": "Najwyższa temperatura wody, o jaką E32 kiedykolwiek prosi ({maximum_range}, powyżej najniższej). Ogrzewanie podłogowe zasilane bez zaworu mieszającego: zwykle najwyżej 45–50 °C. Grzejniki: w zimne dni często 60–75 °C."
         }
       },
@@ -934,7 +943,7 @@
       },
       "ble_sensors": {
         "title": "Czujniki Bluetooth",
-        "description": "{saved}Czujniki Bluetooth sparowane z E32. Tutaj możesz zmienić ich nazwę lub je usunąć; najpierw zbierz wszystkie zmiany i zapisz je razem: po zapisaniu E32 uruchomi się ponownie jeden raz, około 30 sekund później, aby ich użyć. Parowanie nowego czujnika (wyszukiwanie i klucz) odbywa się na stronie Czujniki Bluetooth w E32, przy czujniku. To, które pomieszczenie mierzy czujnik, ustawia się dla każdego pomieszczenia w Pomieszczenia.\n\n{sensors}\n\n{pending}",
+        "description": "{saved}Czujniki Bluetooth sparowane z E32. Tutaj możesz zmienić ich nazwę lub je usunąć; najpierw zbierz wszystkie zmiany i zapisz je razem: po zapisaniu E32 uruchomi się ponownie jeden raz, około 30 sekund później, aby ich użyć. Parowanie nowego czujnika (wyszukiwanie i klucz) odbywa się na stronie E32 System → Devices, przy czujniku. To, które pomieszczenie mierzy czujnik, ustawia się dla każdego pomieszczenia w Pomieszczenia.\n\n{sensors}\n\n{pending}",
         "menu_options": {
           "ble_rename": "Zmień nazwę czujnika",
           "ble_forget": "Usuń czujnik",
@@ -973,6 +982,82 @@
         },
         "data_description": {
           "confirm": "Zaznacz, aby potwierdzić."
+        }
+      },
+      "shelly_devices": {
+        "title": "Urządzenia Shelly",
+        "description": "{saved}Wtyczka Plug pompy podłogowej, The Pill z sondami temperatury i BLU Gateway zaworów grzejnikowych. E32 rozmawia z nimi sam przez sieć domową, także bez Home Assistant.\n\n{devices}\n\nRole sond The Pill, szukanie zaworów w bramce oraz nazwę, adres lub hasło urządzenia ustawia się na stronie E32 System → Devices.",
+        "menu_options": {
+          "shelly_add": "Dodaj urządzenie",
+          "shelly_valve_add": "Dodaj zawór do BLU Gateway",
+          "shelly_valve_remove": "Usuń zawory",
+          "shelly_remove": "Usuń urządzenie",
+          "back": "← Wstecz",
+          "done": "Gotowe"
+        }
+      },
+      "shelly_add": {
+        "title": "Dodaj urządzenie Shelly",
+        "description": "Najpierw skonfiguruj urządzenie w aplikacji Shelly: Wi-Fi, hasło i wyłączona chmura. Nadaj mu stały adres w routerze (rezerwacja DHCP), aby E32 zawsze je znalazł. Potem wpisz tutaj jego adres: E32 zapyta urządzenie, czym jest, co trwa do 16 sekund.",
+        "data": {
+          "ip": "Adres IP"
+        },
+        "data_description": {
+          "ip": "Na przykład 192.168.1.40."
+        },
+        "submit": "Sprawdź połączenie"
+      },
+      "shelly_add_device": {
+        "title": "Do czego służy?",
+        "description": "Znaleziono pod {ip}: Shelly {model}, oprogramowanie {version}.",
+        "data": {
+          "kind": "Do czego służy?",
+          "label": "Nazwa",
+          "password": "Hasło urządzenia"
+        },
+        "data_description": {
+          "kind": "Zaproponowane na podstawie tego, czym urządzenie się przedstawia; zmień, jeśli robi coś innego.",
+          "label": "Nazwa wyświetlana przez E32 i Home Assistant, najwyżej 32 znaki.",
+          "password": "Hasło ustawione w aplikacji Shelly. Trafia tylko do E32, który przechowuje jego odcisk; Home Assistant go nie przechowuje. Zostaw puste, jeśli urządzenie nie ma hasła."
+        },
+        "submit": "Dodaj urządzenie"
+      },
+      "shelly_remove": {
+        "title": "Usuń urządzenie",
+        "description": "E32 przestaje odczytywać i przełączać urządzenie. Zawory BLU Gateway zostają w swoich pomieszczeniach, dopóki ich nie usuniesz w Pomieszczenia. Wtyczki Plug, która przełącza pompę obiegu grzewczego, nie można usunąć, dopóki pompa nie zostanie wyjęta z obiegu (w E32: Home → Heating settings).",
+        "data": {
+          "device": "Urządzenie",
+          "confirm": "Usuń to urządzenie"
+        },
+        "data_description": {
+          "device": "Urządzenie, które E32 ma zapomnieć.",
+          "confirm": "Zaznacz, aby potwierdzić: E32 przestanie je odczytywać i przełączać."
+        }
+      },
+      "shelly_valve_add": {
+        "title": "Dodaj zawór",
+        "description": "Najpierw sparuj zawór z bramką w aplikacji Shelly. Potem dodaj go tutaj po numerze: pierwszy to zwykle 200, następny 201 i tak dalej. Pomieszczenie zaworu wybierasz w Pomieszczenia → pomieszczenie → Zawory grzejnikowe.",
+        "data": {
+          "gateway": "Bramka BLU Gateway",
+          "valve": "Numer zaworu",
+          "name": "Nazwa"
+        },
+        "data_description": {
+          "gateway": "Bramka, z którą zawór jest sparowany.",
+          "valve": "Numer nadany zaworowi przez bramkę, od 200 do 299.",
+          "name": "Opcjonalnie, na przykład Łazienka."
+        }
+      },
+      "shelly_valve_remove": {
+        "title": "Usuń zawory",
+        "description": "E32 przestaje odczytywać i sterować tymi zaworami. Zawór w pomieszczeniu zostaje tam, dopóki go nie usuniesz w Pomieszczenia → pomieszczenie → Zawory grzejnikowe.\n\nObecnie w pomieszczeniu:\n{rooms}",
+        "data": {
+          "valves": "Zawory",
+          "confirm": "Usuń te zawory"
+        },
+        "data_description": {
+          "valves": "Zawory, które E32 ma zapomnieć; bramka zachowuje ich parowanie.",
+          "confirm": "Zaznacz, aby potwierdzić: E32 przestanie odczytywać i sterować tymi zaworami."
         }
       },
       "house_mode": {
@@ -1170,7 +1255,7 @@
           "circuit": "Obieg"
         },
         "data_description": {
-          "circuit": "Obiegi ustawia się na stronie Shelly w E32."
+          "circuit": "Obiegi ustawia się na stronie E32 Home → Heating settings."
         }
       },
       "heating_circuit": {
@@ -1182,7 +1267,7 @@
           "run_on_max_minutes": "Wybieg najwyżej (minuty)"
         },
         "data_description": {
-          "pump_control": "Włączone: E32 sam włącza i wyłącza pompę, ale tylko wtedy, gdy steruje kotłem. Wyłączone: tylko pokazuje, co by zrobił. Ten sam przełącznik co na stronie Shelly w E32.",
+          "pump_control": "Włączone: E32 sam włącza i wyłącza pompę, ale tylko wtedy, gdy steruje kotłem. Wyłączone: tylko pokazuje, co by zrobił. Ten sam przełącznik co na stronie E32 Home → Heating settings.",
           "max_supply_c": "Gdy woda do podłogi przez 2 minuty jest o 5 °C cieplejsza od tej wartości, E32 wyłącza pompę: zawór mieszający przepuszcza za gorącą wodę. Dla podłogi zwykle 50 °C. To samo ustawienie co na stronie Home w E32, Obiegi grzewcze.",
           "run_on_max_minutes": "Po grzaniu pompa pracuje dalej, dopóki woda do podłogi jest co najmniej o 2 °C cieplejsza od wody powrotnej, aby podłoga przejęła resztę ciepła. Zatrzymuje się wcześniej, gdy ta różnica zniknie lub pomieszczenie jest wystarczająco ciepłe; to najdłuższy czas wybiegu. Zwykle 30 minut. Wymaga obu sond wody."
         }
@@ -1529,7 +1614,26 @@
       "notification_invalid": "Coś w formularzu było nieprawidłowe. Spróbuj ponownie.",
       "notification_kinds_needed": "Wybierz co najmniej jedną wiadomość albo wyłącz powiadomienia.",
       "forecast_not_weather": "Wybierz encję pogody (weather.…) dla prognozy.",
-      "forecast_no_hourly": "Ta encja pogody nie podaje prognozy godzinowej. Wybierz inną lub pozostaw pole puste."
+      "forecast_no_hourly": "Ta encja pogody nie podaje prognozy godzinowej. Wybierz inną lub pozostaw pole puste.",
+      "shelly_ip_invalid": "Wpisz adres jako cztery liczby, na przykład 192.168.1.40.",
+      "shelly_ip_duplicate": "Inne urządzenie na liście ma ten adres.",
+      "shelly_connect_failed": "Pod tym adresem nic nie odpowiada. Sprawdź adres i czy urządzenie jest w tej samej sieci.",
+      "shelly_timeout": "Urządzenie nie odpowiedziało na czas. Spróbuj ponownie.",
+      "shelly_auth_required": "Urządzenie prosi o hasło, zanim powie, czym jest. Sprawdź adres.",
+      "shelly_not_a_shelly": "Ten adres nie odpowiada jak urządzenie Shelly trzeciej generacji.",
+      "shelly_probe_busy": "Test już trwa. Spróbuj ponownie za chwilę.",
+      "shelly_duplicate_device": "To urządzenie jest już na liście.",
+      "shelly_full": "E32 nie ma miejsca na to urządzenie: przyjmuje najwyżej 6 urządzeń Shelly. Usuń urządzenie lub użyj krótszych nazw.",
+      "shelly_label_invalid": "Użyj nazwy o długości najwyżej 32 znaków.",
+      "shelly_password_invalid": "Użyj hasła o długości najwyżej 64 znaków, bez znaków diakrytycznych.",
+      "shelly_password_needed": "Urządzenie ma hasło: wpisz je, aby E32 mógł się z nim komunikować.",
+      "shelly_pump_in_use": "Obieg grzewczy używa tej wtyczki do swojej pompy. Najpierw wyjmij pompę z obiegu (w E32: Home → Heating settings).",
+      "shelly_probe_in_use": "Obieg grzewczy używa sondy tego urządzenia. Najpierw zmień obieg (w E32: Home → Heating settings).",
+      "shelly_valve_invalid": "Użyj numeru zaworu, od 200 do 299.",
+      "shelly_valve_duplicate": "Ten numer zaworu jest już na liście.",
+      "shelly_valve_name_invalid": "Użyj nazwy zaworu o długości najwyżej 32 znaków, bez cudzysłowów i ukośników wstecznych.",
+      "shelly_valves_full": "Bramka przyjmuje najwyżej 5 zaworów.",
+      "shelly_rejected": "E32 odrzucił to ({error}). Nic nie zapisano."
     },
     "abort": {
       "comfort_saved": "Ustawienia komfortu zostały zapisane i obowiązują od razu.",
@@ -1612,7 +1716,7 @@
       "e32_logging_saved": "Ustawienia dziennika systemowego zostały zapisane w E32.",
       "e32_time_zone_saved": "E32 używa teraz strefy {zone}. Uruchomi się ponownie jeden raz; ogrzewanie działa dalej po około minucie.",
       "boiler_model_saved": "E32 pokazuje teraz {model}. Urządzenie kotła w Home Assistant otrzymało tę nazwę.",
-      "ble_none": "Z E32 nie sparowano jeszcze żadnego czujnika Bluetooth. Najpierw sparuj czujnik na stronie Czujniki Bluetooth w E32.",
+      "ble_none": "Z E32 nie sparowano jeszcze żadnego czujnika Bluetooth. Najpierw sparuj czujnik na stronie E32 System → Devices.",
       "ble_changed": "Czujniki Bluetooth zostały w międzyczasie zmienione w E32. Nic nie zostało zapisane; otwórz ponownie Czujniki Bluetooth.",
       "ble_saved": "Zapisano w E32. Uruchomi się ponownie za około 30 sekund, aby użyć zmian.",
       "ble_saved_restart_later": "Zapisano w E32. Uruchomi się ponownie, aby użyć zmian, gdy tylko zakończy się aktualizacja lub test kotła.",
@@ -1633,7 +1737,7 @@
       "boiler_setting_pending": "E32 nadal pracuje nad: {setting}. Zajrzyj do Ustawień kotła za minutę.",
       "boiler_setting_unchanged": "Nic się nie zmieniło: {setting} już wynosi {value}.",
       "boiler_setting_failed": "Nie udało się przywrócić: sprawdź kocioł. {setting} powinno znów wynosić {before}, ale kocioł tego nie potwierdził. Sprawdź to na kotle; Ustawienia → Naprawy podpowiedzą, co dalej.",
-      "heating_circuits_none": "E32 nie zgłasza obiegu grzewczego z pompą. Najpierw ustaw go na stronie Shelly w E32.",
+      "heating_circuits_none": "E32 nie zgłasza obiegu grzewczego z pompą. Najpierw ustaw go na stronie E32 Home → Heating settings.",
       "heating_circuit_saved": "Zapisano w E32.",
       "tester_unchanged": "Nic się nie zmieniło.",
       "tester_recording_started": "Nagrywanie trwa: E32 zachowuje najnowsze {minutes} minut komunikatów Twojego kotła, dopóki go nie zatrzymasz lub nie wybierzesz Udostępnij wynik.",
@@ -1645,7 +1749,12 @@
       "notifications_saved": "Powiadomienia zapisane.",
       "notifications_unchanged": "Nic się nie zmieniło.",
       "notifications_no_people": "W Home Assistant nie ma jeszcze osób. Dodaj osobę w Ustawienia → Osoby, a potem wybierz tutaj jej telefon.",
-      "notifications_no_rooms": "E32 nie zgłosił jeszcze żadnych pomieszczeń. Dodaj pomieszczenia w Konfiguruj → Pomieszczenia, odczekaj chwilę i spróbuj ponownie."
+      "notifications_no_rooms": "E32 nie zgłosił jeszcze żadnych pomieszczeń. Dodaj pomieszczenia w Konfiguruj → Pomieszczenia, odczekaj chwilę i spróbuj ponownie.",
+      "shelly_unsupported": "Ten E32 nie obsługuje urządzeń Shelly. Potrzebny jest E32 V2 z oprogramowaniem 1.1 lub nowszym.",
+      "shelly_device_added": "Dodano: {name}.",
+      "shelly_device_removed": "Usunięto: {name}.",
+      "shelly_valve_added": "Dodano: {name}.",
+      "shelly_valves_removed": "Usunięto zawory: {count}."
     },
     "progress": {
       "controller_connect": "Łączenie z E32…",
@@ -1665,6 +1774,12 @@
               "eco": "Eko",
               "sleep": "Noc"
             }
+          },
+          "warming_up_for": {
+            "name": "Nagrzewanie na"
+          },
+          "scheduled_target": {
+            "name": "Planowana temperatura docelowa"
           }
         }
       }
@@ -1763,6 +1878,7 @@
           "house_away": "Nieobecność: wszyscy są poza domem",
           "boost": "Szybkie grzanie",
           "temporary": "Tymczasowa temperatura",
+          "follow": "Grzeje razem z innymi",
           "heating": "Grzeje",
           "wants_heat": "Potrzebuje ciepła",
           "warm_enough": "Wystarczająco ciepło",
@@ -1793,11 +1909,14 @@
               "boost_until": "Szybkie grzanie do {until}",
               "temporary": "Tymczasowo {target} °C",
               "temporary_until": "Tymczasowo {target} °C do {until}",
+              "follow": "Grzeje razem z innymi: samo nigdy nie prosi o ciepło",
+              "follow_frost": "Grzeje razem z innymi; poniżej 8 °C prosi o ciepło",
               "heating": "Grzeje: {temperature} → {target} °C",
               "wants_heat": "Potrzebuje ciepła: {temperature} → {target} °C",
               "warm_enough": "Wystarczająco ciepło: {temperature} °C (cel {target} °C)",
               "no_heat_needed": "Ciepło niepotrzebne",
-              "warm_up": "Inteligentne nagrzewanie: grzeje wcześniej na {time} ({target} °C)"
+              "warm_up": "Inteligentne nagrzewanie: grzeje wcześniej na {time} ({target} °C)",
+              "warm_up_for": "Nagrzewanie na {time}"
             }
           },
           "presence": {
@@ -1842,6 +1961,7 @@
               "house_away": "Nieobecność",
               "boost": "Szybkie grzanie",
               "temporary": "Tymczasowo",
+              "follow": "Grzeje razem z innymi",
               "heating": "Grzeje",
               "wants_heat": "Potrzebuje ciepła",
               "warm_enough": "Temperatura osiągnięta"
@@ -3297,6 +3417,7 @@
         "name": "Ogrzewanie",
         "state": {
           "active": "Włączone",
+          "follow": "Grzeje tylko razem z innymi",
           "inactive": "Wyłączone"
         }
       },
@@ -4288,6 +4409,7 @@
     "e32_room_state": {
       "options": {
         "active": "Włączone",
+        "follow": "Grzeje tylko razem z innymi",
         "inactive": "Wył. (brak zapotrzebowania na ciepło)"
       }
     },
@@ -4415,16 +4537,17 @@
     "e32_room_list_text": {
       "options": {
         "inactive": "nieaktywne",
+        "follow": "grzeje tylko razem z innymi",
         "contacts": "czujniki okien/drzwi: {count}",
         "none": "Nie ma jeszcze pomieszczeń."
       }
     },
     "configuration_status_text": {
       "options": {
-        "confirmed": "Konfiguracja potwierdzona",
-        "unconfirmed": "Konfiguracja jeszcze niepotwierdzona",
+        "confirmed": "Ustawienia potwierdzone",
+        "unconfirmed": "Ustawienia jeszcze niepotwierdzone",
         "calculations_on": "Obliczenia włączone; przegląd E32 pokazuje, kto steruje kotłem",
-        "calculations_off": "Obliczenia wyłączone; brak sterowania urządzeniami",
+        "calculations_off": "Obliczenia wyłączone; nic nie jest sterowane",
         "step": "krok",
         "review_limits": "Sprawdź limity pomieszczenia i temperatury w programie.",
         "capabilities_unavailable": "Właściwości niedostępne; sprawdź połączenie z zaworem.",
@@ -4575,6 +4698,13 @@
         "balanced": "Zrównoważony: ciepło na czas przy tak małej liczbie uruchomień palnika i tak małym zużyciu gazu, jak się da.",
         "save": "Maksymalna oszczędność: jak najmniej gazu i uruchomień palnika; pomieszczenie może chwilami być nieco chłodniejsze."
       }
+    },
+    "shelly_kind": {
+      "options": {
+        "switch": "Plug: przełącza pompę podłogową",
+        "probes": "The Pill: sondy temperatury na rurach",
+        "gateway": "BLU Gateway: zawory grzejnikowe Shelly BLU TRV"
+      }
     }
   },
   "issues": {
@@ -4589,7 +4719,8 @@
         },
         "abort": {
           "room_programs_done": "Każde pomieszczenie ma już program tygodniowy.",
-          "e32_rooms_unavailable": "Nie można teraz odczytać pomieszczeń z E32. Spróbuj ponownie za chwilę."
+          "e32_rooms_unavailable": "Nie można teraz odczytać pomieszczeń z E32. Spróbuj ponownie za chwilę.",
+          "e32_write_failed": "E32 nie przyjął zmiany ({error}). Spróbuj ponownie za chwilę."
         }
       },
       "description": "Te pomieszczenia nie mają jeszcze programu tygodniowego: {rooms}. Wybierz Napraw, aby nadać im program standardowy. Możesz go zmienić w planerze tygodnia."
@@ -4643,6 +4774,10 @@
     "device_own_schedule": {
       "title": "{device} wydaje się mieć własny harmonogram",
       "description": "Temperatura docelowa {device} (pomieszczenie {room}) zmieniała się sama o tej samej porze przez kilka dni. Wyłącz jego własny harmonogram (tryb ręczny), aby decydował program tygodniowy E32; urządzenie będzie go wtedy stosować, a zmiana na nim obowiązuje do następnego punktu przełączenia."
+    },
+    "setting_device_write_failed": {
+      "title": "{device} nie przyjmuje temperatury pomieszczenia",
+      "description": "Home Assistant trzy razy z rzędu nie mógł ustawić {device}, urządzenia nastawczego pomieszczenia {room}. Ostatnia próba: {error}\n\nSprawdź, czy urządzenie jest włączone i w trybie grzania, czy przyjmuje temperaturę zadaną (termostat, który ma tylko zakres, dostaje jego dolną wartość) oraz czy nadal istnieje w Ustawienia → Urządzenia i usługi → Encje. Ten komunikat zniknie sam, gdy ustawienie znów się powiedzie. Inne urządzenie wybierzesz w polu Urządzenie nastawcze w ustawieniach pomieszczenia (Konfiguruj → Pomieszczenia)."
     },
     "legacy_metrics_history": {
       "title": "Liczniki kotła zostały odnowione",
@@ -4829,7 +4964,7 @@
     },
     "valve_offline": {
       "title": "Zawór grzejnikowy nie odpowiada w pomieszczeniu {room}",
-      "description": "Brak zgłoszeń od ponad dwóch godzin w pomieszczeniu {room}: {valves}. Sprawdź baterię i połączenie zaworu (Zigbee lub BLU Gateway). Pomieszczenie dalej grzeje według innych źródeł temperatury; zawór sam reguluje do ostatniej temperatury docelowej."
+      "description": "Brak zgłoszeń od ponad dwóch godzin w pomieszczeniu {room}: {valves}. Sprawdź baterię i połączenie zaworu (Zigbee lub BLU Gateway). Pomieszczenie dalej grzeje według innych źródeł temperatury; zawór dalej otwiera się i zamyka według ostatniej otrzymanej temperatury docelowej."
     },
     "valve_single_source": {
       "title": "{room} ma tylko jedno źródło temperatury",
@@ -4942,11 +5077,11 @@
     },
     "circuit_pump_wrong_device": {
       "title": "{circuit}: pod adresem wtyczki Plug odpowiada inne urządzenie",
-      "description": "Pod adresem wtyczki Shelly Plug pompy odpowiada teraz inne urządzenie, więc E32 nic do niego nie wysyła. Nadaj wtyczce stały adres (rezerwacja DHCP) w routerze albo wpisz jej nowy adres na stronie Shelly w E32."
+      "description": "Pod adresem wtyczki Shelly Plug pompy odpowiada teraz inne urządzenie, więc E32 nic do niego nie wysyła. Nadaj wtyczce stały adres (rezerwacja DHCP) w routerze albo wpisz jej nowy adres na stronie E32 System → Devices."
     },
     "circuit_pump_password": {
       "title": "{circuit}: wtyczka Plug odrzuca hasło E32",
-      "description": "Wtyczka Shelly Plug pompy odrzuca hasło, które ma dla niej E32. Wpisz ponownie hasło wtyczki na stronie Shelly w E32."
+      "description": "Wtyczka Shelly Plug pompy odrzuca hasło, które ma dla niej E32. Wpisz ponownie hasło wtyczki na stronie E32 System → Devices."
     },
     "circuit_pump_no_power": {
       "title": "{circuit}: pompa nie pobiera prądu",
@@ -4970,7 +5105,7 @@
     },
     "valve_not_found": {
       "title": "Nie znaleziono zaworu przy BLU Gateway w pomieszczeniu {room}",
-      "description": "BLU Gateway nie zna (już) tych zaworów albo nie są z nią sparowane: {valves}. Sparuj zawór ponownie w aplikacji Shelly i sprawdź, czy jest na liście swojej bramki na stronie Shelly w E32, albo usuń go z pomieszczenia."
+      "description": "BLU Gateway nie zna (już) tych zaworów albo nie są z nią sparowane: {valves}. Sparuj zawór ponownie w aplikacji Shelly i sprawdź, czy jest na liście swojej bramki na stronie E32 System → Devices, albo usuń go z pomieszczenia."
     },
     "boiler_other_boiler": {
       "title": "Podłączono inny kocioł",
@@ -5006,6 +5141,10 @@
       "description": "{name}: program testerów jest włączony, ale to oprogramowanie E32 jeszcze nie nagrywa magistrali. Zaktualizuj E32 (Aktualizacja oprogramowania). Wynik możesz też udostępnić bez nagrania albo wyłączyć program testerów: Konfiguruj → Zaawansowane i diagnostyka → Program testerów."
     },
     "learned_not_saved": {
+      "title": "E32 nie mógł zapisać tego, czego się nauczył",
+      "description": "{name}: E32 nie mógł zapisać tego, czego się nauczył, dla {missing} z {of} pomieszczeń. E32 ma {free} wolnych miejsc w pamięci ustawień i zachowuje {reserve} wolnych miejsc dla własnych ustawień; to, czego się nauczył, potrzebuje {needed}. Przechowuje to w pamięci, dopóki znów nie będzie miejsca, ale restart przed tym czasem to utraci. Teraz nic nie trzeba robić; jeśli to trwa wiele dni, otwórz na E32 System → Diagnostics i udostępnij diagnostykę. Ten komunikat zniknie po następnym pełnym zapisie."
+    },
+    "learned_not_saved_no_counts": {
       "title": "E32 nie mógł zapisać tego, czego się nauczył",
       "description": "{name}: E32 nie mógł zapisać tego, czego się nauczył, dla {missing} z {of} pomieszczeń. Przechowuje to w pamięci, dopóki znów nie będzie miejsca, ale restart przed tym czasem to utraci. Teraz nic nie trzeba robić; jeśli to trwa wiele dni, otwórz na E32 System → Diagnostics i udostępnij diagnostykę. Ten komunikat zniknie po następnym pełnym zapisie."
     },

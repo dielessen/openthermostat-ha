@@ -203,7 +203,7 @@ TEXT = {
         "max_ch": "Boiler maximum", "status": "Status", "problem": "Heating",
         "starts_hour": "Starts per hour", "short_cycling": "Switching on and off too often",
         "agreement": "Agreement with thermostat", "measured": "Measured by E32", "target": "Target temperature",
-        "valve_position": "Valves open",
+        "valve_position": "Valves open", "valves": "Valves",
         "mode": "Mode", "off_until": "Off until", "without_ha": "Temperature without a week program",
         "compare": "E32 and thermostat", "e32_request": "Boiler request E32",
         "thermostat_request": "Thermostat request", "compare_heating_time": "Heating time today",
@@ -422,6 +422,9 @@ TEXT = {
         "learning_rest": "the rest", "learning_and": " and ",
         "minute_one": "{n} minute", "minute_few": "{n} minutes", "minute_other": "{n} minutes",
         "curve_title": "Water temperature by outdoor temperature", "noticed": "Noticed",
+        # E32 1.3: under the chart while the learned steady-burn floor decides the water temperature (owner's wish).
+        "curve_floor": "The lowest water temperature decides here: weather compensation would ask for {curve} °C, but your "
+                       "boiler burns steadily only from about {floor} °C water, so the E32 asks for {floor} °C.",
         "noticed_note": "Yesterday is compared with your house's own usual days; that is information and changes nothing.",
         "free_heat": "Free heat",
         # rc.5 (P18): the Overview's Today (when each room warms up, what weather compensation asks) and House rows.
@@ -486,7 +489,7 @@ TEXT = {
         "max_ch": "Maximum van de ketel", "status": "Status", "problem": "Verwarming",
         "starts_hour": "Starts per uur", "short_cycling": "Te vaak aan en uit",
         "agreement": "Overeenstemming met thermostaat", "measured": "Gemeten door E32",
-        "valve_position": "Kranen open",
+        "valve_position": "Kranen open", "valves": "Kranen",
         "target": "Gewenste temperatuur", "mode": "Stand", "off_until": "Uit tot",
         "without_ha": "Temperatuur zonder weekprogramma",
         "compare": "E32 en thermostaat vergeleken", "e32_request": "Ketelvraag E32",
@@ -700,6 +703,8 @@ TEXT = {
         "learning_rest": "de rust", "learning_and": " en ",
         "minute_one": "{n} minuut", "minute_few": "{n} minuten", "minute_other": "{n} minuten",
         "curve_title": "Watertemperatuur bij buitentemperatuur", "noticed": "Opgevallen",
+        "curve_floor": "De laagste watertemperatuur beslist hier: de weerafhankelijke regeling zou {curve} °C vragen, maar je "
+                       "ketel brandt pas rustig door vanaf water van ongeveer {floor} °C, dus de E32 vraagt {floor} °C.",
         "noticed_note": "Gisteren wordt vergeleken met de gewone dagen van je eigen huis; dat is informatie en verandert "
                         "niets.",
         "free_heat": "Gratis warmte",
@@ -767,7 +772,7 @@ TEXT = {
         "max_ch": "Maksimum kotła", "status": "Stan", "problem": "Ogrzewanie",
         "starts_hour": "Starty na godzinę", "short_cycling": "Palnik zbyt często się włącza",
         "agreement": "Zgodność z termostatem", "measured": "Zmierzona przez E32", "target": "Temperatura docelowa",
-        "valve_position": "Otwarcie zaworów",
+        "valve_position": "Otwarcie zaworów", "valves": "Zawory",
         "mode": "Tryb", "off_until": "Wyłączone do", "without_ha": "Temperatura bez programu tygodniowego",
         "compare": "E32 i termostat", "e32_request": "Żądanie do kotła E32",
         "thermostat_request": "Żądanie termostatu", "compare_heating_time": "Czas grzania dziś",
@@ -985,6 +990,8 @@ TEXT = {
         "learning_rest": "przerwa", "learning_and": " i ",
         "minute_one": "{n} minutę", "minute_few": "{n} minuty", "minute_other": "{n} minut",
         "curve_title": "Temperatura wody a temperatura zewnętrzna", "noticed": "Spostrzeżenia",
+        "curve_floor": "Tutaj decyduje najniższa temperatura wody: kompensacja pogodowa żądałaby {curve} °C, ale Twój kocioł "
+                       "pali równo dopiero od wody o temperaturze około {floor} °C, więc E32 żąda {floor} °C.",
         "noticed_note": "Wczoraj jest porównywane ze zwykłymi dniami Twojego domu; to tylko informacja i niczego nie "
                         "zmienia.",
         "free_heat": "Darmowe ciepło",
@@ -1312,8 +1319,9 @@ def _listed(entity_id, attribute):
 
 def _plan_section(t, plan):
     """Today's plan (heating_plan.py, 1.1.1 stage B): how far the E32's planner is in one plain line, why it plans
-    what it plans, the next blocks and when the room is expected warm, from the sensor "Heating plan" (its texts are
-    in Home Assistant's language). Hidden while the E32 reports no plan (firmware without the planner)."""
+    what it plans, the next blocks and when the room is expected warm, then the morning check ("This morning: 6
+    minutes early.", E32 1.3), from the sensor "Heating plan" (its texts are in Home Assistant's language). Hidden
+    while the E32 reports no plan (firmware without the planner)."""
     if not plan:
         return None
     quoted = json.dumps(plan)
@@ -1327,7 +1335,8 @@ def _plan_section(t, plan):
                "{% endfor %}{% endif %}"
                "{% set a = " + attr("arrival_text") + " %}{% set c = " + attr("confidence_text") + " %}"
                "{% if a or c %}\n\n{% if a %}{{ a }}{% endif %}{% if a and c %} {% endif %}{% if c %}*{{ c }}*{% endif %}"
-               "{% endif %}")
+               "{% endif %}"
+               "{% set m = " + attr("morning_text") + " %}{% if m %}\n\n{{ m }}{% endif %}")
     shown = [{"condition": "state", "entity": plan, "state_not": "unavailable"}]
     section = _section(_heading(t["plan_today"], ICONS["plan"], visibility=shown),
                        {"type": "markdown", "content": content, "visibility": shown})
@@ -1427,17 +1436,28 @@ def _boiler_section(t, boiler, flow=None, learned=None):
                           {"type": "markdown", "content": content})
 
 
-def _curve_section(t, curve, request=None):
+def _curve_section(t, curve, request=None, learned=None):
     """Water temperature by outdoor temperature (E32 rc.5): the heating-curve card (frontend/heating-curve-card.js)
     under a heading of its own, so the card leaves its own title out; shown while the curve has a value. With the
     heat request (``request``, HA 1.0.1) the card says "E32 would ask" in the trial run and before the takeover is
-    confirmed, as the house card does."""
+    confirmed, as the house card does. E32 1.3 (owner's wish), with the learned overview (``learned``): under the
+    chart "the lowest water temperature decides here" while the learned steady-burn floor is applied
+    (``steady_burn.applied``) and above what weather compensation asks (the curve's ``flow_c``); nothing otherwise."""
     if not curve:
         return None
     card = {"type": CURVE_CARD_TYPE, "entity": curve, "show_name": False, "visibility": _known(curve)}
     if request:
         card["request"] = request
-    return _section_known([curve], _heading(t["curve_title"], ICONS["curve"]), _wide(card))
+    note = None
+    if learned:
+        q, lo = json.dumps(curve), json.dumps(learned)
+        note = {"type": "markdown", "show_empty": False, "content": (
+            "{% set f = state_attr(" + q + ", 'flow_c') %}{% set fl = state_attr(" + lo + ", 'steady_burn_floor_c') %}"
+            "{% set sb = state_attr(" + lo + ", 'steady_burn') %}"
+            "{% if f is number and fl is number and sb is mapping and sb.applied == true"
+            " and (f | round(0) | int) < (fl | round(0) | int) %}" + _icon("lowest") + " {{ "
+            + _jinja_text(t["curve_floor"], curve="f | round(0) | int", floor="fl | round(0) | int") + " }}{% endif %}")}
+    return _section_known([curve], _heading(t["curve_title"], ICONS["curve"]), _wide(card), _wide(note))
 
 
 def _noticed_section(t, learned):
@@ -2291,6 +2311,16 @@ def _tile(entity_id, name=None, icon=None, features=None, visibility=None, color
     return card
 
 
+def _valve_tile(t, entity_id, valves, visibility=None):
+    """A room's valve tile (1.3, NEXT-RELEASE 1f): "Valves open" with the average opening; "Valves" with the
+    temperature the E32 gave them when no valve reports an opening (Sonoff TRV Gen2: driven by temperature, the
+    position cannot be read); in a mixed room the average with how many are driven by temperature below it."""
+    from .e32_valves import tile_kind
+    kind = tile_kind(valves)
+    return _tile(entity_id, t["valves"] if kind == "driven" else t["valve_position"], "mdi:valve", visibility=visibility,
+                 state_content=["set_to_text"] if kind == "driven" else ["state", "driven_text"] if kind == "mixed" else None)
+
+
 class RoomDashboard:
     """Manage a separate dashboard containing the discovered climate entities."""
 
@@ -2491,6 +2521,7 @@ class RoomDashboard:
     def _signature(hub):
         if hub is None or not hub.fresh:
             return None
+        from .e32_valves import tile_kind
         from .heating_link import learned_inputs
         plan = hub.plan.plan if hub.plan is not None else None
         # The E32 counts every plan save in its revision: no need to compare the whole plan (R4-11).
@@ -2501,7 +2532,9 @@ class RoomDashboard:
                 tuple((key, sensor.get("name")) for key, sensor in hub.ble.items()),
                 plan.get("revision") if plan else None,
                 # The outdoor temperature the E32 uses (the House row shows the same one, rc7).
-                learned_inputs(getattr(hub, "learned_header", None)).get("outdoor"))
+                learned_inputs(getattr(hub, "learned_header", None)).get("outdoor"),
+                # What each room's valve tile shows (1.3: valves driven by temperature, _valve_tile).
+                tuple((key, tile_kind(room)) for key, room in (getattr(hub, "valves", None) or {}).items()))
 
     @callback
     def _schedule_refresh(self) -> None:
@@ -2856,7 +2889,8 @@ class RoomDashboard:
         learning = [section for section in (_knowledge_section(t, hub.get("knowledge")),
                                             _plan_section(t, hub.get("heating_plan")),
                                             _boiler_section(t, hub.get("boiler_response"), flow, learned_overview),
-                                            _curve_section(t, flow.get("curve"), request)) if section]
+                                            _curve_section(t, flow.get("curve"), request, learned_overview))
+                    if section]
         # Yesterday in figures, once (dashboard-spec §6): the scoreboard (E32 rc.4) and the daily summary, with the
         # gas in the gas sensor's unit. Is it getting better? Only once one figure has a value. The headline figures
         # large (rc.5, as the owner's sketch): the warm on time of the lead room, the first room switched on that
@@ -3014,9 +3048,16 @@ class RoomDashboard:
         inactive = [{"condition": "state", "entity": state, "state": "inactive"}] if state else None
         sensor = next((metrics for sensor_id, metrics in sorted(ble.items()) if in_room.get(sensor_id) == room_id), {})
         badges = []
+        # E32 1.3: a room on Heat along only ("Heats along") and Smart warm-up's lead say so in the header (the Reason
+        # sensor's word) instead of the heat demand, which then is no request of the room's own.
+        told = ["follow", "warm_up"]
+        asked = [{"condition": "state", "entity": room["reason"], "state_not": told}] if room.get("reason") else []
         if room.get("demand"):
             badges.append({"type": "entity", "entity": room["demand"], "show_state": True, "show_icon": True,
-                           "color": "deep-orange", **({"visibility": active} if active else {})})
+                           "color": "deep-orange", **({"visibility": (active or []) + asked} if active or asked else {})})
+        if room.get("reason"):
+            badges.append({"type": "entity", "entity": room["reason"], "show_state": True, "show_icon": True,
+                           "visibility": [{"condition": "state", "entity": room["reason"], "state": told}]})
         if room.get("status"):
             badges.append({"type": "entity", "entity": room["status"], "show_state": True, "show_icon": True,
                            "color": "amber", "visibility": [{"condition": "state", "entity": room["status"],
@@ -3062,8 +3103,8 @@ class RoomDashboard:
             # radiator valves are open: pairs, an odd one across.
             *_tiles(_tile(room.get("temperature"), t["measured"], visibility=active) if measured else None,
                     None if thermostat else _tile(room.get("setpoint"), t["target"], visibility=active),
-                    _tile(room["valve_position"], t["valve_position"], "mdi:valve", visibility=active)
-                    if room.get("valve_position") else None),
+                    _valve_tile(t, room["valve_position"], (getattr(heating_hub, "valves", None) or {}).get(room_id),
+                                active) if room.get("valve_position") else None),
             {"type": "history-graph", "hours_to_show": 24, "entities": history, **when_active}
             if history else None,
             # The whole width: a date and time do not fit half a section on a phone.

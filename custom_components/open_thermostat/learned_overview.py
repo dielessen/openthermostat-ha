@@ -151,6 +151,19 @@ TEXT = {
         "steady": "Your boiler burns steadily from about {flow} °C water; the E32 asks at least that much.",
         "steady_off": "Your boiler burns steadily from about {flow} °C water; with Smart warm-up on the E32 asks at least that much.",
         "steady_mean": "Below that it switches itself off and on at its lowest flame. Slightly warmer water means far fewer burner starts and costs at most a little efficiency.",
+        "steady_trying": "The E32 is trying {to} °C water for half an hour: if the boiler keeps burning steadily there, it keeps that.",
+        "steady_today": "today",
+        "steady_yesterday": "yesterday",
+        "steady_days": "{n} days ago",
+        "steady_last_week": "last week",
+        "steady_kept": "The E32 tried {d} °C lower water ({to} °C) {when} and kept it: the boiler burnt steadily there.",
+        "steady_cycling": "The E32 tried {d} °C lower water ({to} °C) {when}; the boiler switched itself off and on there, so the E32 went back to {from_c} °C. It tries again in a week.",
+        "steady_cool": "The E32 tried {d} °C lower water ({to} °C) {when}; a room cooled down, so the E32 went back to {from_c} °C. It tries again in a week.",
+        # Plan item 1: which mode holds for the lowest water temperature (fw/telemetry/flow "minimum_flow").
+        "minimum_auto": "Lowest water temperature: automatic, now {flow} °C.",
+        "minimum_auto_mean": "The E32 sets it from what it learned about your boiler and house, never below 30 °C.",
+        "minimum_own": "Lowest water temperature: set by you, now {flow} °C.",
+        "minimum_own_mean": "The E32 never asks for cooler water, also when your boiler could do with less. Automatic: OpenThermostat → Configure → Heating and boiler → Water temperature limits.",
         "house_none": "Nothing yet: this appears after the first heating days.",
         "unavailable": "The E32 has not reported what it learned yet.",
         # rc7: the sentences review (R1, R3). {subject}: the room as the subject of a sentence (Polish: "pomieszczenie X").
@@ -300,6 +313,18 @@ TEXT = {
         "steady": "Je ketel brandt rustig door vanaf water van ongeveer {flow} °C; de E32 vraagt minstens zoveel.",
         "steady_off": "Je ketel brandt rustig door vanaf water van ongeveer {flow} °C; met Slim opwarmen aan vraagt de E32 minstens zoveel.",
         "steady_mean": "Daaronder slaat hij op zijn kleinste vlam steeds af en weer aan. Iets warmer water geeft veel minder branderstarts en kost hooguit een klein beetje rendement.",
+        "steady_trying": "De E32 probeert een half uur water van {to} °C: blijft de ketel daar rustig doorbranden, dan houdt hij dat aan.",
+        "steady_today": "vandaag",
+        "steady_yesterday": "gisteren",
+        "steady_days": "{n} dagen geleden",
+        "steady_last_week": "vorige week",
+        "steady_kept": "De E32 probeerde {when} {d} °C lager water ({to} °C) en hield dat aan: de ketel brandde daar rustig door.",
+        "steady_cycling": "De E32 probeerde {when} {d} °C lager water ({to} °C); de ketel sloeg daar steeds af en weer aan, dus ging de E32 terug naar {from_c} °C. Over een week probeert hij het opnieuw.",
+        "steady_cool": "De E32 probeerde {when} {d} °C lager water ({to} °C); een ruimte koelde af, dus ging de E32 terug naar {from_c} °C. Over een week probeert hij het opnieuw.",
+        "minimum_auto": "Laagste watertemperatuur: automatisch, nu {flow} °C.",
+        "minimum_auto_mean": "De E32 stelt hem in met wat hij over je ketel en huis leerde, nooit onder 30 °C.",
+        "minimum_own": "Laagste watertemperatuur: door jou ingesteld, nu {flow} °C.",
+        "minimum_own_mean": "De E32 vraagt nooit koeler water, ook als je ketel met minder toe kan. Automatisch: OpenThermostat → Configureren → Verwarming en ketel → Grenzen van de watertemperatuur.",
         "house_none": "Nog niets: dit verschijnt na de eerste dagen met verwarming.",
         "unavailable": "De E32 heeft nog niet gemeld wat hij geleerd heeft.",
         # rc7: the sentences review (R1, R3).
@@ -449,6 +474,18 @@ TEXT = {
         "steady": "Twój kocioł pali równo od wody o temperaturze około {flow} °C; E32 żąda co najmniej tyle.",
         "steady_off": "Twój kocioł pali równo od wody o temperaturze około {flow} °C; przy włączonym Inteligentnym nagrzewaniu E32 żąda co najmniej tyle.",
         "steady_mean": "Poniżej tego kocioł na najmniejszym płomieniu sam ciągle się wyłącza i włącza. Nieco cieplejsza woda daje znacznie mniej startów palnika i kosztuje co najwyżej odrobinę sprawności.",
+        "steady_trying": "E32 przez pół godziny próbuje wody o temperaturze {to} °C: jeśli kocioł nadal będzie palił równo, zostanie przy niej.",
+        "steady_today": "dzisiaj",
+        "steady_yesterday": "wczoraj",
+        "steady_days": "{n} dni temu",
+        "steady_last_week": "w zeszłym tygodniu",
+        "steady_kept": "E32 {when} spróbował wody chłodniejszej o {d} °C ({to} °C) i przy niej został: kocioł palił równo.",
+        "steady_cycling": "E32 {when} spróbował wody chłodniejszej o {d} °C ({to} °C); kocioł sam ciągle się wyłączał i włączał, więc E32 wrócił do {from_c} °C. Spróbuje ponownie za tydzień.",
+        "steady_cool": "E32 {when} spróbował wody chłodniejszej o {d} °C ({to} °C); pomieszczenie się wychłodziło, więc E32 wrócił do {from_c} °C. Spróbuje ponownie za tydzień.",
+        "minimum_auto": "Najniższa temperatura wody: automatycznie, teraz {flow} °C.",
+        "minimum_auto_mean": "E32 ustala ją na podstawie tego, czego nauczył się o kotle i domu, nigdy poniżej 30 °C.",
+        "minimum_own": "Najniższa temperatura wody: ustawiona przez ciebie, teraz {flow} °C.",
+        "minimum_own_mean": "E32 nigdy nie prosi o chłodniejszą wodę, nawet gdy kocioł poradziłby sobie z mniejszą. Automatycznie: OpenThermostat → Konfiguruj → Ogrzewanie i kocioł → Limity temperatury wody.",
         "house_none": "Jeszcze nic: pojawi się po pierwszych dniach ogrzewania.",
         "unavailable": "E32 jeszcze nie przekazał, czego się nauczył.",
         # rc7: the sentences review (R1, R3).
@@ -998,7 +1035,9 @@ def steady_burn(summary):
     while not learned), "applied": whether the E32 asks at least that (Smart warm-up on, the E32 driving the boiler),
     "least_pct": the boiler's least output (p10 of its burns), "cycling": self-cycling seen in an E32 request,
     "points": up to three [{"flow_c", "stops_per_hour", "hours_asked"}] of its starts table (the lowest and highest
-    band with evidence and the floor's band)}.
+    band with evidence and the floor's band), E32 1.3: "trying_c": the water temperature of the daily probe one band
+    lower while it runs (else None) and "step": the last probe of the last 14 days, {"days_ago", "from_c", "to_c",
+    "result": "kept" | "cycling" | "cool"} (else None)}.
     """
     boiler = summary.get("boiler") if type(summary) is dict else None
     steady = boiler.get("steady") if type(boiler) is dict else None
@@ -1011,9 +1050,34 @@ def steady_burn(summary):
                 and 0 <= point[1] <= 600 and 0 <= point[2] <= 1e5):
             points.append({"flow_c": point[0], "stops_per_hour": point[1], "hours_asked": point[2]})
     floor = floor if _ok(floor) and 20 <= floor <= 90 else None
+    trying, step = steady.get("trying_c"), steady.get("step")
+    if (type(step) is list and len(step) == 4 and all(_ok(v) for v in step[:3]) and 0 <= step[0] < 14
+            and 20 <= step[2] < step[1] <= 90 and step[3] in ("kept", "cycling", "cool")):
+        step = {"days_ago": int(step[0]), "from_c": step[1], "to_c": step[2], "result": step[3]}
+    else:
+        step = None
     return {"floor_c": floor, "applied": steady.get("applied") is True and floor is not None,
             "least_pct": least if _ok(least) and 0 <= least <= 100 else None,
-            "cycling": steady.get("cycling") is True, "points": points[:3]}
+            "cycling": steady.get("cycling") is True, "points": points[:3],
+            "trying_c": trying if _ok(trying) and 20 <= trying <= 90 else None, "step": step}
+
+
+def steady_probe_line(steady, lang):
+    """E32 1.3: the steady-burn floor's daily probe one band lower in the E32 page's words (house.html
+    steadyProbe), or None: while it runs, else the last one of the last 14 days ("yesterday", "last week")."""
+    t = TEXT.get(lang, TEXT["en"])
+    if steady is None or steady["floor_c"] is None:
+        return None
+    if steady["trying_c"] is not None:
+        return t["steady_trying"].format(to=number(steady["trying_c"], lang, 0))
+    step = steady["step"]
+    if step is None:
+        return None
+    days = step["days_ago"]
+    when = (t["steady_today"] if days == 0 else t["steady_yesterday"] if days == 1
+            else t["steady_days"].format(n=days) if days < 7 else t["steady_last_week"])
+    return t["steady_" + step["result"]].format(when=when, d=number(step["from_c"] - step["to_c"], lang, 0),
+                                                to=number(step["to_c"], lang, 0), from_c=number(step["from_c"], lang, 0))
 
 
 CURVE_STEPS = 6  # CurveLearner::Params::minWindows: steady 3-hour periods before the learned curve is used
@@ -1098,6 +1162,14 @@ def house_overview(summary, lang, options=None):
     if steady is not None and steady["floor_c"] is not None:
         lines.append(_line(t["steady" if steady["applied"] else "steady_off"].format(flow=number(steady["floor_c"], lang, 0)),
                            t["steady_mean"]))
+        probe = steady_probe_line(steady, lang)  # E32 1.3: the floor learns downwards
+        if probe:
+            lines.append(_line(probe, None))
+    # Plan item 1: automatic or set by you, with the value in effect (firmware before it: no line).
+    from .e32_room_flow import minimum_flow_now
+    if (minimum := minimum_flow_now(summary)) is not None:
+        key = "minimum_auto" if minimum[2] else "minimum_own"
+        lines.append(_line(t[key].format(flow=number(minimum[0], lang, 0)), t[key + "_mean"]))
     return lines or [_line(t["house_none"], None)]
 
 
@@ -1203,7 +1275,9 @@ class LearnedOverviewSensor(RestoreEntity, SensorEntity):
         from .e32_flow import smart_warm_up
         smart = smart_warm_up(self.hass, self.entry.entry_id) if getattr(self, "hass", None) is not None else None
         day, today = local_day(self.hass) if getattr(self, "hass", None) is not None and self._clock is None else (None, None)
-        active = [(room_id, name) for room_id, name in names.items() if self.hub.rooms[room_id].get("state") != "inactive"]
+        # E32 1.3: a room on Heat along only ("follow") learns no warm-up and gets none: left out like a room that is off.
+        active = [(room_id, name) for room_id, name in names.items()
+                  if self.hub.rooms[room_id].get("state") not in ("inactive", "follow")]
         trial = trial_run(self.hub.status)  # the trial run or a takeover not confirmed yet: the E32 heats nothing early
         currency = getattr(getattr(getattr(self, "hass", None), "config", None), "currency", None)
         from .heating_plan import plan_state

@@ -2,7 +2,7 @@
 
 The E32 plans the heating itself; Home Assistant only shows the plan and carries the owner's one confirmation.
 
-What the E32 sends, ``fw/telemetry/plan`` (retained, on change at most once a minute, at most 600 B;
+What the E32 sends, ``fw/telemetry/plan`` (retained, on change at most once a minute, at most 660 B;
 heating_link.HEATING_PLAN_TOPIC; the same object is "heat_plan" in /status/heating), as SL-B3 built it
 (HeatPlanner::addJson, its report section 2)::
 
@@ -10,7 +10,8 @@ heating_link.HEATING_PLAN_TOPIC; the same object is "heat_plan" in /status/heati
      "blocks":[[90,245,52,"warmup"]],"confidence":"good","err_3h":0.18,
      "reason":{"key":"warmup","room":"woonkamer","start":1794105000,"flow":52,"target":20.5,"time":1794128400,
                "arrival":1794127800,"alt_flow":37,"alt_start":1794094200,"alt_starts":70},
-     "last":{"room":"woonkamer","rise":1794042000,"plan":-165,"e32":-175,"arrived":-9,"predicted":-20},
+     "last":{"room":"woonkamer","rise":1794042000,"plan":-165,"e32":-175,"arrived":-9,"predicted":-20,
+             "week_min":[-27,-1,4,-9]},
      "guards":0,"learn":"refused"}
 
 ``state``: collecting / checking (the plan in shadow) / ready (ready for your confirmation) / planning / demoted; the
@@ -19,8 +20,10 @@ memory, clock, model, plant, outdoor, stale, guard. ``days`` and ``mornings``: [
 not over yet, [start, end] in minutes from ``made``, the water temperature and the purpose (warmup / hold / preheat /
 learn). ``confidence`` (high / good / fair) and ``err_3h`` only with a planned room. ``reason``: the explainer's key
 (warmup / preheat / learn / hold / coast / none) and its figures, the predicted arrival in ``arrival``. ``last``: the
-last judged morning, ``rise`` in unix seconds, the rest minutes from the rise (signed; absent when unknown). Every
-field is optional; what is not known is left out, never shown as a raw code.
+last judged morning, ``rise`` in unix seconds, the rest minutes from the rise (signed; absent when unknown);
+``week_min`` (E32 1.3, the morning check) that room's last judged mornings (at most 7, oldest first) in minutes from
+their rise, 180 for a room not warm within 3 hours. Every field is optional; what is not known is left out, never
+shown as a raw code.
 
 The sentences are the E32 House page's (house.html stateText / whyText / reasonText and its last morning line), in
 English and in its Dutch (ui-messages-house.js), so the page and Home Assistant say the same; Polish is this
@@ -29,7 +32,8 @@ module's. While the E32 does not plan, the reason reads "If the E32 planned the 
 What Home Assistant adds, all on the E32 device:
 
 - the sensor "Heating plan": state = the next planned start; attributes: the planner's state and its plain line,
-  the next blocks (and one line each), the expected arrival, the confidence, the reason sentence, the last morning;
+  the next blocks (and one line each), the expected arrival, the confidence, the reason sentence, the last morning
+  and the morning check ("This morning: 6 minutes early.", with the last seven mornings in minutes);
 - when the E32 reports ``ready``: a Repairs item (an invitation, not a fault) whose one step confirms, and the
   button "Let the E32 plan the heating", which exists only in that state. Both POST ``/config/heating/plan``
   {"mode": "planning"} (controller_link.async_plan_mode, over the stored connection; the E32 answers 409
@@ -45,7 +49,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.components.repairs import RepairsFlow
@@ -106,6 +110,11 @@ TEXT = {
         "last_e32": "Last time the E32 started at {e32}.",
         "last_warm": "{room} was warm at {arrived}.", "last_cold": "{room} was not warm within 3 hours.",
         # Home Assistant's own lines
+        # The morning check (E32 1.3, "last.arrived" and "week_min"): when the room was warm, in minutes from the rise.
+        "morning_today": "This morning: {how}.", "morning_yesterday": "Yesterday morning: {how}.",
+        "morning_date": "On {date}: {how}.",
+        "morning_early": "{n} early", "morning_late": "{n} late", "morning_on_time": "on time",
+        "morning_cold": "not warm within 3 hours",
         "block": "{from}–{until}: {flow} °C water", "tomorrow": "tomorrow {time}",
         "purpose.warmup": "warm-up", "purpose.hold": "keep warm", "purpose.preheat": "warm up for your return",
         "purpose.learn": "learning",
@@ -144,6 +153,10 @@ TEXT = {
         "last_plan": "Vorige keer zou het plan om {plan} zijn begonnen; de E32 begon om {e32}.",
         "last_e32": "Vorige keer begon de E32 om {e32}.",
         "last_warm": "{room} was om {arrived} warm.", "last_cold": "{room} was niet binnen 3 uur warm.",
+        "morning_today": "Vanochtend: {how}.", "morning_yesterday": "Gisterochtend: {how}.",
+        "morning_date": "Op {date}: {how}.",
+        "morning_early": "{n} te vroeg warm", "morning_late": "{n} te laat warm", "morning_on_time": "op tijd warm",
+        "morning_cold": "niet binnen 3 uur warm",
         "block": "{from}–{until}: water van {flow} °C", "tomorrow": "morgen {time}",
         "purpose.warmup": "opwarmen", "purpose.hold": "warm houden", "purpose.preheat": "opwarmen voor je terugkomst",
         "purpose.learn": "leren",
@@ -183,6 +196,10 @@ TEXT = {
         "last_e32": "Ostatnio E32 zaczął o {e32}.",
         "last_warm": "Pomieszczenie {room} było ciepłe o {arrived}.",
         "last_cold": "Pomieszczenie {room} nie nagrzało się w ciągu 3 godzin.",
+        "morning_today": "Dziś rano: {how}.", "morning_yesterday": "Wczoraj rano: {how}.",
+        "morning_date": "Dnia {date}: {how}.",
+        "morning_early": "ciepło {n} za wcześnie", "morning_late": "ciepło {n} za późno",
+        "morning_on_time": "ciepło na czas", "morning_cold": "nie nagrzało się w ciągu 3 godzin",
         "block": "{from}–{until}: woda {flow} °C", "tomorrow": "jutro {time}",
         "purpose.warmup": "nagrzewanie", "purpose.hold": "utrzymanie ciepła", "purpose.preheat": "nagrzewanie na powrót",
         "purpose.learn": "nauka",
@@ -242,11 +259,24 @@ def _reason(value):
     return reason
 
 
+WEEK_MORNINGS = 7  # HeatPlanner::weekMornings
+
+
+def _week(value):
+    """``last.week_min`` (E32 1.3): the room's last judged mornings in whole minutes from the rise, oldest first, or
+    None (older firmware, or anything else than a list of at most WEEK_MORNINGS such numbers)."""
+    if type(value) is not list or not 0 < len(value) <= WEEK_MORNINGS:
+        return None
+    week = [_number(x, *MINUTE_LIMITS) for x in value]
+    return [int(x) for x in week] if all(x is not None and x == int(x) for x in week) else None
+
+
 def _last(value):
     if type(value) is not dict or _utc(value.get("rise")) is None:
         return None
     return {"room": _room(value.get("room")), "rise": _utc(value["rise"]),
-            **{key: _number(value.get(key), *MINUTE_LIMITS) for key in ("plan", "e32", "arrived", "predicted")}}
+            **{key: _number(value.get(key), *MINUTE_LIMITS) for key in ("plan", "e32", "arrived", "predicted")},
+            "week": _week(value.get("week_min"))}
 
 
 def decode_heating_plan(payload):
@@ -286,9 +316,10 @@ def plan_ready(hub):
 
 
 def lead_room(hub):
-    """The first room that is on (the House page's "lead" room for the state line), or None."""
-    return next((room_id for room_id, room in getattr(hub, "rooms", {}).items() if room.get("state") != "inactive"),
-                None)
+    """The first room that is on (the House page's "lead" room for the state line), or None. A room on Heat along
+    only (E32 1.3, "follow") is no planner input."""
+    return next((room_id for room_id, room in getattr(hub, "rooms", {}).items()
+                 if room.get("state") not in ("inactive", "follow")), None)
 
 
 # -- in words ---------------------------------------------------------------------------------------------------
@@ -361,6 +392,34 @@ def last_line(last, lang, names, local):
     return start + " " + t["last_warm" if values["arrived"] else "last_cold"].format(**values)
 
 
+NOT_WARM_MIN = 180  # the planner judges a room not warm within 3 hours at its rise + 3 h (HeatPlanner::judge)
+
+
+def morning_line(last, lang, local, today):
+    """The morning check in one line ("This morning: 6 minutes early."), from the last judged morning: when the room
+    was warm, in minutes from its program time; None while no warm-up was judged. The day is the rise's local day:
+    today, yesterday, or its date."""
+    from .insight import minutes
+    from .learned_overview import TEXT as LEARNED_TEXT, whole_minutes
+    if not last or last.get("e32") is None:
+        return None
+    t = TEXT[lang]
+    arrived = last.get("arrived")
+    if arrived is None or arrived >= NOT_WARM_MIN:
+        how = t["morning_cold"]
+    else:
+        n = abs(int(round(arrived)))
+        words = minutes(n, lang) if n < 60 else whole_minutes(n, lang)
+        how = t["morning_on_time"] if n == 0 else t["morning_late" if arrived > 0 else "morning_early"].format(n=words)
+    day = local(last["rise"]).date()
+    if day == today:
+        return t["morning_today"].format(how=how)
+    if day == today - timedelta(days=1):
+        return t["morning_yesterday"].format(how=how)
+    months = LEARNED_TEXT[lang]["months"].split()
+    return t["morning_date"].format(date=f"{day.day} {months[day.month - 1]}", how=how)
+
+
 def block_line(block, lang, local, today):
     from .learned_overview import number
     t = TEXT[lang]
@@ -409,6 +468,8 @@ def plan_view(plan, lang, names, local, today, now, lead=None):
         "confidence_text": t["confidence"].format(word=t["confidence." + confidence]) if confidence else None,
         "reason": reason_sentence(plan, lang, names, local),
         "last_text": last_line(plan.get("last"), lang, names, local),
+        "morning_text": morning_line(plan.get("last"), lang, local, today),
+        "morning_minutes": ((plan.get("last") or {}).get("week") or None),
         "comfort_guards_today": plan.get("guards"),
     }
 
@@ -429,7 +490,8 @@ class HeatingPlanSensor(HubEntity, SensorEntity):
     _attr_icon = "mdi:calendar-clock"
     # The texts are shown, not kept in the history (the state and the plan's state are).
     _unrecorded_attributes = frozenset({"plan_state_text", "blocks", "block_lines", "arrival_text", "confidence_text",
-                                        "reason", "room", "arrival_room", "last_text", "comfort_guards_today"})
+                                        "reason", "room", "arrival_room", "last_text", "morning_text",
+                                        "morning_minutes", "comfort_guards_today"})
 
     def __init__(self, hub, clock=time.time):
         self._attach(hub, "hub_heating_plan")  # unique id <prefix>_hub_heating_plan: the dashboard's heating_plan
@@ -558,7 +620,8 @@ class PlanReadyRepairFlow(RepairsFlow):
         self._issue, self._data = issue, data
 
     async def async_step_init(self, user_input=None):
-        return await self.async_step_plan_ready(user_input)
+        # Home Assistant opens a repair with data={"issue_id": ...} as this step's input: never a submitted form.
+        return await self.async_step_plan_ready()
 
     async def async_step_plan_ready(self, user_input=None):
         entry = self.hass.config_entries.async_get_entry(self._data.get("entry_id"))

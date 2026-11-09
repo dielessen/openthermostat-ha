@@ -62,8 +62,9 @@ ZIGBEE_MODELS = ("bosch_bth_ra", "sonoff_trvzb", "sonoff_trv_zbt", "tuya_tv02", 
 HA_MODEL = "ha_climate"  # a climate entity Home Assistant drives (ha_valves.py)
 GATEWAY_MODEL = "shelly_blu_trv"  # E32 1.1: a Shelly BLU TRV through the BLU Gateway Gen3 (TrvConfig.h)
 MODELS = (*ZIGBEE_MODELS, HA_MODEL, GATEWAY_MODEL)
-# Models without a position readback (TrvConfig.h positionKey nullptr): the valve regulates itself to the target
-# the E32 sends, so it reports no opening (Sonoff confirmed it for the TRV Gen2 / TRV-ZBT).
+# Models without a position readback (TrvConfig.h positionKey nullptr): the E32 drives the valve by temperature (it
+# sends the target), the valve opens and closes, and it reports no opening (Sonoff confirmed it for the TRV Gen2 /
+# TRV-ZBT).
 NO_POSITION_MODELS = ("sonoff_trvzb", "sonoff_trv_zbt", "tuya_tv02", "generic")
 CLIMATE_ID = re.compile(r"climate\.[a-z0-9_]+")
 # "g<gateway device number 1-99>:<blutrv component id 200-299>" (TrvConfig.h parseGatewayValveName).
@@ -338,20 +339,30 @@ GATEWAY_VALVE_TEXT = {"en": "valve {id} on BLU Gateway {n}", "nl": "kraan {id} a
 LINK_TEXT = {
     "en": {"gateway": "the BLU Gateway does not answer", "silent": "the valve has not reported to the gateway",
            "missing": "the gateway does not know this valve", "unpaired": "the valve is not paired with the gateway",
-           "unknown": "the gateway is not on the E32's Shelly page"},
+           "unknown": "the gateway is not among the E32's Shelly devices"},
     "nl": {"gateway": "de BLU Gateway antwoordt niet", "silent": "de kraan heeft zich niet bij de gateway gemeld",
            "missing": "de gateway kent deze kraan niet", "unpaired": "de kraan is niet gekoppeld aan de gateway",
-           "unknown": "de gateway staat niet op de Shelly-pagina van de E32"},
+           "unknown": "de gateway staat niet bij de Shelly-apparaten van de E32"},
     "pl": {"gateway": "BLU Gateway nie odpowiada", "silent": "zawór nie zgłosił się do bramki",
            "missing": "bramka nie zna tego zaworu", "unpaired": "zawór nie jest sparowany z bramką",
-           "unknown": "bramki nie ma na stronie Shelly w E32"},
+           "unknown": "bramki nie ma wśród urządzeń Shelly w E32"},
 }
 
 
-# The Valves open sensor's note for such a valve.
-POSITION_NOTE = {"en": "Regulates itself to the target; the position cannot be read",
-                 "nl": "Regelt zelf naar het doel; de stand is niet uit te lezen",
-                 "pl": "Sam reguluje do temperatury docelowej; nie można odczytać położenia"}
+# The Valves open sensor's note for such a valve (1.3: the E32 decides, the valve opens and closes; never "regulates
+# itself"). The same sentence as the E32's Rooms page.
+POSITION_NOTE = {"en": "Driven by temperature; the position cannot be read",
+                 "nl": "Gestuurd op temperatuur; de stand is niet uit te lezen",
+                 "pl": "Sterowany temperaturą; nie można odczytać położenia"}
+# 1.3 (NEXT-RELEASE 1f): the temperature the E32 gave such valves, and in a mixed room how many there are, as
+# sentences the dashboard's valve tile shows (state_content).
+SET_TO_TEXT = {"en": ("Set to {t} °C", "Set to {t} °C (frost protection)"),
+               "nl": ("Ingesteld op {t} °C", "Ingesteld op {t} °C (vorstbeveiliging)"),
+               "pl": ("Ustawiono na {t} °C", "Ustawiono na {t} °C (ochrona przed mrozem)")}
+DRIVEN_TEXT = {"en": ("{n} valve driven by temperature", "{n} valves driven by temperature"),
+               "nl": ("{n} kraan op temperatuur gestuurd", "{n} kranen op temperatuur gestuurd"),
+               "pl": ("{n} zawór sterowany temperaturą", "{n} zawory sterowane temperaturą",
+                      "{n} zaworów sterowanych temperaturą")}
 
 
 def language(hass):
@@ -365,6 +376,59 @@ def shown_name(name, lang="en"):
     if match is None:
         return name
     return GATEWAY_VALVE_TEXT.get(lang, GATEWAY_VALVE_TEXT["en"]).format(n=match.group(1), id=match.group(2))
+
+
+def driven(room):
+    """The valves of a room document that the E32 drives by temperature and that report no opening."""
+    return [v for v in (room or {}).get("valves", [])
+            if v.get("model") in NO_POSITION_MODELS and type(v.get("position_pct")) not in (int, float)]
+
+
+def tile_kind(room):
+    """What the dashboard's valve tile shows for a room document: "driven" (no valve reports an opening: the
+    temperature the E32 gave them), "mixed" (the average opening and how many are driven by temperature), or None
+    (the average opening, as before 1.3)."""
+    valves, found = (room or {}).get("valves", []), driven(room)
+    if not valves or not found:
+        return None
+    return "driven" if len(found) == len(valves) else "mixed"
+
+
+def set_to(room, status_room):
+    """(°C, frost protection) the E32 gave the valves driven by temperature, or None while unknown.
+
+    The setpoint the valves report back (the most common one), else the room's target, or 8 °C frost protection
+    while the room is off (ha_valves.room_target, TrvControl::step).
+    """
+    from .ha_valves import FROST_C, room_target
+    reported = [v["setpoint_c"] for v in driven(room) if type(v.get("setpoint_c")) in (int, float)]
+    if reported:
+        value = max(reported, key=reported.count)
+    elif type(status_room) is dict:
+        value = room_target(status_room)
+    else:
+        return None
+    off = type(status_room) is dict and (status_room.get("status") == "inactive" or status_room.get("state") == "inactive")
+    return float(value), off and float(value) == FROST_C
+
+
+def degrees(value, lang="en"):
+    """20.5 → "20.5" (English) or "20,5"; a whole number without decimals."""
+    text = f"{value:.0f}" if float(value).is_integer() else f"{value:.1f}"
+    return text if lang == "en" else text.replace(".", ",")
+
+
+def set_to_text(value, frost, lang="en"):
+    return SET_TO_TEXT.get(lang, SET_TO_TEXT["en"])[1 if frost else 0].format(t=degrees(value, lang))
+
+
+def driven_text(count, lang="en"):
+    forms = DRIVEN_TEXT.get(lang, DRIVEN_TEXT["en"])
+    if lang == "pl":  # 1 zawór, 2-4 zawory (not 12-14), else zaworów
+        form = forms[0] if count == 1 else forms[1] if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14) else forms[2]
+    else:
+        form = forms[0 if count == 1 else 1]
+    return form.format(n=count)
 
 
 def valve_attributes(room):
@@ -409,11 +473,15 @@ class ValvePositionSensor(ValveEntity, SensorEntity):
     def extra_state_attributes(self):
         attributes = valve_attributes(self.valves or {})
         lang = language(getattr(self, "hass", None))
-        own = [shown_name(v["name"], lang) for v in (self.valves or {}).get("valves", [])
-               if v.get("model") in NO_POSITION_MODELS and type(v.get("position_pct")) not in (int, float)]
-        if own:  # these valves are not in the average: say why, in words
-            attributes["self_regulating"] = own
+        own = [shown_name(v["name"], lang) for v in driven(self.valves)]
+        if own:  # these valves are not in the average: say why, and what the E32 gave them, in words
+            attributes["driven_by_temperature"] = own
             attributes["position_note"] = POSITION_NOTE[lang]
+            attributes["driven_text"] = driven_text(len(own), lang)
+            given = set_to(self.valves, self.room)
+            if given is not None:
+                attributes["set_to_c"] = given[0]
+                attributes["set_to_text"] = set_to_text(*given, lang)
         return attributes
 
 

@@ -92,11 +92,13 @@ HEATING_TRV = "/config/heating/trv"
 # The Shelly devices the E32 drives itself (E32 1.1, ShellyConfig.h): GET the record without secrets ("password":
 # bool per device), POST the whole record back (a device without "password" keeps its stored one); the circuits'
 # pump override POST {"id","pump":"on"|"off"|"automatic","minutes"?}; and the live status with the BLU Gateway's
-# valves. Firmware without Shelly answers 404.
+# valves. Firmware without Shelly answers 404. 1.3 (Configure → E32 devices): POST /config/shelly/probe {"ip"} asks
+# the device at that address who it is (202); its answer shows in /status/shelly "probe" once it came.
 SHELLY_CONFIG = "/config/shelly"
 SHELLY_CIRCUIT = "/config/shelly/circuit"
 SHELLY_STATUS = "/status/shelly"
-SHELLY_PATHS = (SHELLY_CONFIG, SHELLY_CIRCUIT, SHELLY_STATUS)
+SHELLY_PROBE = "/config/shelly/probe"
+SHELLY_PATHS = (SHELLY_CONFIG, SHELLY_CIRCUIT, SHELLY_STATUS, SHELLY_PROBE)
 # The E32 system log: syslog forwarding and the kept log levels (diagnostics/LogSettings.h).
 # Not part of a settings backup; refusals are plain text (400 invalid, 503 not confirmed or unavailable).
 LOGGING = "/config/logging"
@@ -619,7 +621,7 @@ class ControllerClient:
     _writes = frozenset(("/auth/login", "/auth/logout", "/auth/password", "/config/device", "/updates/reboot",
                          HEATING_PLAN, HEATING_COMFORT, HEATING_FLOW, HEATING_HANDOVER, HEATING_PLAN_MODE,
                          HEATING_TRV, CONFIG_BACKUP,
-                         LOGGING, BOILER_DISPLAY, BLUETOOTH, *BOILER_SETTINGS_POSTS, SHELLY_CONFIG, SHELLY_CIRCUIT,
+                         LOGGING, BOILER_DISPLAY, BLUETOOTH, *BOILER_SETTINGS_POSTS, SHELLY_CONFIG, SHELLY_CIRCUIT, SHELLY_PROBE,
                          BOILER_MATCH_ACKNOWLEDGE, *RECORDING_POSTS))
 
     def __init__(self, address):
@@ -760,7 +762,7 @@ class ControllerClient:
                 if response.status == 409:
                     raise ControllerLinkError("controller_busy_or_conflict")
                 accepted = ({200, 201} if method == "POST" and path in ("/config/device", CONFIG_BACKUP, BLUETOOTH)
-                            else {202} if method == "POST" and path == "/updates/reboot"
+                            else {202} if method == "POST" and path in ("/updates/reboot", SHELLY_PROBE)
                             else {204} if method == "POST" and path == "/auth/password"
                             else {200, 202} if method == "POST" and settings
                             else {200})
@@ -1040,6 +1042,17 @@ class ControllerClient:
     async def async_shelly_status(self):
         """GET /status/shelly: the devices, the circuits and each BLU Gateway's valves (E32 1.1)."""
         return await self.async_read(SHELLY_STATUS)
+
+    async def async_shelly_probe(self, ip):
+        """POST /config/shelly/probe: the E32 asks the device at ``ip`` who it is (E32 1.1, "Test connection" on its
+        Devices page); returns the Shelly status, whose "probe" shows the answer once it came.
+
+        A refusal raises HeatingPlanRejected (invalid_ip, invalid_request: 400; probe_busy: 409).
+        """
+        if type(ip) is not str:
+            raise ControllerLinkError("controller_request_invalid")
+        raw, _, _ = await self._request("POST", SHELLY_PROBE, document={"ip": ip})
+        return _decode(raw)
 
     async def async_shelly_circuit(self, command):
         """POST the owner's pump override of one circuit; returns the E32's Shelly status.

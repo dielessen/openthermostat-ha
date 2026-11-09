@@ -81,6 +81,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .heating_link import RoomEntity, add_options, heating_hub, number, track_entities
+from .native_form import remember_shown, shown_value
 from .room_levels import room_levels
 
 CONF_COMFORT = "comfort_settings"
@@ -1021,6 +1022,7 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         if room is None:
             return None
         comfort, away = self.comfort, self.away
+        from .e32_setting_device import setting_device_attributes
         from .room_away import away_reason, room_away
         own = room_away(self.plan_room)
         return {"room_id": self.room_id, "comfort_mode": comfort.get("mode", "program"),
@@ -1034,13 +1036,27 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
                 # (None: the house value, plan.room_away.v1).
                 "away_reason": away_reason(comfort, away), "room_persons": comfort.get("persons"),
                 "own_away_temperature": own / 100 if own is not None else None,
-                "smart_warm_up": self._smart_warm_up()}
+                # E32 1.3: in Smart warm-up's lead the target is already the coming one: the moment it warms up
+                # for and the program's target then (None outside a lead; setpoint_source "warmup").
+                **self._warming_up(room),
+                "smart_warm_up": self._smart_warm_up(),
+                # The room's setting device: which one, what was written and taken, the last failure.
+                **setting_device_attributes(self.hass, self.entry, self.room_id, self.plan_room)}
+
+    def _warming_up(self, room):
+        from homeassistant.util import dt as dt_util
+
+        from .room_overview import e32_zone, warmup_rise
+        zone = e32_zone(self.hass, self.entry) if self.hass is not None else dt_util.get_default_time_zone()
+        rise = warmup_rise(room, datetime.now(timezone.utc), zone) if room.get("setpoint_source") == "warmup" else None
+        return {"warming_up_for": rise.isoformat() if rise else None,
+                "scheduled_target": number(room.get("warmup_target_c"), 5, 35) if rise else None}
 
     def _smart_warm_up(self):
         """What Smart warm-up does for the next program step (E32 rc.3) and how the last step up turned out
         (E32 rc.4: "Yesterday warm at 09:12 (12 min late); next time it starts a little earlier.", or "about 10 min
         earlier" where the E32's numbers tell it, E32 SL-A), in the Home Assistant language, or None."""
-        if self.hass is None:
+        if self.hass is None or (self.room or {}).get("state") == "follow":  # E32 1.3: Heat along only has none
             return None
         from .e32_flow import smart_warm_up
         from .learned_overview import (HELD_MODES, arrival_line, free_heat_later, language, local_clock, local_day,
@@ -1102,8 +1118,9 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
 
     async def _ensure_active(self):
         if self._inactive():
-            from .room_plan import set_state
-            await self._change_plan(set_state("active"))
+            from .room_plan import on_state, set_state
+            # E32 1.3: a room switched off from Heat along only goes back to it, not to On.
+            await self._change_plan(set_state(on_state(self.plan_room)))
 
     def _one_sign_in(self):
         """R4-27: switching an inactive room on and its new target share one E32 sign-in (RoomPlanLink.async_session)."""
@@ -1312,7 +1329,9 @@ class ComfortOptionsSteps:
         if user_input is not None:
             try:
                 settings = validate_presence(self.hass, user_input, current)
-                temperature = validate_away_temperature(user_input, away) if house is not None else None
+                # 1.3 (plan item 1b): against the away temperature the form showed, so an E32 edit meanwhile stays.
+                temperature = (validate_away_temperature(user_input, shown_value(self, "house_presence", away))
+                               if house is not None else None)
             except ComfortError as err:
                 errors[err.field] = err.code
             else:
@@ -1328,6 +1347,8 @@ class ComfortOptionsSteps:
                 else:
                     save_comfort(self.hass, self.config_entry, settings)
                     return self.async_abort(reason="presence_saved")
+        if user_input is None:
+            remember_shown(self, "house_presence", away)
         schema = presence_schema(vol, current, away if house is not None else False)
         if user_input is not None and errors:  # shown again: what was just entered
             schema = self.add_suggested_values_to_schema(schema, user_input)

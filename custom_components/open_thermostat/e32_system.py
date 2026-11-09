@@ -393,7 +393,8 @@ class TimeZoneRepairFlow(RepairsFlow):
         self._issue_id, self._data = issue_id, data if isinstance(data, dict) else {}
 
     async def async_step_init(self, user_input=None):
-        return await self.async_step_confirm_time_zone(user_input)
+        # Home Assistant opens a repair with data={"issue_id": ...} as this step's input: never a submitted form.
+        return await self.async_step_confirm_time_zone()
 
     async def async_step_confirm_time_zone(self, user_input=None):
         from .controller_link import ControllerLinkError
