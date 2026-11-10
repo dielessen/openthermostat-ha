@@ -716,7 +716,7 @@ _WARNINGS = {
     "bluetooth": ("Bluetooth sensors: {v}", "Bluetooth-sensoren: {v}", "Czujniki Bluetooth: {v}"),
 }
 _WORDS = {
-    "on": ("On", "Aan", "Wł."), "off": ("Off", "Uit", "Wył."), "hidden": ("will change", "verandert", "zmieni się"),
+    "on": ("On", "Aan", "Włączone"), "off": ("Off", "Uit", "Wyłączone"), "hidden": ("will change", "verandert", "zmieni się"),
     "changes": ("These settings change:", "Deze instellingen veranderen:", "Te ustawienia się zmienią:"),
     "notes": ("Notes, and what is skipped:", "Opmerkingen, en wat wordt overgeslagen:", "Uwagi i to, co zostanie pominięte:"),
     "reenter": ("Enter these again on the E32 page afterwards:", "Voer dit daarna opnieuw in op de E32-pagina:",

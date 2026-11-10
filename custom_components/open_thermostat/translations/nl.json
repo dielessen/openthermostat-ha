@@ -921,6 +921,13 @@
         "floor": "Vloerverwarming"
       }
     },
+    "e32_smart_warm_up": {
+      "options": {
+        "house": "Als het huis",
+        "on": "Aan",
+        "off": "Uit"
+      }
+    },
     "e32_room_action": {
       "options": {
         "edit": "Ruimte bewerken",
@@ -1207,6 +1214,14 @@
         "probes": "The Pill: temperatuursondes op de leidingen",
         "gateway": "BLU Gateway: Shelly BLU TRV-radiatorkranen"
       }
+    },
+    "configure_text": {
+      "options": {
+        "menu": "Kies wat je wilt instellen. De E32 bewaart deze instellingen en regelt de verwarming, ook zonder Home Assistant.",
+        "settings_page": "De meeste instellingen staan op het tabblad Instellen van het OpenThermostat-dashboard. Hier verbind je de E32, en onder Geavanceerd en diagnose staat wat je zelden nodig hebt.",
+        "advanced_menu": "De tijdzone en het systeemlogboek van de E32, een back-up terugzetten, entiteits-ID's opruimen en controles. Dagelijkse instellingen, ook Dashboard en naam, staan in het hoofdmenu.",
+        "advanced_settings_page": "Wat het tabblad Instellen nog niet heeft: de radiatorkranen, personen en temperatuurgrenzen van een ruimte, de ketelinstellingen (voorproefje), een back-up terugzetten, entiteits-ID's opruimen en de oude Home Assistant-ruimtes. Het systeemlog van de E32, zijn tijdzone en het testerprogramma staan op het tabblad Instellen onder Geavanceerd."
+      }
     }
   },
   "config": {
@@ -1349,8 +1364,9 @@
       },
       "init": {
         "title": "OpenThermostat",
-        "description": "{saved}Kies wat je wilt instellen. De E32 bewaart deze instellingen en regelt de verwarming, ook zonder Home Assistant.",
+        "description": "{saved}{intro}",
         "menu_options": {
+          "open_settings": "Instelpagina openen",
           "e32_rooms": "Ruimtes",
           "house": "Huis",
           "heating_boiler": "Verwarming en ketel",
@@ -1365,6 +1381,11 @@
           "done": "Klaar",
           "general": "Dashboard en naam"
         }
+      },
+      "open_settings": {
+        "title": "Instelpagina openen",
+        "description": "De instellingen van je ruimtes, het huis, de verwarming, de apparaten en de meldingen staan op het OpenThermostat-dashboard: [OpenThermostat-dashboard → Instellen]({path}).\n\nDaar zie je elk onderdeel van je installatie met wat er nu staat, en wijzig je het meteen. Kies Klaar om Configureren te sluiten.",
+        "submit": "Klaar"
       },
       "graph_review": {
         "title": "Controleer je verwarmingsinstellingen",
@@ -1644,8 +1665,10 @@
       },
       "advanced_settings": {
         "title": "Geavanceerd en diagnose",
-        "description": "{saved}De tijdzone en het systeemlogboek van de E32, een back-up terugzetten, entiteits-ID's opruimen en controles. Dagelijkse instellingen, ook Dashboard en naam, staan in het hoofdmenu.",
+        "description": "{saved}{intro}",
         "menu_options": {
+          "e32_rooms": "Radiatorkranen, personen en temperatuurgrenzen",
+          "boiler_settings": "Ketelinstellingen (voorproefje)",
           "configuration_status": "Oude ruimtes controleren",
           "graph_status": "Status van de oude ruimtes op de E32",
           "graph_prepare": "Oude ruimtes op de E32 herstellen",
@@ -1774,19 +1797,23 @@
           "setpoint_entity": "Instelapparaat (optioneel)",
           "fallback_temperature": "Temperatuur zonder weekprogramma",
           "program": "Weekprogramma op de E32",
-          "inactive_until": "Uit tot (optioneel)"
+          "resets": "Terugzetmomenten (optioneel)",
+          "inactive_until": "Uit tot (optioneel)",
+          "smart_warm_up": "Slim opwarmen"
         },
         "data_description": {
           "name": "De naam die je in Home Assistant en op de E32 ziet. Maximaal 40 tekens (minder met accenten of emoji); hernoemen behoudt de ruimte en haar geschiedenis.",
           "state": "Aan: de ruimte kan warmte vragen. Alleen meeverwarmen: de ruimte houdt de gewenste temperatuur en de radiatorkranen gaan ervoor open, maar ze vraagt nooit warmte; ze warmt mee zolang de ketel voor andere ruimtes stookt. Uit: de ruimte vraagt geen warmte. Voor een tijdelijke stop vult u hieronder \"Uit tot\" in.",
           "emitter": "Radiatoren of vloerverwarming. Vloerverwarming warmt langzaam op en wil koeler water, dus elk type krijgt een eigen watertemperatuur.",
-          "ha_sources": "Thermostaten of temperatuursensoren (°C of °F) in Home Assistant die deze ruimte meten. De eerste met een actuele waarde wordt gebruikt; de andere zijn reserve. Sleep om de volgorde te wijzigen.",
+          "ha_sources": "Thermostaten of temperatuursensoren (°C of °F) in Home Assistant die deze ruimte meten. De eerste met een actuele waarde wordt gebruikt; de andere zijn reserve. Sleep om de volgorde te wijzigen. Met één bron: valt die weg, dan vraagt de ruimte na 30 minuten geen warmte meer. Een tweede bron, bijvoorbeeld een Bluetooth-sensor, vangt dat op.",
           "ble_sources": "Sensoren die aan de E32 zelf gekoppeld zijn; ze blijven werken zonder Home Assistant.",
           "bluetooth_first": "Aan: de E32 gebruikt zijn Bluetooth-sensoren vóór de bronnen uit Home Assistant.",
           "setpoint_entity": "Optioneel: een thermostaat of radiatorkraan (bijvoorbeeld een tado of TV02), of een getal met een doel, om de ruimte mee in te stellen. Home Assistant zet bij elk schakelpunt de temperatuur van het weekprogramma erop; eraan draaien verandert de ruimte tot het volgende schakelpunt. Zet het eigen programma van het apparaat uit (handmatige stand), anders verandert het de temperatuur zelf. Leeg: geen instelapparaat; stel de ruimte in met haar thermostaat in Home Assistant of op de E32-pagina.{setting_hint}",
           "fallback_temperature": "De temperatuur die de E32 aanhoudt als Home Assistant geen doel doorgeeft en de ruimte geen weekprogramma heeft, of zijn klok nog niet is gezet.",
-          "program": "Het makkelijkst: de visuele planner onder Weekprogramma op het OpenThermostat-dashboard. Deze tekst is de geavanceerde weergave van hetzelfde programma: één regel per groep dagen, bijvoorbeeld ma-vr: 06:30 20,5; 22:30 18 en za-zo: 08:00 20,5; 23:00 18. Temperaturen in de eenheid van je Home Assistant. Een regel zonder dagen geldt voor elke dag. Maximaal 6 schakelpunten per dag; elke temperatuur geldt tot het volgende punt. Elke ruimte heeft een weekprogramma: laat je dit leeg, dan krijgt de ruimte het standaardprogramma \"Werkdagen en weekend\" (overdag 20 °C, 18 °C als je op werkdagen weg bent, 's nachts 16 °C).",
-          "inactive_until": "Alleen bij Verwarming uit: het moment waarop de ruimte vanzelf weer verwarmt. Leeg: uit tot u het weer aanzet."
+          "program": "Het makkelijkst: de visuele planner onder Weekprogramma op het OpenThermostat-dashboard. Deze tekst is de geavanceerde weergave van hetzelfde programma: één regel per groep dagen, bijvoorbeeld ma-vr: 06:30 20,5; 22:30 18 en za-zo: 08:00 20,5; 23:00 18. Temperaturen in de eenheid van je Home Assistant. Een regel zonder dagen geldt voor elke dag. Maximaal 6 schakelpunten per dag; elke temperatuur geldt tot het volgende punt. Leeg: geen weekprogramma; de ruimte houdt haar temperatuur zonder weekprogramma. Een nieuwe ruimte begint met het standaardprogramma \"Werkdagen en weekend\" (overdag 20 °C, 18 °C als je op werkdagen weg bent, 's nachts 16 °C); maak het veld leeg als de ruimte er geen nodig heeft.{resets_note}",
+          "resets": "Op dat moment eindigt een handmatige wijziging en krijgt de ruimte deze waarde; de E32 werkt er niet naartoe. Hoogstens vier. Eén per regel: de dagen, de tijd en een temperatuur of een stand (aan, meeverwarmen, uit), bijvoorbeeld ma-vr 22:00 14 of dag 09:00 meeverwarmen. Geef in een ruimte zonder weekprogramma het avondmoment de temperatuur zonder weekprogramma: dan geldt die ook na een herstart.",
+          "inactive_until": "Alleen bij Verwarming uit: het moment waarop de ruimte vanzelf weer verwarmt. Leeg: uit tot u het weer aanzet.",
+          "smart_warm_up": "Als het huis: volgt Slim opwarmen van het huis (Configureren → Verwarming en ketel). Aan: deze ruimte is warm op haar schakeltijden. Uit: deze ruimte begint pas op haar schakeltijden met verwarmen."
         },
         "sections": {
           "window": {
@@ -1903,7 +1930,7 @@
       },
       "e32_rooms_saved": {
         "title": "Ruimtes",
-        "description": "{saved}{name} is opgeslagen op de E32. Voeg nog een ruimte toe of bewerk er een, of sluit dit venster.{valves}\n\n{rooms}",
+        "description": "{saved}{name} is opgeslagen op de E32. Voeg nog een ruimte toe of bewerk er een, of sluit dit venster.{program}{valves}\n\n{rooms}",
         "menu_options": {
           "e32_room_add": "Ruimte toevoegen",
           "e32_room_pick": "Ruimte bewerken of verwijderen",
@@ -2699,6 +2726,11 @@
       "e32_program_invalid": "Regel {line} van het weekprogramma is niet leesbaar: {text}. Gebruik één regel per groep dagen, bijvoorbeeld ma-vr: 06:30 20,5; 22:30 18, en noem elke dag in maar één regel.",
       "e32_program_too_many": "Regel {line}: een dag kan maximaal 6 schakelpunten hebben.",
       "e32_program_outside_limits": "Regel {line}: een temperatuur ligt buiten de temperatuurgrenzen van de ruimte.",
+      "e32_resets_invalid": "Regel {line} van de terugzetmomenten is niet leesbaar: {text}. Gebruik één regel per terugzetmoment: de dagen, de tijd en een temperatuur of aan, meeverwarmen of uit, bijvoorbeeld ma-vr 22:00 14 of dag 09:00 meeverwarmen. Temperaturen in hele of halve graden.",
+      "e32_resets_too_many": "Hoogstens vier terugzetmomenten per ruimte.",
+      "e32_resets_outside_limits": "Regel {line} van de terugzetmomenten: de temperatuur ligt buiten de temperatuurgrenzen van de ruimte.",
+      "e32_resets_same_moment": "Regel {line} van de terugzetmomenten: op die dag en dat tijdstip staat al een terugzetmoment.",
+      "e32_rejected_resets": "De E32 accepteerde de terugzetmomenten niet ({error}). Controleer de dagen, de tijden en de temperaturen.",
       "e32_plan_changed": "Het ruimteplan is tijdens het opslaan twee keer op de E32 gewijzigd. Er is niets opgeslagen; probeer het opnieuw.",
       "e32_flow_limits_order": "De laagste watertemperatuur moet lager zijn dan de hoogste.",
       "e32_flow_limits_invalid": "Vul hele graden in: minimum {minimum_range}, maximum {maximum_range}.",
@@ -2982,7 +3014,8 @@
             "name": "Voorinstelling",
             "state": {
               "eco": "Eco",
-              "sleep": "Nacht"
+              "sleep": "Nacht",
+              "heat_along": "Alleen meeverwarmen"
             }
           },
           "warming_up_for": {
@@ -2990,6 +3023,17 @@
           },
           "scheduled_target": {
             "name": "Geplande gewenste temperatuur"
+          },
+          "next_reset": {
+            "name": "Volgend terugzetmoment"
+          },
+          "next_reset_value": {
+            "name": "Waarde bij het volgende terugzetmoment",
+            "state": {
+              "active": "Aan",
+              "follow": "Alleen meeverwarmen",
+              "inactive": "Uit"
+            }
           }
         }
       }
@@ -3187,7 +3231,8 @@
               "window_open": "Raam open",
               "door_open": "Deur open",
               "window_pending": "Raam open, pauzeert zo",
-              "door_pending": "Deur open, pauzeert zo"
+              "door_pending": "Deur open, pauzeert zo",
+              "settings": "Instellen"
             }
           },
           "program": {
@@ -4556,6 +4601,17 @@
           }
         }
       },
+      "e32_errors": {
+        "name": "Fouten",
+        "state_attributes": {
+          "last_error": {
+            "name": "Laatste fout"
+          },
+          "last_error_at": {
+            "name": "Tijdstip laatste fout"
+          }
+        }
+      },
       "heating_plan": {
         "name": "Verwarmingsplan"
       }
@@ -4708,23 +4764,6 @@
     }
   },
   "issues": {
-    "room_programs": {
-      "title": "Geef je ruimtes een weekprogramma: {rooms}",
-      "fix_flow": {
-        "step": {
-          "room_programs": {
-            "title": "Weekprogramma en instelapparaat",
-            "description": "Elke ruimte draait haar eigen weekprogramma op de E32, ook zonder Home Assistant. Deze ruimtes krijgen het programma \"Werkdagen en weekend\" (ongeveer 20 °C, aan te passen in de weekplanner) en, waar ze er een heeft, haar eigen thermostaat of kraan als instelapparaat:\n{changes}\n\nHome Assistant zet dan bij elk schakelpunt de temperatuur van het programma op dat apparaat, en een wijziging op het apparaat geldt tot het volgende schakelpunt. Zet het eigen programma van het apparaat uit (handmatige stand)."
-          }
-        },
-        "abort": {
-          "room_programs_done": "Elke ruimte heeft al een weekprogramma.",
-          "e32_rooms_unavailable": "De ruimtes zijn nu niet van de E32 te lezen. Probeer het zo opnieuw.",
-          "e32_write_failed": "De E32 nam de wijziging niet aan ({error}). Probeer het zo nog eens."
-        }
-      },
-      "description": "Deze ruimtes hebben nog geen weekprogramma: {rooms}. Kies Oplossen om ze het standaardprogramma te geven. Je kunt het later aanpassen in de weekplanner."
-    },
     "reconfirm_takeover": {
       "title": "Bevestig opnieuw dat de E32 de ketel mag regelen",
       "fix_flow": {
@@ -4778,18 +4817,6 @@
     "setting_device_write_failed": {
       "title": "{device} neemt de temperatuur van de ruimte niet aan",
       "description": "Home Assistant kon {device}, het instelapparaat van {room}, drie keer achter elkaar niet instellen. Laatste poging: {error}\n\nKijk of het apparaat aan staat en op verwarmen, of het een gewenste temperatuur aanneemt (een thermostaat met alleen een bereik krijgt de onderste waarde) en of het nog bestaat onder Instellingen → Apparaten en diensten → Entiteiten. Deze melding verdwijnt vanzelf zodra het instellen weer lukt. Een ander apparaat kies je bij Instelapparaat in de instellingen van de ruimte (Configureren → Ruimtes)."
-    },
-    "legacy_metrics_history": {
-      "title": "Keteltellers zijn vernieuwd",
-      "description": "De keteltellers zijn vernieuwd. Je geschiedenis blijft bewaard. Heb je eigen kaarten met de oude sensoren gemaakt, zet ze dan over op de nieuwe."
-    },
-    "metrics_definition_v2": {
-      "title": "Keteltellers zijn vernieuwd",
-      "description": "De keteltellers zijn vernieuwd. Je geschiedenis blijft bewaard. Heb je eigen kaarten met de oude sensoren gemaakt, zet ze dan over op de nieuwe. Energie is een schatting, geen gas- of warmtemeter."
-    },
-    "room_model_v2": {
-      "title": "Warmteschattingen per ruimte zijn vernieuwd",
-      "description": "De warmteschattingen per ruimte zijn vernieuwd. Je geschiedenis blijft bewaard. Heb je eigen kaarten met de oude sensoren gemaakt, zet ze dan over op de nieuwe. Het zijn schattingen, geen gemeten warmte."
     },
     "measurement_clock": {
       "title": "Ruimtemetingen gepauzeerd: de klok van Home Assistant sprong",
@@ -4954,10 +4981,6 @@
         }
       }
     },
-    "room_group_restored": {
-      "title": "{room} staat weer op de integratiepagina",
-      "description": "Je hebt de groep van de ruimte {room} onder {installation} verwijderd, maar {room} is nog een ruimte in het ruimteplan van de E32 en de E32 blijft die verwarmen. De groep, het apparaat en de entiteiten zijn teruggezet met dezelfde namen, gebieden en geschiedenis. Wil je de ruimte verwijderen, open dan {installation} → Configureren → Ruimtes → Ruimte bewerken of verwijderen, kies {room} en verwijder hem daar. Je kunt deze melding negeren."
-    },
     "valve_battery_low": {
       "title": "Batterij radiatorkraan bijna leeg in {room}",
       "description": "Batterij bijna leeg (ongeveer 20 % of minder) in {room}: {valves}. Vervang hem binnenkort: een kraan met een lege batterij volgt de E32 niet meer. Deze melding verdwijnt vanzelf zodra de kraan een batterij meldt die niet meer bijna leeg is."
@@ -4965,10 +4988,6 @@
     "valve_offline": {
       "title": "Radiatorkraan meldt zich niet in {room}",
       "description": "Al meer dan twee uur geen melding in {room}: {valves}. Controleer de batterij en de verbinding van de kraan (Zigbee of de BLU Gateway). De ruimte blijft verwarmen op haar andere temperatuurbronnen; een kraan blijft open- en dichtgaan voor de laatste gewenste temperatuur die hij kreeg."
-    },
-    "valve_single_source": {
-      "title": "{room} hangt af van één temperatuurbron",
-      "description": "De E32 stuurt de radiatorkranen in {room} aan, maar de ruimte heeft maar één temperatuurbron. Valt die weg, dan stopt de E32 na 30 minuten met warmte vragen voor deze ruimte in plaats van blind te stoken. Voeg in de ruimte-instellingen een tweede bron toe, bijvoorbeeld een losse Bluetooth-sensor."
     },
     "heating_problem": {
       "title": "Verwarming vraagt aandacht",

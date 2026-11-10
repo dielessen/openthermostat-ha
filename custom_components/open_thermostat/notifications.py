@@ -817,18 +817,26 @@ PHONE_APP = {"en": "{name} (Home Assistant app)", "nl": "{name} (Home Assistant-
              "pl": "{name} (aplikacja Home Assistant)"}
 
 
-def phone_services(hass):
-    """{service: label} of the notify services that reach one phone or app, the app's devices by their name."""
+def phone_apps(hass):
+    """{service: the phone's name, or None} of the notify services that reach one phone or app, sorted: a Home
+    Assistant app by the name of its phone, any other service (Telegram, e-mail …) without one."""
     from homeassistant.util import slugify
-    from .heating_advice import language
     apps = {}
     for app in hass.config_entries.async_entries("mobile_app"):
         name = app.data.get("device_name")
         if type(name) is str and name:
             apps[f"mobile_app_{slugify(name)}"] = name
-    words = PHONE_APP[language(hass)]
-    return {service: words.format(name=apps[service]) if service in apps else f"notify.{service}"
+    return {service: apps.get(service)
             for service in sorted(hass.services.async_services_for_domain("notify")) if service not in NOT_A_PHONE}
+
+
+def phone_services(hass, lang=None):
+    """{service: label} of the notify services that reach one phone or app, the app's devices by their name (in
+    Home Assistant's language, or ``lang``)."""
+    from .heating_advice import language
+    words = PHONE_APP[lang if lang in PHONE_APP else language(hass)]
+    return {service: words.format(name=name) if name else f"notify.{service}"
+            for service, name in phone_apps(hass).items()}
 
 
 def suggested_phone(hass, person, services):

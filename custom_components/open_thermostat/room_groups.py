@@ -15,8 +15,8 @@ group when its device appears. A room removed there loses its device
 add these groups (the type is not in async_get_supported_subentry_types). If
 the user deletes one on the integration page, Core has already removed the
 room's device and entities. While the room is still in the E32 plan, it keeps
-heating, so a Repairs message explains that and one reload brings the group
-back. The room's device and entities come back from Home Assistant's deleted
+heating, so the log says so (no Repairs item since 1.4) and one reload brings
+the group back. The room's device and entities come back from Home Assistant's deleted
 registry with the same entity IDs, names, areas and history.
 
 Only this entry's E32 room and Bluetooth devices move, and only their
@@ -42,7 +42,6 @@ from types import MappingProxyType
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
-from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.typing import UNDEFINED
 from homeassistant.util import dt as dt_util
 
@@ -54,9 +53,6 @@ _LOGGER = logging.getLogger(__name__)
 GROUP_TYPE = "e32_room"
 GROUP_PREFIX = "e32_room_"
 STATE_KEY = "room_groups"
-RESTORED_ISSUE = "room_group_restored"
-# The "group restored" note stays this long after its group is back, then goes by itself.
-RESTORED_NOTICE = timedelta(hours=24)
 # A room or sensor device Home Assistant moved without us (RoomGroups._silent_move): one reload per entry this often.
 SILENT_MOVE_REPAIR_INTERVAL = timedelta(hours=1)
 REPAIRS_KEY = f"{DOMAIN}_room_group_repairs"  # hass.data: {entry id: its last repair reload}; outlives a reload
@@ -103,10 +99,6 @@ def room_group_ids(entry):
     return {sub.unique_id.removeprefix(GROUP_PREFIX): sub.subentry_id for sub in entry.subentries.values()
             if sub.subentry_type == GROUP_TYPE and type(sub.unique_id) is str
             and sub.unique_id.startswith(GROUP_PREFIX)}
-
-
-def restored_issue_id(entry, room_id):
-    return f"{RESTORED_ISSUE}_{entry.entry_id}_{room_id}"
 
 
 def _snapshot(entry):
@@ -239,7 +231,7 @@ class RoomGroups:
         """One of our own group changes. Home Assistant runs the entry's update listener at once, inside
         the change (an eager task), and that listener reconciles: halfway through, a new room's group
         exists but neither this setup's record of it nor the room's device does yet, so without this the
-        reconcile removed the new group and then reported it deleted (room_group_restored) on a new install."""
+        reconcile removed the new group and then restored it as if the user had deleted it, on a new install."""
         changing, self._changing = self._changing, True
         try:
             yield
@@ -437,7 +429,6 @@ class RoomGroups:
         if (self._restoring or self._changing
                 or self.hass.config_entries.async_get_entry(self.entry.entry_id) is not self.entry):
             return  # (_changing: the update listener inside one of our own changes, see _own_change)
-        self._expire_restored()
         if self._current_signature() == self._signature and not force:
             return  # every telemetry message notifies the hub; nothing that matters here changed
         try:
@@ -446,16 +437,6 @@ class RoomGroups:
         except Exception:  # presentation only: never break the telemetry path
             _LOGGER.exception("Could not arrange the OpenThermostat room groups")
         self._signature = self._current_signature()
-
-    @callback
-    def _expire_restored(self):
-        """Information only: the "group restored" note goes once its group is back and the
-        note has been shown for RESTORED_NOTICE (a restart clears it too: not persistent)."""
-        registry, now = ir.async_get(self.hass), dt_util.utcnow()
-        for room_id in room_group_ids(self.entry):
-            issue = registry.async_get_issue(DOMAIN, restored_issue_id(self.entry, room_id))
-            if issue is not None and issue.created is not None and now - issue.created >= RESTORED_NOTICE:
-                ir.async_delete_issue(self.hass, DOMAIN, issue.issue_id)
 
     def _current_signature(self):
         plan = self._plan()
@@ -497,20 +478,17 @@ class RoomGroups:
                     self._move(device, self.installation_id)
             self._known.pop(room_id, None)
             self.hass.config_entries.async_remove_subentry(self.entry, group_id)
-            ir.async_delete_issue(self.hass, DOMAIN, restored_issue_id(self.entry, room_id))
 
     @callback
     def _restore(self, room_ids, rooms):
-        """A room group deleted while the room is still on the E32: say so, and reload once to restore it."""
+        """A room group deleted while the room is still on the E32: log it, and reload once to restore it.
+
+        No Repairs item since 1.4: nothing is broken and nothing waits for a decision (the user's guide says how to
+        remove a room); an older version's item goes at setup (issue_sync.RETIRED)."""
         for room_id in room_ids:
-            name = rooms.get(room_id, room_id)
             _LOGGER.warning("The group of E32 room %s was deleted in Home Assistant, but the room is still in "
-                            "the E32 room plan; restoring it", name)
-            ir.async_create_issue(self.hass, DOMAIN, restored_issue_id(self.entry, room_id), is_fixable=False,
-                                  is_persistent=False, severity=ir.IssueSeverity.WARNING,
-                                  translation_key=RESTORED_ISSUE,
-                                  translation_placeholders={"room": name, "installation": self.entry.title},
-                                  data={"entry_id": self.entry.entry_id, "room_id": room_id})
+                            "the E32 room plan; restoring it. To remove the room, open %s → Configure → Rooms → "
+                            "Edit or remove a room", rooms.get(room_id, room_id), self.entry.title)
         self._restoring = True
         self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
 

@@ -36,10 +36,10 @@ from homeassistant.core import callback
 from .heating_link import RoomEntity, number
 
 # The room status card's module (served and loaded with the week planner's, week_planner.card_modules).
-CARD_URL = "/open_thermostat/room-status-card-1.3.0.js"
+CARD_URL = "/open_thermostat/room-status-card-1.4.0.js"
 # The Overview's house card (E32 rc.5, frontend/house-card.js): what the boiler does now, today in figures, the day
 # so far and, in a house with one room switched on, that room. The seventh card module, versioned like the others.
-HOUSE_CARD_URL = "/open_thermostat/house-card-1.3.0.js"
+HOUSE_CARD_URL = "/open_thermostat/house-card-1.4.0.js"
 HOUSE_CARD_TYPE = "custom:openthermostat-house"
 # Yesterday's headline figures on the Learning view, large as on the house card (the same module, house-card.js).
 YESTERDAY_CARD_TYPE = "custom:openthermostat-yesterday"
@@ -69,7 +69,7 @@ PRESENCE = ["room_home", "room_away", "house_home", "house_away"]
 # The Boiler view's "Now" card (E32 rc.5, frontend/boiler-now-card.js): what the boiler does now in a band of its
 # colour with its display code in words, the water to the heating and back, the burner power and its starts as large
 # figures. The eighth card module, versioned like the others.
-BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.3.0.js"
+BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.4.0.js"
 BOILER_NOW_CARD_TYPE = "custom:openthermostat-boiler-now"
 
 
@@ -482,4 +482,7 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
                 # The comfort mode itself (away, nobody home, open window) and a holiday's end: the Reason ranks no
                 # measurement, hot water and a boiler pause above them, while the E32 still holds the program (Today).
                 "comfort_mode": _dict(room.get("comfort")).get("mode"),
-                "comfort_until": _iso(_utc(_dict(room.get("comfort")).get("until")))}
+                "comfort_until": _iso(_utc(_dict(room.get("comfort")).get("until"))),
+                # E32 1.4 (#8): Smart warm-up as this room has it ("on" / "off": its own choice or the house switch);
+                # None on older firmware (the card then follows the house switch).
+                "smart_warm_up": room.get("smart_warm_up") if room.get("smart_warm_up") in ("on", "off") else None}

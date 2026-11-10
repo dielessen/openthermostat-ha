@@ -24,7 +24,7 @@ _LOGGER = logging.getLogger(__name__)
 _KEY = DOMAIN + "_week_frontend"
 # Versioned like the card and editor URLs (the manifest version): a changed module is never taken
 # from the browser cache. The older URLs stay served for pages loaded before an update.
-URL = "/open_thermostat/week-planner-1.3.0.js"
+URL = "/open_thermostat/week-planner-1.4.0.js"
 LEGACY_URLS = ("/open_thermostat/week-planner-0.4.0b4.js", "/open_thermostat/week-planner-0.4.0.dev41.js")
 ROOM_CARD_TYPE = "custom:openthermostat-room-editor-v42"
 
@@ -134,7 +134,9 @@ def card_modules():
     from .e32_flow import CURVE_CARD_URL
     from .e32_week import CARD_URL
     from .room_overview import BOILER_NOW_CARD_URL, CARD_URL as ROOM_STATUS_URL, HOUSE_CARD_URL
-    return (CARD_URL, URL, ROOM_STATUS_URL, CURVE_CARD_URL, HOUSE_CARD_URL, BOILER_NOW_CARD_URL)
+    from .settings import SECTION_MODULES, URL as SETTINGS_URL  # the dashboard's settings panel and its sections (1.4)
+    return (CARD_URL, URL, ROOM_STATUS_URL, CURVE_CARD_URL, HOUSE_CARD_URL, BOILER_NOW_CARD_URL, SETTINGS_URL,
+            *(url for url, _ in SECTION_MODULES))
 
 
 @callback
@@ -204,11 +206,15 @@ async def async_setup_planner(hass):
         from .room_overview import HOUSE_CARD_URL  # the Overview's house card (E32 rc.5)
         from .room_overview import BOILER_NOW_CARD_URL  # the Boiler view's Now card (E32 rc.5)
         from .e32_flow import CURVE_CARD_URL  # water temperature by outdoor temperature (E32 rc.5)
+        from .settings import COMMANDS as SETTINGS_COMMANDS, SECTION_MODULES, URL as SETTINGS_URL  # the settings panel (1.4)
         for url, name in ((URL, "week-planner.js"), *((old, "week-planner.js") for old in LEGACY_URLS),
                           (CARD_URL, "e32-week-card.js"), (EDITOR_URL, "week-editor.js"),
                           (ROOM_STATUS_URL, "room-status-card.js"), (CURVE_CARD_URL, "heating-curve-card.js"),
-                          (HOUSE_CARD_URL, "house-card.js"), (BOILER_NOW_CARD_URL, "boiler-now-card.js")):
+                          (HOUSE_CARD_URL, "house-card.js"), (BOILER_NOW_CARD_URL, "boiler-now-card.js"),
+                          (SETTINGS_URL, "openthermostat-settings.js"), *SECTION_MODULES):
             await _async_serve(hass, url, name)
+        for command in SETTINGS_COMMANDS:
+            websocket_api.async_register_command(hass, command)
         websocket_api.async_register_command(hass, ws_week_get)
         websocket_api.async_register_command(hass, ws_week_save)
         from .room_editor import ws_room_get, ws_room_save, ws_room_device_metadata

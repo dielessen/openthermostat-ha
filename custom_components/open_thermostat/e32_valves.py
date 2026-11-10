@@ -79,7 +79,8 @@ HEALTH = ("ok", "low_battery", "offline", "unknown")
 # A BLU Gateway valve's route problem in its room document (TrvControl.h "link").
 LINKS = ("gateway", "silent", "missing", "unpaired", "unknown")
 ENTITY_KEYS = ("valve_position", "valve_battery", "valve_problem", "valve_control")
-ISSUES = ("valve_battery_low", "valve_offline", "valve_single_source", "valve_gateway_silent", "valve_not_found")
+# A room with one temperature source is no Repairs item (1.4): the room form's help text says what it means.
+ISSUES = ("valve_battery_low", "valve_offline", "valve_gateway_silent", "valve_not_found")
 # A switched control shows its new state until the E32's telemetry agrees (at most this long).
 PENDING_SECONDS = 30
 
@@ -621,9 +622,6 @@ def sync_issues(hass, entry, hub, raised):
         if lost:
             wanted[issue_id("valve_not_found", entry, room_id)] = ("valve_not_found", ir.IssueSeverity.WARNING,
                                                                    {"room": name, "valves": ", ".join(lost)})
-        if valves.get("control") is True and valves.get("single_source") is True:
-            wanted[issue_id("valve_single_source", entry, room_id)] = ("valve_single_source", ir.IssueSeverity.WARNING,
-                                                                       {"room": name})
     if silent_gateway:
         wanted[f"valve_gateway_silent_{entry.entry_id}"] = ("valve_gateway_silent", ir.IssueSeverity.WARNING,
                                                             {"valves": ", ".join(silent_gateway)})

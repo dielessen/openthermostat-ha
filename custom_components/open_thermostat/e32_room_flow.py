@@ -89,7 +89,10 @@ REJECTIONS = {"invalid_sources": "e32_rejected_sources", "invalid_room_name": "e
               "duplicate_room": "e32_rejected_duplicate_room", "duplicate_source": "e32_rejected_duplicate_source",
               "invalid_setpoint_entity": "e32_rejected_setpoint", "invalid_room_limits": "e32_limits_invalid",
               "invalid_flow_limits": "e32_rejected_flow_limits", "invalid_schedule": "e32_rejected_schedule",
-              "invalid_schedule_limits": "e32_rejected_schedule", "invalid_room_away": "e32_away_invalid"}
+              "invalid_schedule_limits": "e32_rejected_schedule", "invalid_room_away": "e32_away_invalid",
+              # E32 1.4: the room's reset times
+              "invalid_reset": "e32_rejected_resets", "invalid_reset_limits": "e32_rejected_resets",
+              "too_many_resets": "e32_resets_too_many"}
 # The one sentence about the boiler's own maximum in the flow-limits form.
 BOILER_MAXIMUM_TEXT = {
     "en": "Boiler maximum: {maximum} (set on the boiler); the E32 never asks for more. A lower limit here is "
@@ -103,6 +106,8 @@ FLOW_LIMIT_FIELDS = {"minimum_flow_temperature": "minimum_flow_c", "maximum_flow
 # default; the E32 keeps 30 °C as the hard lower bound and its learned floors decide above it) or set by you.
 MINIMUM_AUTOMATIC_KEY = "minimum_flow_automatic"
 MINIMUM_AUTOMATIC_FIELD = "minimum_flow_automatic"
+# E32 1.4 (#8): a room's own Smart warm-up ("house" | "on" | "off"; absent: as the house), only for an E32 that names it.
+SMART_WARM_UP_FEATURE, SMART_WARM_UP_FIELD = "plan.room_smart_warm_up.v1", "smart_warm_up"
 STANDARD_MINIMUM_FLOW_C = 30  # RoomPlan::defaultMinimumFlowC
 # The form's line about the lowest water temperature in effect (fw/telemetry/flow "minimum_flow"), EN/NL/PL;
 # the same words as the E32's House page.
@@ -141,6 +146,35 @@ DAY_NAMES = {name: index for names in (
 ) for index, name in enumerate(names)}
 POINT = re.compile(r"(\d{1,2})[:.](\d{2})\s+(\d{1,2}(?:[.,]\d{1,2})?)")
 DAY_PREFIX = re.compile(r"([a-z][a-z ,\-]*?)\s*:\s*(.*)")
+
+# Reset times (E32 1.4, docs/engineering/TERUGZETMOMENT-ONTWERP.nl.md): on a time, on chosen days, any manual change
+# of the room ends and the room takes one value, a temperature or a state; the E32 never works towards it. The plan
+# keeps them per room as "resets": [{"days": [0..6], "time": "HH:MM", "temperature_c": 14.0} or {..., "state":
+# "follow"}], at most four, never two on the same day and minute. Firmware before 1.4 has no such key and ignores it.
+MAX_RESETS = 4
+RESET_STATES = ("active", "follow", "inactive")
+# A state's word in the form, EN and NL (Polish uses the English words, as it does the day names).
+STATE_WORDS = {"en": {"active": "on", "follow": "heat along", "inactive": "off"},
+               "nl": {"active": "aan", "follow": "meeverwarmen", "inactive": "uit"}}
+STATE_NAMES = {**{word: state for words in STATE_WORDS.values() for state, word in words.items()},
+               "heat along only": "follow", "alleen meeverwarmen": "follow"}
+EVERY_DAY = {"en": "daily", "nl": "dag"}
+EVERY_DAY_NAMES = frozenset({"daily", "every day", "dag", "elke dag", "dagelijks"})
+RESET_LINE = re.compile(r"(?:([a-z][a-z ,\-]*?)\s*:?\s+)?(\d{1,2})[:.](\d{2})\s+(.+)")
+RESET_TEMPERATURE = re.compile(r"(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:°\s*[cf]?)?")
+# The form's one sentence while the E32 has no reset times (firmware before 1.4), after the program's help, EN/NL/PL.
+RESETS_LATER_TEXT = {
+    "en": " With E32 firmware 1.4 or newer you can also set reset times here.",
+    "nl": " Met E32-firmware 1.4 of nieuwer kun je hier ook terugzetmomenten instellen.",
+    "pl": " Z oprogramowaniem E32 w wersji 1.4 lub nowszej możesz tu też ustawić godziny powrotu."}
+# After a save, the room list says what the room's week program and reset times now are (issue #7), EN/NL/PL.
+SAVED_PROGRAM_TEXT = {
+    "en": {"none": "Week program: none; the room keeps {temperature} without a week program.",
+           "program": "Week program:", "resets": "Reset times:"},
+    "nl": {"none": "Weekprogramma: geen; de ruimte houdt {temperature} zonder weekprogramma.",
+           "program": "Weekprogramma:", "resets": "Terugzetmomenten:"},
+    "pl": {"none": "Program tygodniowy: brak; pomieszczenie utrzymuje {temperature} bez programu tygodniowego.",
+           "program": "Program tygodniowy:", "resets": "Godziny powrotu:"}}
 
 # HA error translation keys of RoomPlanLink -> this flow's error/abort keys.
 FAILURES = {"room_plan_changed": "e32_plan_changed", "room_plan_too_large": "e32_plan_too_large",
@@ -304,6 +338,113 @@ def format_program(schedule, language="en", unit=CELSIUS):
                      for key, days in groups.items())
 
 
+RESETS_FEATURE = "plan.room_resets.v1"
+
+
+def resets_supported(plan):
+    """True when the E32 that answered this plan has reset times: it names plan.room_resets.v1 (also with no room
+    yet), or, as a fallback, a room carries "resets" (1.4 sends the key with every room)."""
+    if type(plan) is not dict:
+        return False
+    features, rooms = plan.get("features"), plan.get("rooms")
+    if type(features) is list and RESETS_FEATURE in features:
+        return True
+    return type(rooms) is list and any(type(room) is dict and type(room.get("resets")) is list for room in rooms)
+
+
+def parse_resets(text, minimum, maximum, unit=CELSIUS):
+    """The room's reset times from the form's text ([] for none); an error names the line it could not read.
+
+    One per line: days, time and value, "mon-fri 22:00 14" or "daily 09:00 heat along" (Dutch "ma-vr 22:00 14",
+    "dag 09:00 meeverwarmen"). The days as in the week program; "daily" (or no days) is every day. The value is a
+    temperature in the user's unit (whole or half °C; °F to the nearest half °C) within the room's limits, or a
+    state: on, heat along, off (aan, meeverwarmen, uit). At most four; never two on the same day and minute.
+    """
+    resets, moments = [], set()
+    for number, original in enumerate((text or "").splitlines(), 1):
+        line = " ".join(original.lower().replace("–", "-").split())
+        if not line:
+            continue
+        try:
+            reset = _parse_reset(line, minimum, maximum, unit)
+            if any((day, reset["time"]) in moments for day in reset["days"]):
+                raise FlowError("e32_resets_same_moment", "resets")
+        except FlowError as err:
+            err.placeholders.setdefault("line", str(number))
+            err.placeholders.setdefault("text", original.strip()[:60])
+            raise
+        moments.update((day, reset["time"]) for day in reset["days"])
+        resets.append(reset)
+    if len(resets) > MAX_RESETS:
+        raise FlowError("e32_resets_too_many", "resets")
+    return resets
+
+
+def _parse_reset(line, minimum, maximum, unit):
+    """One reset time line (lower case, single spaces) in the plan's form; raises FlowError."""
+    match = RESET_LINE.fullmatch(line)
+    if match is None or int(match[2]) > 23 or int(match[3]) > 59:
+        raise FlowError("e32_resets_invalid", "resets")
+    if match[1] is None or match[1].strip() in EVERY_DAY_NAMES:
+        days = list(range(7))
+    else:
+        try:
+            days = sorted(set(_days(match[1])))
+        except FlowError:
+            raise FlowError("e32_resets_invalid", "resets") from None
+    reset = {"days": days, "time": f"{int(match[2]):02d}:{match[3]}"}
+    value = match[4].strip()
+    if value in STATE_NAMES:
+        reset["state"] = STATE_NAMES[value]
+        return reset
+    temperature = RESET_TEMPERATURE.fullmatch(value)
+    if temperature is None:
+        raise FlowError("e32_resets_invalid", "resets")
+    try:
+        centi_c = centi(temperature[1], unit)
+    except FlowError:
+        raise FlowError("e32_resets_invalid", "resets") from None
+    if unit == FAHRENHEIT:  # the E32 keeps half degrees, as the thermostat sets them
+        centi_c = int((Decimal(centi_c) / 50).to_integral_value(ROUND_HALF_UP)) * 50
+    elif centi_c % 50:
+        raise FlowError("e32_resets_invalid", "resets")
+    if not minimum <= centi_c <= maximum:
+        raise FlowError("e32_resets_outside_limits", "resets")
+    reset["temperature_c"] = centi_c / 100
+    return reset
+
+
+def reset_value(reset, language="en", unit=CELSIUS):
+    """A reset time's value in words: its temperature in the user's unit (Dutch: decimal comma) or its state word."""
+    words = STATE_WORDS["nl" if language == "nl" else "en"]
+    if reset.get("state") in RESET_STATES:
+        return words[reset["state"]]
+    temperature = reset.get("temperature_c")
+    if type(temperature) not in (int, float):
+        return None
+    text = f"{shown(round(temperature * 100), unit):g}"
+    return text.replace(".", ",") if language == "nl" else text
+
+
+def format_resets(resets, language="en", unit=CELSIUS):
+    """The form's text for the room's stored reset times: one per line, in the stored order."""
+    if type(resets) is not list:
+        return ""
+    dutch = language == "nl"
+    names = DAYS["nl" if dutch else "en"]
+    lines = []
+    for reset in resets:
+        if type(reset) is not dict or type(reset.get("time")) is not str:
+            continue
+        days = sorted({day for day in reset.get("days") or [] if type(day) is int and 0 <= day <= 6})
+        value = reset_value(reset, language, unit)
+        if not days or value is None:
+            continue
+        when = EVERY_DAY["nl" if dutch else "en"] if len(days) == 7 else _day_ranges(days, names)
+        lines.append(f"{when} {reset['time']} {value}")
+    return "\n".join(lines)
+
+
 def source_problem(hass, entity_id, setpoint=False):
     """An error key when the E32 cannot use this HA entity as a source (or setpoint), else None."""
     if len(entity_id) > 80 or not ENTITY_ID.fullmatch(entity_id):
@@ -356,10 +497,11 @@ class E32RoomFlow:
             key = "e32_unreachable"
         return self.async_abort(reason=key, description_placeholders=placeholders)
 
-    async def async_step_e32_rooms(self, user_input=None, done=None, name=None, valves=""):
+    async def async_step_e32_rooms(self, user_input=None, done=None, name=None, valves="", program=""):
         """The room list and what to do next; done ("saved"/"removed") says what just happened.
 
-        valves: after a save, the saved room's radiator valves and their route, one per line.
+        valves: after a save, the saved room's radiator valves and their route, one per line; program: its week
+        program and reset times as saved (issue #7: also when it has none).
         """
         link = self._e32_link()
         if link is None:
@@ -381,6 +523,7 @@ class E32RoomFlow:
         if done is not None:
             placeholders["name"] = name or ""
             placeholders["valves"] = valves or ""
+            placeholders["program"] = program or ""
         return self.async_show_menu(step_id="e32_rooms" if done is None else f"e32_rooms_{done}",
                                     menu_options=options, description_placeholders=placeholders)
 
@@ -476,51 +619,26 @@ class E32RoomFlow:
             placeholders["minimum_now"] = MINIMUM_NOW_TEXT[language(self.hass)][now[1]].format(
                 value=f"{flow_shown(round(now[0]), unit):g} {unit}")
         if user_input is not None:
-            automatic = tick and user_input.get(MINIMUM_AUTOMATIC_FIELD) is True
-            try:
-                values = [float(user_input[field]) for field in FLOW_LIMIT_FIELDS]
-                low, high = (flow_celsius(v, unit) for v in values)
-            except (KeyError, TypeError, ValueError):
-                low = high = None
-            if automatic and (low is None or not FLOW_MINIMUM_C[0] <= low <= FLOW_MINIMUM_C[1]):
-                low = STANDARD_MINIMUM_FLOW_C  # not used while automatic: whatever the field holds
             # Plan item 1b: only what the user changed in this form goes to the E32 (against what it showed),
-            # so a limit changed on the E32's own page while the form was open stays.
-            wanted = {MINIMUM_AUTOMATIC_KEY: automatic} if tick else {}
-            if not automatic:
-                wanted["minimum_flow_c"] = low
-            wanted["maximum_flow_c"] = high
-            edits = {key: value for key, value in wanted.items() if current.get(key) != value}
-            if low is None or high is None or not (FLOW_MINIMUM_C[0] <= low <= FLOW_MINIMUM_C[1]
-                                                   and FLOW_MAXIMUM_C[0] <= high <= FLOW_MAXIMUM_C[1]):
-                errors["base"] = "e32_flow_limits_invalid"
-            elif (STANDARD_MINIMUM_FLOW_C if automatic else low) >= high:
-                errors["base"] = "e32_flow_limits_order"
-            elif not edits:
-                return self.async_abort(reason="e32_room_unchanged")
+            # so a limit changed on the E32's own page while the form was open stays. 1.4: the same check as the
+            # settings panel (e32_flow.limit_edits, limit_warnings).
+            from .e32_flow import limit_edits, limit_warnings
+            try:
+                edits, low, high = limit_edits(plan, user_input.get(MINIMUM_AUTOMATIC_FIELD),
+                                               user_input.get("minimum_flow_temperature"),
+                                               user_input.get("maximum_flow_temperature"), unit)
+            except FlowError as err:
+                errors["base"] = err.key
             else:
-                warnings = {}
-                if high > FLOOR_FLOW_WARNING_C and any(
-                        room.get("emitter") == "floor" for room in plan.get("rooms", [])):
-                    warnings["maximum_flow_temperature"] = "e32_flow_limits_floor_warning"
-                if boiler is not None and high > boiler:
-                    warnings["base"] = "e32_flow_limits_above_boiler"
+                if not edits:
+                    return self.async_abort(reason="e32_room_unchanged")
+                warnings = limit_warnings(plan, high, boiler)
                 if warnings and getattr(self, "_e32_flow_warned", None) != (low, high):
                     self._e32_flow_warned = (low, high)  # the same values once more: save
                     errors.update(warnings)
                 else:
                     return await self._e32_save_flow_limits(edits, errors, placeholders, current)
         return self._e32_flow_form(current, unit, user_input, errors, placeholders)
-
-    @staticmethod
-    async def _e32_save_flow_options(link, change):
-        """None once the E32 stored the changed options as asked, else the form's error key."""
-        from homeassistant.exceptions import HomeAssistantError as Failed
-        try:
-            stored = await link.async_change(change)
-        except Failed:
-            return "e32_flow_options_failed"
-        return None if all(stored.get(key) is value for key, value in change.items()) else "e32_flow_options_failed"
 
     @staticmethod
     def _flow_ranges(unit):
@@ -530,20 +648,14 @@ class E32RoomFlow:
                 "floor_maximum": f"{flow_shown(FLOOR_FLOW_WARNING_C, unit)} {unit}"}
 
     async def _e32_save_flow_limits(self, edits, errors, placeholders, current):
-        """Writes only ``edits`` (the fields the user changed) on top of the plan the E32 holds now."""
-        def change(stored):
-            candidate = deepcopy(stored)
-            candidate.update(edits)
-            return candidate
-
-        def confirm(stored):
-            # Automatic: the E32 sets the minimum to its standard itself; the rest as asked.
-            return all(stored.get(key) == value for key, value in edits.items())
+        """Writes only ``edits`` (the fields the user changed) on top of the plan the E32 holds now (1.4: the same write
+        as the settings panel, e32_flow.async_save_limits)."""
+        from .e32_flow import async_save_limits
         link = self._e32_link()
         if link is None:
             return self.async_abort(reason="e32_rooms_unavailable")
         try:
-            stored = await link.async_change_plan(change, confirm)
+            stored = await async_save_limits(link, edits)
         except HomeAssistantError as err:
             key, extra = self._e32_failure(err)
             if key in ABORTS:
@@ -584,29 +696,18 @@ class E32RoomFlow:
         if user_input is not None:
             if not user_input.get("confirm_remove", False):
                 return self.async_abort(reason="cancelled")
-
-            def change(plan):
-                if plan_room(plan, room_id) is None:
-                    raise FlowError("e32_room_missing")
-                candidate = deepcopy(plan)
-                candidate["rooms"] = [r for r in candidate["rooms"] if r["id"] != room_id]
-                return candidate
             link = self._e32_link()
             if link is None:
                 return self.async_abort(reason="e32_rooms_unavailable")
             try:
-                await link.async_change_plan(change, lambda stored: plan_room(stored, room_id) is None)
-            except FlowError:  # the plan just read no longer has it
-                self._e32_forget_room(room_id)
-                return await self.async_step_e32_rooms(done="removed", name=placeholders["name"])
+                await remove_room(self.hass, self.config_entry, link, room_id)  # shared with the settings panel
             except HomeAssistantError as err:
                 key, extra = self._e32_failure(err)
                 if key in ABORTS:
                     return self.async_abort(reason=key, description_placeholders={**placeholders, **extra})
                 errors["base"] = key
                 placeholders.update(extra)
-            else:  # the E32 confirmed a plan without it
-                self._e32_forget_room(room_id)
+            else:  # the E32 confirmed a plan without it (or the plan just read no longer had it)
                 return await self.async_step_e32_rooms(done="removed", name=placeholders["name"])
         return self.async_show_form(step_id="e32_room_remove", data_schema=vol.Schema({
             vol.Required("confirm_remove", default=False): bool}),
@@ -858,12 +959,7 @@ class E32RoomFlow:
 
     def _e32_forget_room(self, room_id):
         """The room is gone from the E32 plan: remove its device and entities (this entry's only)."""
-        from .native_entity_cleanup import remove_room_devices
-        remove_room_devices(self.hass, self.config_entry, heating_hub(self.hass, self.config_entry).prefix, [room_id])
-        if room_contacts(self.config_entry, room_id) or room_persons(self.config_entry, room_id):
-            # Its window/door contacts and its persons go with it.
-            settings = with_room_persons(comfort_options(self.config_entry), room_id, [])
-            save_comfort(self.hass, self.config_entry, with_room_contacts(settings, room_id, []))
+        forget_room(self.hass, self.config_entry, room_id)
 
     def _e32_own_entities(self):
         """This entry's E32 entities (room and Bluetooth values): never an HA source.
@@ -891,6 +987,10 @@ class E32RoomFlow:
         room = room or {}
         sources = room.get("sources", [])
         unit = self._unit()
+        # Issue #7: a room shows the program it has (empty: none). Only a new room starts from the standard
+        # program "Workdays and weekend", shown in the field, so it is a choice the user sees and can clear.
+        schedule = room.get("schedule") if room.get("id") else default_program(
+            room.get("minimum_centi_c", 500), room.get("maximum_centi_c", 3000))
         return {
             "name": room.get("name", ""), "state": room.get("state", "active"),
             "emitter": room.get("emitter", "radiator"),
@@ -916,9 +1016,9 @@ class E32RoomFlow:
             "fallback_temperature": shown(room.get("fallback_centi_c", 2000), unit),
             "minimum_temperature": shown(room.get("minimum_centi_c", 500), unit),
             "maximum_temperature": shown(room.get("maximum_centi_c", 2500), unit),
-            # A room without a program is shown (and saved) with the template: every room has one.
-            "program": format_program(room.get("schedule") or default_program(
-                room.get("minimum_centi_c", 500), room.get("maximum_centi_c", 3000)), self.hass.config.language, unit),
+            "program": format_program(schedule, self.hass.config.language, unit),
+            # E32 1.4: the room's reset times, one per line ("" without any, or on older firmware).
+            "resets": format_resets(room.get("resets"), self.hass.config.language, unit),
         }
 
     def _e32_centi(self, value, field, defaults, room):
@@ -984,15 +1084,61 @@ class E32RoomFlow:
             schedule = deepcopy(stored)  # the program as shown: kept exactly (no °F rounding)
         else:
             schedule = parse_program(text, low, high, self._unit())
-        if not schedule:  # every room has a week program: the planner's "Workdays and weekend"
-            schedule = default_program(low, high)
+        # Issue #7: an empty field is no program; the room keeps its temperature without a week program (None:
+        # an edit drops the stored program, a new room is added without one).
         values = {"name": name, "state": state, "emitter": emitter, "sources": sources,
                   "setpoint_entity": setpoint, "fallback_centi_c": fallback,
-                  "minimum_centi_c": low, "maximum_centi_c": high, "schedule": schedule,
+                  "minimum_centi_c": low, "maximum_centi_c": high, "schedule": schedule or None,
                   "inactive_until": self._e32_inactive_until(user_input, state, room)}
         if self._e32_away_supported():  # an older E32 ignores the field: not offered, not sent
             values[room_away.FIELD] = self._e32_room_away(user_input, room, defaults)
+        if SMART_WARM_UP_FEATURE in ((getattr(self, "_e32_plan", None) or {}).get("features") or []):
+            # E32 1.4 (#8): Smart warm-up for this room; "house" (the default) is a room without the key (None: removed).
+            choice = user_input.get(SMART_WARM_UP_FIELD)
+            values[SMART_WARM_UP_FIELD] = choice if choice in ("on", "off") else None
+        if self._e32_resets_supported():  # E32 1.4: always sent (also []); never to older firmware
+            values["resets"] = self._e32_resets(user_input, room, defaults, low, high)
         return values
+
+    def _e32_resets_supported(self):
+        return resets_supported(getattr(self, "_e32_plan", None))
+
+    def _e32_resets(self, user_input, room, defaults, low, high):
+        """The submitted reset times in the plan's form; the text as shown keeps the stored ones exactly.
+
+        The settings panel sends them as a list (settings_rooms.py): each one checked by the same rules."""
+        if type(user_input.get("resets")) is list:
+            return valid_resets(user_input["resets"], low, high, self._unit(), room.get("resets"))
+        text = user_input.get("resets") or ""
+        stored = room.get("resets")
+
+        def within(reset):
+            temperature = reset.get("temperature_c") if type(reset) is dict else None
+            return type(temperature) not in (int, float) or low <= round(temperature * 100) <= high
+        if type(stored) is list and text.strip() == defaults["resets"].strip() and all(map(within, stored)):
+            return deepcopy(stored)  # as shown: kept exactly (no °F rounding)
+        return parse_resets(text, low, high, self._unit())
+
+    def _e32_language(self):
+        """The user's language when the flow context carries it, Home Assistant's own otherwise: en, nl or pl."""
+        language = ((getattr(self, "context", None) or {}).get("language") or self.hass.config.language or "en")[:2]
+        return language if language in ("en", "nl", "pl") else "en"
+
+    def _e32_saved_program(self, values):
+        """After a save: the room's week program and reset times as saved, for the room list (issue #7)."""
+        language, unit = self._e32_language(), self._unit()
+        words, written = SAVED_PROGRAM_TEXT[language], "nl" if language == "nl" else "en"
+        program = format_program(values.get("schedule"), written, unit)
+        if program:
+            lines = [words["program"], *(f"- {line}" for line in program.splitlines())]
+        else:
+            temperature = f"{shown(values['fallback_centi_c'], unit):g}"
+            temperature = temperature.replace(".", ",") if language == "nl" else temperature
+            lines = [words["none"].format(temperature=f"{temperature} {unit}")]
+        resets = format_resets(values.get("resets"), written, unit)
+        if resets:
+            lines += ["", words["resets"], *(f"- {line}" for line in resets.splitlines())]
+        return "\n\n" + "\n".join(lines)
 
     def _e32_inactive_until(self, user_input, state, room):
         """The submitted "Off until" as epoch seconds; 0 (no end) when blank or the room heats."""
@@ -1123,6 +1269,7 @@ class E32RoomFlow:
         valve_ctx = valve_state[1]
         placeholders["valve_routes"] = self._e32_valve_routes(
             [*valve_ctx.stored, *valve_ctx.gateway_stored] if valve_ctx else [])
+        placeholders["resets_note"] = "" if self._e32_resets_supported() else RESETS_LATER_TEXT[self._e32_language()]
         if user_input is not None:
             try:
                 values = self._e32_room_values(user_input, room, ble_options)
@@ -1142,21 +1289,14 @@ class E32RoomFlow:
                 settings = comfort_options(self.config_entry)
                 same_delay = not room or self._same_delays(settings, room_id, delay, door_delay)
                 if room is not None:
-                    edits = {k: v for k, v in values.items()
-                             if room.get(k, 0 if k == "inactive_until" else None) != v}
+                    edits = room_edits(room, values)
                     if (not edits and not valves_changed and contacts == room_contacts(self.config_entry, room_id)
                             and doors == room_doors(self.config_entry, room_id) and same_delay
                             and persons == room_persons(self.config_entry, room_id)):
                         return self.async_abort(reason="e32_room_unchanged")
-                    change, confirm = self._e32_edit(room_id, edits)
-                    saved = room_id
-                else:
-                    created = []
-                    change, confirm = self._e32_add(values, created)
-                if room is None or edits:
-                    await link.async_change_plan(change, confirm)
-                if room is None:
-                    saved = created[0]
+                # The plan part of the save, shared with the settings panel (settings_rooms.py): an edit sends only
+                # the changed fields on top of the plan the E32 holds now; a new room gets its id there.
+                saved = await write_room(link, room, values)
                 if valves_changed:  # after the plan: a new room exists on the E32 before its valves
                     await self._e32_save_valves(saved, *valves, valve_ctx, pins)
                 settings = comfort_options(self.config_entry)
@@ -1181,13 +1321,13 @@ class E32RoomFlow:
                 placeholders.update(extra)
             else:
                 return await self.async_step_e32_rooms(done="saved", name=values["name"],
-                                                       valves=self._e32_saved_valves(valves))
+                                                       valves=self._e32_saved_valves(valves),
+                                                       program=self._e32_saved_program(values))
         if getattr(self, "_e32_room_id", None) != room_id:  # a new room stored, its valves refused: edit it now
             room = plan_room(self._e32_plan, self._e32_room_id)
         placeholders["setting_hint"] = self._e32_setting_hint(room, user_input)
         # The title says which room (or that it is a new one).
-        language = ((getattr(self, "context", None) or {}).get("language") or self.hass.config.language or "en")[:2]
-        placeholders["room_name"] = room.get("name", room_id) if room else NEW_ROOM_TITLE.get(language, NEW_ROOM_TITLE["en"])
+        placeholders["room_name"] = room.get("name", room_id) if room else NEW_ROOM_TITLE[self._e32_language()]
         return self.async_show_form(step_id="e32_room", data_schema=retained_input_schema(
             self, self._e32_room_schema(room, ble_options, valve_ctx), user_input),
             errors=errors, description_placeholders=placeholders)
@@ -1242,6 +1382,11 @@ class E32RoomFlow:
             vol.Required("fallback_temperature", default=d["fallback_temperature"]): temperature,
             vol.Optional("program", description={"suggested_value": d["program"] or None}):
                 selector.TextSelector({"multiline": True}),
+        })
+        if self._e32_resets_supported():  # E32 1.4: the room's reset times, right under its week program
+            fields[vol.Optional("resets", description={"suggested_value": d["resets"] or None})] = \
+                selector.TextSelector({"multiline": True})
+        fields.update({
             # Open: easy to find in the room itself, not only under Comfort.
             # Windows and doors (1.0.1): each kind with its own delay; a door usually waits longer.
             vol.Optional("window"): section(vol.Schema({
@@ -1260,6 +1405,10 @@ class E32RoomFlow:
                 vol.Required("maximum_temperature", default=d["maximum_temperature"]): temperature,
             }), {"collapsed": True}),
         })
+        if SMART_WARM_UP_FEATURE in ((getattr(self, "_e32_plan", None) or {}).get("features") or []):
+            # E32 1.4 (#8): Smart warm-up for this room: as the house (the default), on or off.
+            stored = (room or {}).get(SMART_WARM_UP_FIELD)
+            fields[vol.Required(SMART_WARM_UP_FIELD, default=stored if stored in ("on", "off") else "house")] =                 selector.SelectSelector({"options": ["house", "on", "off"], "translation_key": "e32_smart_warm_up"})
         if valve_ctx is not None:  # rc.3: the room's radiator valves, in the room itself (open when it has some)
             fields[vol.Optional("valves")] = section(vol.Schema(self._e32_valve_fields(valve_ctx)),
                                                      {"collapsed": not (valve_ctx.stored or valve_ctx.gateway_stored)})
@@ -1298,3 +1447,175 @@ class E32RoomFlow:
             created[:] = [room_id]
             return candidate
         return change, lambda stored: bool(created) and plan_room(stored, created[0]) is not None
+
+
+# -- the room rules without the form (1.4): shared by this flow and the settings panel (settings_rooms.py) ----------
+
+def room_edits(room, values):
+    """The plan fields of ``values`` that differ from the stored room: an edit sends only these."""
+    return {k: v for k, v in values.items() if room.get(k, 0 if k == "inactive_until" else None) != v}
+
+
+async def write_room(link, room, values):
+    """Store one room in the E32 plan (RoomPlanLink.async_change_plan: the read revision, one re-read on 409) and
+    return its id. An edit (``room``: the room as shown) sends only the fields that differ from it, on top of the
+    plan the E32 holds now, so a change made meanwhile on the E32 page to another field or room stays; nothing is
+    sent when nothing differs. A new room (``room`` None) gets its id from its name. Raises FlowError
+    (e32_room_missing, e32_room_limit) or the link's HomeAssistantError."""
+    if room is not None:
+        edits = room_edits(room, values)
+        if edits:
+            await link.async_change_plan(*E32RoomFlow._e32_edit(room["id"], edits))
+        return room["id"]
+    created = []
+    await link.async_change_plan(*E32RoomFlow._e32_add(values, created))
+    return created[0]
+
+
+def forget_room(hass, entry, room_id):
+    """The room is gone from the E32 plan: its device and entities go (this entry's only), and its window and door
+    contacts and its persons with them."""
+    from .native_entity_cleanup import remove_room_devices
+    remove_room_devices(hass, entry, heating_hub(hass, entry).prefix, [room_id])
+    if room_contacts(entry, room_id) or room_persons(entry, room_id):
+        settings = with_room_persons(comfort_options(entry), room_id, [])
+        save_comfort(hass, entry, with_room_contacts(settings, room_id, []))
+
+
+async def remove_room(hass, entry, link, room_id):
+    """Remove a room from the E32 plan, then forget it in Home Assistant. A room the plan no longer has counts as
+    removed. Raises the link's HomeAssistantError (nothing removed)."""
+    def change(plan):
+        if plan_room(plan, room_id) is None:
+            raise FlowError("e32_room_missing")
+        candidate = deepcopy(plan)
+        candidate["rooms"] = [r for r in candidate["rooms"] if r["id"] != room_id]
+        return candidate
+    try:
+        await link.async_change_plan(change, lambda stored: plan_room(stored, room_id) is None)
+    except FlowError:  # the plan just read no longer has it
+        pass
+    forget_room(hass, entry, room_id)
+
+
+def valid_resets(items, minimum, maximum, unit=CELSIUS, stored=None):
+    """The settings panel's reset times (a list of {"days", "time", and "temperature" in the user's unit or
+    "state"}) in the plan's form, checked by the rules of parse_resets: whole minutes, at least one day, a
+    temperature in whole or half °C (°F to the nearest half °C) within the room's limits, or a state; at most four,
+    never two on the same day and minute. One shown as stored keeps the stored one exactly (no °F rounding). An
+    error is on the field "resets" with the reset time's place ``line`` (1..)."""
+    if type(items) is not list:
+        raise FlowError("e32_resets_invalid", "resets", line="1", text="")
+    if len(items) > MAX_RESETS:
+        raise FlowError("e32_resets_too_many", "resets")
+    as_stored = {}
+    for reset in stored if type(stored) is list else []:
+        if type(reset) is dict:
+            as_stored[_reset_key(shown_reset(reset, unit))] = reset
+    resets, moments = [], set()
+    for number, item in enumerate(items, 1):
+        try:
+            kept = as_stored.get(_reset_key(item))
+            reset = deepcopy(kept) if kept is not None else _valid_reset(item, minimum, maximum, unit)
+            temperature = reset.get("temperature_c")
+            if type(temperature) in (int, float) and not minimum <= round(temperature * 100) <= maximum:
+                raise FlowError("e32_resets_outside_limits", "resets")
+            if any((day, reset["time"]) in moments for day in reset["days"]):
+                raise FlowError("e32_resets_same_moment", "resets")
+        except FlowError as err:
+            err.placeholders.setdefault("line", str(number))
+            err.placeholders.setdefault("text", "")
+            raise
+        moments.update((day, reset["time"]) for day in reset["days"])
+        resets.append(reset)
+    return resets
+
+
+def shown_reset(reset, unit=CELSIUS):
+    """A stored reset time as the settings panel shows it: its days, time and state, or its temperature in the
+    user's unit."""
+    out = {"days": sorted({d for d in reset.get("days") or [] if type(d) is int and 0 <= d <= 6}),
+           "time": reset.get("time")}
+    if reset.get("state") in RESET_STATES:
+        out["state"] = reset["state"]
+    elif type(reset.get("temperature_c")) in (int, float):
+        out["temperature"] = shown(round(reset["temperature_c"] * 100), unit)
+    return out
+
+
+def _reset_key(item):
+    """What makes two reset times the same as shown: days, time and value (None for anything else)."""
+    if type(item) is not dict:
+        return None
+    days = item.get("days")
+    days = tuple(sorted(days)) if type(days) is list and all(type(d) is int for d in days) else None
+    value = item.get("temperature")
+    value = float(value) if type(value) in (int, float) and type(value) is not bool else None
+    return days, item.get("time"), item.get("state"), value
+
+
+def _valid_reset(item, minimum, maximum, unit):
+    """One reset time of the settings panel in the plan's form; raises FlowError."""
+    if type(item) is not dict:
+        raise FlowError("e32_resets_invalid", "resets")
+    days, time_text = item.get("days"), item.get("time")
+    match = re.fullmatch(r"(\d{2}):(\d{2})", time_text) if type(time_text) is str else None
+    if (type(days) is not list or not days or len(set(days)) != len(days)
+            or any(type(d) is not int or not 0 <= d <= 6 for d in days)
+            or match is None or int(match[1]) > 23 or int(match[2]) > 59):
+        raise FlowError("e32_resets_invalid", "resets")
+    reset = {"days": sorted(days), "time": time_text}
+    state, temperature = item.get("state"), item.get("temperature")
+    if state is not None:
+        if state not in RESET_STATES or temperature is not None:
+            raise FlowError("e32_resets_invalid", "resets")
+        reset["state"] = state
+        return reset
+    if type(temperature) not in (int, float) or type(temperature) is bool:
+        raise FlowError("e32_resets_invalid", "resets")
+    try:
+        centi_c = centi(temperature, unit)
+    except FlowError:
+        raise FlowError("e32_resets_invalid", "resets") from None
+    if unit == FAHRENHEIT:  # the E32 keeps half degrees, as the thermostat sets them
+        centi_c = int((Decimal(centi_c) / 50).to_integral_value(ROUND_HALF_UP)) * 50
+    elif centi_c % 50:
+        raise FlowError("e32_resets_invalid", "resets")
+    if not minimum <= centi_c <= maximum:
+        raise FlowError("e32_resets_outside_limits", "resets")
+    reset["temperature_c"] = centi_c / 100
+    return reset
+
+
+class RoomEditor(E32RoomFlow):
+    """The room rules of the form, without the form: the settings panel (settings_rooms.py) validates and writes a
+    room with the very methods the options step uses, for one installation and the plan Home Assistant read."""
+
+    def __init__(self, hass, entry, plan, language=None):
+        self.hass, self.config_entry, self._e32_plan = hass, entry, plan
+        self.context = {"language": language} if language else {}
+
+    def room_input(self, room):
+        """What the room form would send for this room left as shown (``room`` None: a new room); the panel lays
+        its own fields over it, so everything it does not show stays exactly as stored."""
+        d = self._e32_defaults(room)
+        user_input = {key: d[key] for key in ("name", "state", "emitter", "ha_sources", "ble_sources",
+                                              "bluetooth_first", "setpoint_entity", "fallback_temperature",
+                                              "program", "inactive_until")}
+        user_input["limits"] = {"minimum_temperature": d["minimum_temperature"],
+                                "maximum_temperature": d["maximum_temperature"]}
+        user_input["persons"] = {"away_temperature": d["away_temperature"]}
+        if self._e32_resets_supported():
+            user_input["resets"] = [shown_reset(r, self._unit()) for r in (room or {}).get("resets") or []
+                                    if type(r) is dict]
+        stored = (room or {}).get(SMART_WARM_UP_FIELD)
+        user_input[SMART_WARM_UP_FIELD] = stored if stored in ("on", "off") else "house"
+        return user_input
+
+
+def validate_room(hass, entry, plan, room, user_input, language=None):
+    """The room as plan fields, checked as the room form checks it (E32RoomFlow._e32_room_values: the name, the
+    state, the sources, the setting device, the temperatures, the program, the reset times, Off until); raises
+    FlowError for the first problem. ``room``: the stored room (None: a new one); ``user_input``: the form's fields."""
+    editor = RoomEditor(hass, entry, plan, language)
+    return editor._e32_room_values(user_input, room, editor._e32_ble_options(room))

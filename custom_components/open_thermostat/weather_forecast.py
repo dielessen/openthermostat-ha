@@ -49,8 +49,10 @@ def forecast_entity(options):
 
     The chosen one; none chosen: the outdoor temperature entity when it is a weather entity; FORECAST_OFF: off.
     """
+    from collections.abc import Mapping
     from .energy_input import CONF_OUTDOOR
-    options = options if isinstance(options, dict) else {}
+    # A config entry's options are a read-only mapping (MappingProxyType), not a dict (1.4: before, they read as none).
+    options = options if isinstance(options, Mapping) else {}
     chosen = options.get(CONF_FORECAST)
     if chosen == FORECAST_OFF:
         return None

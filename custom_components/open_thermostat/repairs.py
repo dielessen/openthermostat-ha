@@ -104,9 +104,6 @@ async def async_create_fix_flow(hass, issue_id, data):
     from .e32_access import DEFAULT_PASSWORD_ISSUE, ChooseE32PasswordRepairFlow
     if issue_id.startswith(DEFAULT_PASSWORD_ISSUE + "_"):  # the factory password: choose a new one here
         return ChooseE32PasswordRepairFlow(issue_id, data)
-    from .e32_setting_device import ROOM_PROGRAMS_ISSUE, RoomProgramsRepairFlow
-    if issue_id.startswith(ROOM_PROGRAMS_ISSUE + "_"):  # a week program and setting device per room
-        return RoomProgramsRepairFlow(issue_id, data)
     from .e32_reconfirm import RECONFIRM_ISSUE, ReconfirmTakeoverRepairFlow
     if issue_id.startswith(RECONFIRM_ISSUE + "_"):  # confirm the takeover again after a firmware update
         return ReconfirmTakeoverRepairFlow(issue_id, data)

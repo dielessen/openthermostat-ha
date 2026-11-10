@@ -42,6 +42,34 @@ def model_name(model_id, language):
     return item["name"] if type(item) is dict and type(item.get("name")) is str else model_id
 
 
+# -- shared by Configure and the settings panel (1.4, settings_heating.py) -----------------------------------------
+
+async def async_read_model(link):
+    """The catalog id the E32 shows now (GET /config/boiler-display); ControllerLinkError when it cannot be read
+    (``controller_response_invalid`` for an answer without a model)."""
+    from .controller_link import ControllerLinkError
+    from .e32_system import async_e32_call
+    answer = await async_e32_call(link, lambda c: c.async_boiler_display(), write=False)
+    current = answer.get("model") if type(answer) is dict else None
+    if type(current) is not str:
+        raise ControllerLinkError("controller_response_invalid")
+    return current
+
+
+async def async_save_model(hass, entry, link, chosen):
+    """Choose ``chosen`` on the E32 (POST); True once its answer is that choice, and then the boiler device in Home
+    Assistant is named after it (ems_devices MODEL_CHOSEN). ControllerLinkError when the E32 refuses or is away."""
+    from .e32_system import async_e32_call
+    stored = await async_e32_call(link, lambda c: c.async_boiler_display(chosen), write=True)
+    if type(stored) is not dict or stored.get("model") != chosen:
+        return False
+    from .ems_devices import MODEL_CHOSEN
+    rename = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get(MODEL_CHOSEN)
+    if rename is not None:
+        rename(chosen)
+    return True
+
+
 class BoilerModelSteps:
     """Mixin for the product options flow: Heating and boiler → Boiler model."""
 
@@ -53,7 +81,7 @@ class BoilerModelSteps:
         from homeassistant.helpers import selector
         import probatio as vol
         from .controller_link import ControllerLinkError
-        from .e32_system import ABORTS, async_e32_call, failure, link_for
+        from .e32_system import ABORTS, failure, link_for
         link = link_for(self.hass, self.config_entry)
         if link is None:
             return self.async_abort(reason="e32_rooms_unavailable")
@@ -65,13 +93,9 @@ class BoilerModelSteps:
         current = getattr(self, "_boiler_model", None)
         if current is None or user_input is None:
             try:
-                answer = await async_e32_call(link, lambda c: c.async_boiler_display(), write=False)
+                current = await async_read_model(link)
             except ControllerLinkError as err:
-                return self._system_abort(err)
-            current = answer.get("model") if type(answer) is dict else None
-            if type(current) is not str:
-                return self.async_abort(reason="e32_settings_unreachable",
-                                        description_placeholders={"error": "controller_response_invalid"})
+                return self._system_abort(err)  # an answer without a model: e32_settings_unreachable, as before
             self._boiler_model = current
         choices = options(current, lang)
         from .boiler_capabilities import current as recognition, recognised_line
@@ -87,7 +111,7 @@ class BoilerModelSteps:
                 return self.async_abort(reason="e32_settings_unchanged")
             else:
                 try:
-                    stored = await async_e32_call(link, lambda c: c.async_boiler_display(chosen), write=True)
+                    confirmed = await async_save_model(self.hass, self.config_entry, link, chosen)
                 except ControllerLinkError as err:
                     key, values = failure(err)
                     if key in ABORTS:
@@ -95,12 +119,8 @@ class BoilerModelSteps:
                     errors["base"], placeholders = key, {**placeholders, **values}
                 else:
                     self._boiler_model = None
-                    if type(stored) is not dict or stored.get("model") != chosen:
+                    if not confirmed:
                         return self.async_abort(reason="e32_settings_unconfirmed")
-                    from .ems_devices import MODEL_CHOSEN
-                    rename = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id, {}).get(MODEL_CHOSEN)
-                    if rename is not None:
-                        rename(chosen)
                     return self.async_abort(reason="boiler_model_saved",
                                             description_placeholders={"model": model_name(chosen, lang)})
         return self.async_show_form(step_id="boiler_model", errors=errors, description_placeholders=placeholders,

@@ -11,7 +11,12 @@
    ``program`` attribute (room_overview.program_step): "Comfort until 22:30, then Night 18.0 °C"; nothing while the
    attribute is absent or has no next step (the program does not set the room's target, or nothing changes).
    HA 1.0.1: an open window or door in the chip's tooltip by its kind when the E32 names it (E32 1.0.1, the Reason
-   sensor's ``opening``: "Door open, pausing soon"); "Window or door open" with E32 1.0.0. */
+   sensor's ``opening``: "Door open, pausing soon"); "Window or door open" with E32 1.0.0.
+   HA 1.4: with ``settings_path`` in its config (the OpenThermostat dashboard adds it, with ``room_id``) a text button
+   "Settings" at the bottom right opens this room in the dashboard's settings view (<settings_path>#room/<id>);
+   the rest of the card still opens the Reason sensor's history.
+   HA 1.4: the room's next reset time, from the room thermostat on the Reason sensor's device (its next_reset and
+   next_reset_value): "Resets at 22:00 to 14 °C", "At 23:00 to Heat along only"; nothing without one. */
 const KEY = 'component.open_thermostat.entity.sensor.room_reason.state_attributes.';
 // The tone of each reason: the colour of the disc and of the word chip.
 const TONE = {warm_up: 'heat', heating: 'heat', wants_heat: 'heat', boost: 'heat', away_return: 'heat', window_open: 'warn', window_pending: 'warn',
@@ -23,7 +28,7 @@ const CHIP = {off: 'Off', window_open: 'Paused', window_pending: 'Pausing soon',
  house_away: 'Away', boost: 'Boost', temporary: 'Temporary', follow: 'Heats along', heating: 'Heating', wants_heat: 'Wants heat', warm_enough: 'At temperature'};
 // The card's other words (state_attributes.card): the same, for the chips beside the reason's word.
 const WORDS = {smart_on: 'Smart warm-up on', home: 'At home', away: 'Away', holiday: 'Holiday', window_open: 'Window open',
- door_open: 'Door open', window_pending: 'Window open, pausing soon', door_pending: 'Door open, pausing soon'};
+ door_open: 'Door open', window_pending: 'Window open, pausing soon', door_pending: 'Door open, pausing soon', settings: 'Settings'};
 // The week program's step (state_attributes.program): the English last resort, key for key as strings.json.
 const PROGRAM = {comfort: 'Comfort', eco: 'Eco', night: 'Night', holiday: 'Holiday', step: '{level} until {time}, then {next}'};
 // Who is home for this room (room_overview.room_presence): the house chip's word while the house mode is automatic.
@@ -32,6 +37,10 @@ const MODES = new Set(['home', 'away', 'holiday']);  // the house mode select's 
 // E32 1.0.1 names the kind that pauses the room (the Reason sensor's opening attribute); 1.0.0 does not.
 const OPENINGS = new Set(['window', 'door']);
 const FALLBACK = {temperature: 'Now', setpoint: 'Target', valve_position: 'Radiator valves open'};
+// The next reset time's line: [a temperature, a state, On, Heat along only, Off], as the room's settings say them.
+const RESET = {en: ['Resets at {time} to {value}', 'At {time} to {value}', 'On', 'Heat along only', 'Off'],
+ nl: ['Om {time} terug naar {value}', 'Om {time} naar {value}', 'Aan', 'Alleen meeverwarmen', 'Uit'],
+ pl: ['Godzina powrotu {time}: {value}', 'Godzina powrotu {time}: {value}', 'Włączone', 'Grzeje tylko razem z innymi', 'Wyłączone']};
 const STYLE = `:host{display:block}ha-card{display:block;padding:14px 16px;color:var(--primary-text-color);cursor:pointer;
 --heat:var(--state-climate-heat-color,#ff8100);--warn:var(--warning-color,#ffa600);--error:var(--error-color,#db4437);--ok:var(--success-color,#43a047);
 --info:var(--info-color,#039be5);--away:var(--state-climate-cool-color,#2b9af9);--off:var(--disabled-text-color,#9e9e9e);
@@ -44,7 +53,7 @@ background:var(--secondary-background-color);background:color-mix(in srgb,var(--
 .disc ha-icon{display:flex}
 .text{flex:1 1 auto;min-width:0}
 .name{font-size:16px;font-weight:500;line-height:1.3;overflow-wrap:anywhere}
-.why,.missing{margin-top:2px;font-size:13px;line-height:1.35;color:var(--secondary-text-color);overflow-wrap:anywhere}
+.why,.reset,.missing{margin-top:2px;font-size:13px;line-height:1.35;color:var(--secondary-text-color);overflow-wrap:anywhere}
 .now{flex:none;font-size:26px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
 .now small{font-size:14px;font-weight:400;color:var(--secondary-text-color);margin-left:1px}
 .now.none{color:var(--secondary-text-color);font-weight:400}
@@ -54,6 +63,9 @@ background:var(--secondary-background-color);background:color-mix(in srgb,var(--
 color:var(--primary-text-color);color:color-mix(in srgb,var(--tone) 45%,var(--primary-text-color));--mdc-icon-size:16px}
 .chip ha-icon{display:flex}
 .chip.smart{--tone:var(--info)}.chip.problem{--tone:var(--warn)}
+.settings{margin-left:auto;align-self:center;font:inherit;font-size:13px;font-weight:500;min-height:32px;padding:4px 10px;border:0;border-radius:16px;
+background:none;cursor:pointer;color:var(--primary-text-color);color:color-mix(in srgb,var(--primary-color,#03a9f4) 60%,var(--primary-text-color))}
+.settings:hover{background:color-mix(in srgb,var(--primary-color,#03a9f4) 10%,transparent)}.settings:focus-visible{outline:3px solid var(--primary-color);outline-offset:1px}
 ${Object.keys({heat: 0, warn: 0, error: 0, info: 0, away: 0, ok: 0, off: 0}).map(t => `.tone-${t} .disc,.tone-${t} .chip.state{--tone:var(--${t})}`).join('')}
 @media(max-width:380px){ha-card{padding:12px}.now{font-size:24px}}`;
 
@@ -128,11 +140,28 @@ class OpenThermostatRoomStatus extends HTMLElement {
   // Only a new state of its own entities, language or theme redraws; Home Assistant sets hass on every change in the house.
   const config = this._config || {}, states = hass?.states || {};
   const key = [states[config.entity], states[config.smart], states[config.mode], locale(hass), hass?.themes?.darkMode,
-   hass?.locale?.time_format];
+   hass?.locale?.time_format, states[this.climate()]];
   if (this._key && key.every((v, i) => v === this._key[i])) return;
   this._key = key; this.render();
  }
  getCardSize() { return 3; }
+ // The room thermostat: the climate entity on the Reason sensor's device (looked up again when the registry changes).
+ climate() {
+  const all = this._hass?.entities;
+  if (this._found?.[0] !== all) {
+   const device = all?.[this._config?.entity]?.device_id;
+   this._found = [all, device && Object.values(all).find(e => e.device_id === device && e.entity_id.startsWith('climate.'))?.entity_id];
+  }
+  return this._found[1];
+ }
+ // "Resets at 22:00 to 14 °C" / "At 23:00 to Heat along only"; '' without a next reset time. The time as the step's.
+ reset() {
+  const hass = this._hass, a = hass?.states?.[this.climate()]?.attributes || {}, v = a.next_reset_value;
+  const t = RESET[/^(nl|pl)\b/.exec(locale(hass))?.[1] || 'en'], state = ['active', 'follow', 'inactive'].indexOf(v);
+  const time = moment(hass, a.next_reset).replace(/\s/g, ' '), degree = degrees(hass, typeof v === 'string' ? Number(v) || null : v);
+  if (!time || (state < 0 && degree === null)) return '';
+  return together(t[state < 0 ? 0 : 1].replace('{time}', time).replace('{value}', state < 0 ? degree + ' °C' : t[state + 2]));
+ }
  getGridOptions() { return {columns: 12, min_columns: 6}; }
  _text(key, values) {
   try { const text = this._hass?.localize?.(KEY + key, values); return typeof text === 'string' ? text : ''; } catch (e) { return ''; }
@@ -216,6 +245,8 @@ class OpenThermostatRoomStatus extends HTMLElement {
   const why = el('p', this.sentence(st), {class: 'why', 'data-reason': st.state}), step = this.step(st);
   if (step) why.append(el('span', ' · '), el('span', step, {class: 'step', 'data-step': ''}));
   text.append(why);
+  const reset = this.reset();
+  if (reset) text.append(el('p', reset, {class: 'reset', 'data-reset': ''}));
   // Now, large; for a screen reader with its label and the target ("Now 20.6 °C, Target 22.5 °C").
   const now = degrees(hass, a.temperature, true), target = st.state === 'off' ? null : degrees(hass, a.setpoint);
   const spoken = [now && `${label('temperature')} ${now} °C`, target && `${label('setpoint')} ${target} °C`].filter(Boolean).join(', ');
@@ -233,7 +264,9 @@ class OpenThermostatRoomStatus extends HTMLElement {
   const opened = a.window === 'open' || a.window === 'pending'
    ? (typeof a.values?.contact === 'string' && a.values.contact ? a.values.contact + ': ' : '') + this.opened(a) : '';
   chip('state', word, opened ? {title: opened, 'data-window': a.window, ...(OPENINGS.has(a.opening) ? {'data-opening': a.opening} : {})} : {});
-  if (st.state !== 'off' && config.smart && hass.states?.[config.smart]?.state === 'on') chip('smart', this._text('card.state.smart_on') || WORDS.smart_on);
+  // E32 1.4 (#8): the room's own Smart warm-up in effect (the Reason sensor's smart_warm_up), else the house switch.
+  const smart = a.smart_warm_up === 'on' || a.smart_warm_up === 'off' ? a.smart_warm_up === 'on' : !!config.smart && hass.states?.[config.smart]?.state === 'on';
+  if (st.state !== 'off' && smart) chip('smart', this._text('card.state.smart_on') || WORDS.smart_on);
   const house = this.house(st);
   if (house && house !== word) {  // never "Away" twice: an away room says it in its own word already
    const presence = PRESENCE[a.presence] ? this._text('presence.state.' + a.presence) || a.presence : '';
@@ -242,6 +275,18 @@ class OpenThermostatRoomStatus extends HTMLElement {
   if (typeof a.valve_position === 'number' && Number.isFinite(a.valve_position)) {
    const valves = chip('valves' + (a.valve_problem ? ' problem' : ''), together(label('valve_position') + ': ' + Math.round(a.valve_position) + ' %'), {'data-valves': ''});
    valves.prepend(icon(a.valve_problem ? 'mdi:valve-closed' : 'mdi:valve'));
+  }
+  // 1.4: "Settings" opens this room in the settings view (Home Assistant's navigation: the path and location-changed).
+  const room = typeof config.room_id === 'string' && config.room_id ? config.room_id : a.room_id;
+  if (typeof config.settings_path === 'string' && config.settings_path && typeof room === 'string' && room) {
+   const go = el('button', this._text('card.state.settings') || WORDS.settings, {type: 'button', class: 'settings', 'data-settings': ''});
+   go.addEventListener('click', e => {
+    e.stopPropagation();
+    try { history.pushState(null, '', config.settings_path + '#room/' + encodeURIComponent(room)); } catch (err) { return; }
+    window.dispatchEvent(new CustomEvent('location-changed', {detail: {replace: false}}));
+   });
+   go.addEventListener('keydown', e => e.stopPropagation());  // Enter and Space press this button, not the card
+   chips.append(go);
   }
   card.append(chips);
  }

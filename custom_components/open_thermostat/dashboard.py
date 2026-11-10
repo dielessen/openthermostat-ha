@@ -42,10 +42,13 @@ planner and, per room, the room status card (frontend/room-status-card.js):
   who controls the boiler (short cycling as information, the takeover check).
   On a wide screen the sketch's two columns: the curve with what stood out and
   the free heat under it beside your boiler, yesterday and the settings;
-* Diagnostics (last): the connection with the E32 in plain words (is it heard, do
+* Diagnostics: the connection with the E32 in plain words (is it heard, do
   the room values reach it, the MQTT broker, the firmware), the E32 itself, the
   thermostat on the boiler bus, the energy and hot water counters, the raw boiler data and the hot water capability,
   and the older Home Assistant rooms' heat model and history while such rooms are left;
+* Settings (last, 1.4; an E32 installation): one panel card, the settings app (custom:openthermostat-settings,
+  settings.py): every section with what is set now, and the editor of each section; each room status card's
+  "Settings" button opens its room there;
 * Comparison (subview, trial run with a thermostat on the bus only).
 
 Layout: every view is sections; a section hides as a whole while nothing in it
@@ -195,7 +198,7 @@ ICON_COLOURS = {"heating": "#ff6f22", "insight": "#039be5", "free_heat": "#ffc10
                 "learning": "#039be5"}
 TEXT = {
     "en": {
-        "heating": "Heating", "boiler_view": "Boiler", "diagnostics": "Diagnostics",
+        "heating": "Heating", "boiler_view": "Boiler", "diagnostics": "Diagnostics", "settings_view": "Settings",
         "room_settings": "Room settings", "now": "Now", "rooms": "Rooms", "set_up_rooms": "Set up rooms", "week_program": "Week program",
         "settings": "{room} settings",
         "boiler_request": "Boiler request", "flow": "Water to heating", "return": "Water back",
@@ -366,6 +369,9 @@ TEXT = {
         "e32": "E32", "thermostat": "Thermostat",
         "comparison_view": "Comparison",
         "room_off": "This room is off: only frost protection keeps it from getting too cold.",
+        # 1.4 (issue #9): an Off room's measured temperature and its source in one line ("Off · 17.2 °C (Bluetooth
+        # sensor)"); a Home Assistant source by its name.
+        "room_off_now": "Off", "bluetooth_sensor": "Bluetooth sensor",
         "room_no_source": "{room} is off and has no working temperature source. Choose a source to "
             "use it again, or remove the room if you no longer need it.",
         "choose_source": "Choose a source",
@@ -455,6 +461,7 @@ TEXT = {
         "scoreboard_short_none": "Short burner runs: none",
         "figures_day": "These figures are from {date}: the E32 has no newer full day.",
         "holiday_hint": "To plan a holiday: Configure → House → House mode and holiday.",
+        "holiday_hint_settings": "To plan a holiday: Settings → House → House mode and holiday.",
         "dur_h_m": "{h} h {m} min",
         "dur_h": "{h} h",
         "warm_up_now_estimate": "{room} is warming up now (estimate) to be {target} °C at **{time}**.",
@@ -481,7 +488,7 @@ TEXT = {
         "line_gives": "the line gives {base} °C",
     },
     "nl": {
-        "heating": "Verwarming", "boiler_view": "Ketel", "diagnostics": "Diagnose",
+        "heating": "Verwarming", "boiler_view": "Ketel", "diagnostics": "Diagnose", "settings_view": "Instellen",
         "room_settings": "Ruimte-instellingen", "now": "Nu", "rooms": "Ruimtes", "set_up_rooms": "Ruimtes instellen", "week_program": "Weekprogramma",
         "settings": "Instellingen {room}",
         "boiler_request": "Ketelvraag", "flow": "Water naar verwarming", "return": "Water terug",
@@ -651,6 +658,7 @@ TEXT = {
         "e32": "E32", "thermostat": "Thermostaat",
         "comparison_view": "Vergelijking",
         "room_off": "Deze ruimte staat uit: alleen de vorstbeveiliging houdt hem warm genoeg.",
+        "room_off_now": "Uit", "bluetooth_sensor": "Bluetooth-sensor",
         "room_no_source": "{room} staat uit en heeft geen werkende temperatuurbron. Kies een bron "
             "om de ruimte weer te gebruiken, of verwijder hem als je hem niet meer nodig hebt.",
         "choose_source": "Kies een bron",
@@ -736,6 +744,7 @@ TEXT = {
         "scoreboard_short_none": "Korte brandtijden: geen",
         "figures_day": "Deze cijfers zijn van {date}: de E32 heeft geen nieuwere volledige dag.",
         "holiday_hint": "Vakantie plannen: Configureren → Huis → Huismodus en vakantie.",
+        "holiday_hint_settings": "Vakantie plannen: Instellen → Huis → Huismodus en vakantie.",
         "dur_h_m": "{h} u {m} min",
         "dur_h": "{h} u",
         "warm_up_now_estimate": "{room} warmt nu op (schatting), zodat het om **{time}** {target} °C is.",
@@ -763,7 +772,7 @@ TEXT = {
     },
     # Polish: the terms of translations/pl.json and docs/UX-GLOSSARY.md; E32 page names stay English.
     "pl": {
-        "heating": "Ogrzewanie", "boiler_view": "Kocioł", "diagnostics": "Diagnostyka",
+        "heating": "Ogrzewanie", "boiler_view": "Kocioł", "diagnostics": "Diagnostyka", "settings_view": "Ustawienia",
         "room_settings": "Ustawienia pomieszczeń", "now": "Teraz", "rooms": "Pomieszczenia",
         "set_up_rooms": "Skonfiguruj pomieszczenia", "week_program": "Program tygodniowy",
         "settings": "Ustawienia: {room}",
@@ -934,6 +943,7 @@ TEXT = {
         "e32": "E32", "thermostat": "Termostat",
         "comparison_view": "Porównanie",
         "room_off": "To pomieszczenie jest wyłączone: chroni je tylko ochrona przed mrozem.",
+        "room_off_now": "Wyłączone", "bluetooth_sensor": "czujnik Bluetooth",
         "room_no_source": "Pomieszczenie {room} jest wyłączone i nie ma działającego źródła temperatury. Wybierz "
             "źródło, aby znów z niego korzystać, albo usuń pomieszczenie, jeśli nie jest już potrzebne.",
         "choose_source": "Wybierz źródło",
@@ -1023,6 +1033,7 @@ TEXT = {
         "scoreboard_short_none": "Krótkie cykle palnika: brak",
         "figures_day": "Te dane są z dnia {date}: E32 nie ma nowszego pełnego dnia.",
         "holiday_hint": "Aby zaplanować urlop: Konfiguruj → Dom → Tryb domu i urlop.",
+        "holiday_hint_settings": "Aby zaplanować urlop: Ustawienia → Dom → Tryb domu i urlop.",
         "dur_h_m": "{h} godz. {m} min",
         "dur_h": "{h} godz.",
         "warm_up_now_estimate": "{room}: nagrzewanie trwa (szacunek), aby o **{time}** było {target} °C.",
@@ -1131,6 +1142,20 @@ def _link(text, icon, path, visibility=None):
     card = _heading(text, icon, style="subtitle", visibility=visibility)
     card["tap_action"] = {"action": "navigate", "navigation_path": path}
     return card
+
+
+def _off_temperature(t, entity_id, visibility):
+    """1.4 (issue #9): an Off room's measured temperature with its source, one line ("Off · 17.2 °C (Bluetooth
+    sensor)"), from the room's temperature sensor and its ``source`` attribute: a Home Assistant entity by its name,
+    else the E32's Bluetooth sensor. Shown only while the sensor has a value (firmware before 1.4 reports none)."""
+    quoted = json.dumps(entity_id)
+    value = "('%.1f' | format(states(" + quoted + ") | float(0))) | replace('.', " + json.dumps(t["decimal"]) + ")"
+    content = ("{% set s = state_attr(" + quoted + ", 'source') %}"
+               "{% set n = state_attr(s, 'friendly_name') if s and '.' in s else none %}"
+               "**" + t["room_off_now"] + "** · {{ " + value + " }} "
+               "{{ state_attr(" + quoted + ", 'unit_of_measurement') or '°C' }}"
+               "{% if n %} ({{ n }}){% elif s %} (" + t["bluetooth_sensor"] + "){% endif %}")
+    return {"type": "markdown", "content": content, "visibility": visibility + _known(entity_id)}
 
 
 def _known(entity_id, also=()):
@@ -2189,9 +2214,9 @@ def _today_section(t, rooms, curve=None, smart=None, request=None):
 
 def _house_rows(t, select, outdoor, planner):
     """House (rc.5, the owner's sketch) in rows: "Home or away" with the house mode (a tap opens it, to switch), "Holiday"
-    with "Plan", which leads to the holiday planner (Configure → House → House mode and holiday, on the integration's
-    page: ``planner``), and "Outside" with the outdoor temperature (a sensor, or a weather entity's own row). Each row
-    shows while its entity has a value, the card while one of them does; None without both."""
+    with "Plan", which leads to the holiday planner (``planner``: the Settings tab's House mode and holiday, 1.4; else
+    Configure, the integration's page), and "Outside" with the outdoor temperature (a sensor, or a weather entity's
+    own row). Each row shows while its entity has a value, the card while one of them does; None without both."""
     rows = []
     if select:
         rows += [{"type": "conditional", "conditions": _known(select), "row": {
@@ -2329,6 +2354,8 @@ class RoomDashboard:
         self.prefix = prefix
         self.entry_id = entry_id
         self.path = f"open-thermostat-{slugify(prefix, separator='-')}-{entry_id[:8].lower()}"
+        # The settings view (1.4): the room status cards' "Settings" button opens <settings_path>#room/<id>.
+        self.settings_path = f"/{self.path}/settings"
         self._rooms: set[str] = set()
         self._store: LovelaceStorage | None = None
         self._unsubscribe = []
@@ -2682,6 +2709,7 @@ class RoomDashboard:
                     "dense_section_placement": True, "sections": sections, **more}
         back = "/" + self.path + "/heating"
         comparison = parts["comparison"]
+        from .settings import CARD_TYPE as SETTINGS_CARD_TYPE, VIEW_PATH as SETTINGS_PATH
         return {
             "views": [
                 # 1. Overview (rc.5, the owner's sketch): the house card across the whole width, under it Rooms,
@@ -2709,8 +2737,12 @@ class RoomDashboard:
                 view(t["boiler_view"], "boiler", boiler),
                 # 5. What it learned, Smart warm-up, weather compensation, short cycling and the takeover check.
                 *([view(t["learning_view"], LEARNED_PATH, parts["learning"])] if parts["learning"] else []),
-                # 6. Diagnostics last.
+                # 6. Diagnostics.
                 view(t["diagnostics"], "diagnostics", diagnostics),
+                # 7. Settings (1.4, HA-INSTELPANEEL-ONTWERP.nl.md): one panel card, the settings app (settings.py).
+                *([{"title": t["settings_view"], "path": SETTINGS_PATH, "panel": True,
+                    "cards": [{"type": SETTINGS_CARD_TYPE, "entry_id": self.entry_id,
+                               "settings_path": self.settings_path}]}] if product else []),
                 # Trial run only: reached from the "E32 compared with your thermostat" link and the
                 # "Ready to take over?" tile in the learning view.
                 *([view(t["comparison_view"], COMPARISON_PATH, comparison, subview=True,
@@ -2822,9 +2854,11 @@ class RoomDashboard:
             room = e32_room_entities[room_id]
             if room.get("reason"):
                 # rc.5 (P18): its chips "Smart warm-up on" (the switch) and at home, away or on holiday (the house mode).
+                # 1.4: the card's "Settings" button opens this room in the settings view.
                 room_cards.append({"type": ROOM_STATUS_CARD_TYPE, "entity": room["reason"], "name": names[room_id],
                                    **{key: value for key, value in (("smart", flow.get("apply_learned")),
-                                                                    ("mode", house_mode)) if value}})
+                                                                    ("mode", house_mode)) if value},
+                                   "room_id": room_id, "settings_path": self.settings_path})
             else:  # a registry without the Reason sensor (older integration): the temperature at least
                 room_cards.append(_wide(_tile(room.get("temperature") or room.get("setpoint"), names[room_id],
                                               "mdi:home-thermometer-outline")))
@@ -2845,9 +2879,12 @@ class RoomDashboard:
                 or (used == "boiler" and boiler_outdoor)):
             outdoor = boiler_outdoor
         house = _section(_heading(t["house"], ICONS["house"]),  # one icon per concept (dashboard-spec §1)
-                         _house_rows(t, house_mode, outdoor, "/config/integrations/integration/" + DOMAIN),
+                         _house_rows(t, house_mode, outdoor, self._settings_link(e32_rooms, "house/mode")),
                          _holiday_card(t, house_mode),
-                         _note(t, t["holiday_hint"], _known(house_mode)) if house_mode else None)
+                         # 1.4: on the E32 room plan Configure is short; the hint names the Settings tab, as the
+                         # Plan link does (_settings_link).
+                         _note(t, t["holiday_hint_settings" if e32_rooms else "holiday_hint"], _known(house_mode))
+                         if house_mode else None)
         house = _shown_while_one_is(house, house["cards"][1:])
         rooms_section = _section(_heading(t["rooms"], "mdi:thermostat"), *room_cards) if any(room_cards) else None
         if rooms_section is not None and today and house:
@@ -2860,7 +2897,7 @@ class RoomDashboard:
         # -- Rooms ---------------------------------------------------------------------------------
         learned_overview = hub.get("learned_overview")
         rooms = [self._room_section(t, room_id, room, heating_hub, names[room_id], ble, in_room, entry, learned_overview,
-                                    (room_contacts, room_persons), flow.get("apply_learned"))
+                                    (room_contacts, room_persons), flow.get("apply_learned"), to_settings=e32_rooms)
                  for room_id, room in e32_room_entities.items()]
         # Older HA rooms (one climate per MQTT room) and their settings.
         legacy_cards = []
@@ -2909,7 +2946,7 @@ class RoomDashboard:
             learning.append(yesterday)
         learning += [section for section in (
             _noticed_section(t, learned_overview), _free_heat_section(t, learned_overview),
-            _settings_section(t, flow, "/config/integrations/integration/" + DOMAIN if e32_rooms else None,
+            _settings_section(t, flow, self._settings_link(e32_rooms, "rooms") if e32_rooms else None,
                               "/" + self.path + "/week-program" if e32_rooms else None)) if section]
         # The sketch's two columns on a wide screen, within the sections view's own placement (in this order, dense,
         # a row as tall as its tallest section): yesterday spans two rows, so the curve and what stood out under it
@@ -3035,12 +3072,21 @@ class RoomDashboard:
         return self._device_name((DOMAIN, f"{self.prefix}_e32_room_{room_id}"),
                                  label(reported) if reported else room_id)
 
-    def _room_section(self, t, room_id, room, heating_hub, name, ble, in_room, entry, learned, comfort, smart=None):
+    def _settings_link(self, e32_rooms, route):
+        """Where a dashboard link to a setting leads: the Settings tab's own screen (1.4, settings.py; ``route`` after
+        the #) for an installation on the E32 room plan, where Configure is short (product_flow.settings_page); else
+        Configure itself (the integration's page)."""
+        if e32_rooms:
+            return f"{self.settings_path}#{route}"
+        return "/config/integrations/integration/" + DOMAIN
+
+    def _room_section(self, t, room_id, room, heating_hub, name, ble, in_room, entry, learned, comfort, smart=None,
+                      to_settings=False):
         """One E32 room: its thermostat, the last 24 hours, its sensors, windows and people, and what it learned.
 
         Every card is as wide as the section, or a tidy pair of tiles that appear together. An inactive room
-        stays compact; without any working source, a hint with "Choose a source" first and "Remove room" second
-        (both in Home Assistant's own pages).
+        stays compact; without any working source, a hint with "Choose a source" first (Repairs when it has an item
+        for it) and "Remove room" second (both else the room's screen on the Settings tab).
         """
         room_contacts, room_persons = comfort
         state = room.get("state")
@@ -3099,6 +3145,9 @@ class RoomDashboard:
             _heading(name, "mdi:home-thermometer-outline", badges),
             # An inactive room stays compact: its heading says "Off"; no dial, so no way to switch it on here.
             {"type": "thermostat", "entity": thermostat, **when_active} if thermostat else None,
+            # ... but it says how warm it is and where that comes from (1.4, issue #9).
+            _off_temperature(t, room["temperature"], inactive)
+            if inactive and room.get("temperature") else None,
             # The E32's own measurement where the dial does not show it, the target without a dial and how far its
             # radiator valves are open: pairs, an odd one across.
             *_tiles(_tile(room.get("temperature"), t["measured"], visibility=active) if measured else None,
@@ -3118,10 +3167,10 @@ class RoomDashboard:
         if inactive and working:
             cards += [{"type": "markdown", "content": t["room_off"], "visibility": inactive},
                       _link(t["settings"].format(room=name), "mdi:cog",
-                            "/config/integrations/integration/" + DOMAIN, inactive)]
+                            self._settings_link(to_settings, f"room/{room_id}"), inactive)]
         elif inactive:
             from homeassistant.helpers import issue_registry as ir
-            integration = "/config/integrations/integration/" + DOMAIN
+            integration = self._settings_link(to_settings, f"room/{room_id}")  # its sources and Remove room
             repair = ir.async_get(self.hass).async_get_issue(DOMAIN, f"e32_room_choose_source_{self.entry_id}_{room_id}")
             cards += [
                 _note(t, t["room_no_source"].format(room=name), inactive),

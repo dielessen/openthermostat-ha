@@ -82,8 +82,15 @@ def _small(value):
     return type(value) in (bool, int, float) or value is None or (type(value) is str and len(value) <= 64)
 
 
+def _room_summary(key, value):
+    if key == "resets" and type(value) is list:
+        return value  # E32 1.4: at most four small records (days, time, a temperature or a state), in full
+    return value if _small(value) else len(value) if isinstance(value, (list, dict)) else None
+
+
 def plan_summary(hub):
-    """The room plan without schedules or sources: scalars, counts, and per room its scalars and counts."""
+    """The room plan without schedules or sources: scalars, counts, and per room its scalars and counts (its reset
+    times in full)."""
     link = getattr(hub, "plan", None) if hub is not None else None
     if link is None:
         return {"connected": False}
@@ -97,8 +104,7 @@ def plan_summary(hub):
         result[key] = value if _small(value) else {"count": len(value)} if isinstance(value, (list, dict)) else None
     rooms = []
     for room in plan.get("rooms") or []:
-        rooms.append({key: value if _small(value) else len(value) if isinstance(value, (list, dict)) else None
-                      for key, value in room.items()})
+        rooms.append({key: _room_summary(key, value) for key, value in room.items()})
     result["rooms"] = rooms
     return result
 

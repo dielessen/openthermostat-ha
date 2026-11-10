@@ -42,3 +42,25 @@ def forget_entry(hass, entry_id):
     store = hass.data.get(SHARED, {}).get(_KEY, {})
     for key in [k for k in store if k[0] == entry_id]:
         del store[key]
+
+
+# Repairs items earlier versions raised that are no Repairs items any more (1.4): a Repairs item names something that
+# is broken or needs a decision now, never a design fact, an advice or an "it changed" notice. A room with one
+# temperature source is explained in the room form, a restored room group is only logged and the "renewed" notes
+# are only in the diagnostics.
+RETIRED = ("valve_single_source", "room_group_restored", "legacy_metrics_history", "metrics_definition_v2",
+           "room_model_v2",
+    "room_programs",  # 1.4 (#7): a room without a program is a choice, not a fault
+)
+
+
+def retired_issue(issue_id, entry_id):
+    """True for a retired key's issue id of this entry: ``<key>_<entry>`` or ``<key>_<entry>_<item>``."""
+    return any(issue_id == f"{key}_{entry_id}" or issue_id.startswith(f"{key}_{entry_id}_") for key in RETIRED)
+
+
+def remove_retired_issues(hass, entry_id):
+    """At every setup of the entry: remove the retired items an older version left in the issue registry."""
+    for domain, issue_id in list(ir.async_get(hass).issues):
+        if domain == DOMAIN and retired_issue(issue_id, entry_id):
+            ir.async_delete_issue(hass, DOMAIN, issue_id)

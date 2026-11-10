@@ -101,6 +101,28 @@ def change_for(key, automatic, stored, settings):
     return None if tuning[key] == stored else {"tuning": {key: stored}}
 
 
+def changes_for(settings, wanted):
+    """One partial POST for several knobs at once (the settings panel, 1.4), or None when nothing would change.
+
+    ``wanted``: {knob: (automatic, stored value)} as change_for takes them one by one; the result is what the E32 does
+    with each of those changes in turn: "tuning" holds every new value, "tuning_manual" (only when an automatic knob
+    changes) the exact list of the knobs set by you afterwards. A knob not in ``wanted`` keeps what it has.
+    """
+    tuning, manual = settings["tuning"], list(settings.get("tuning_manual") or [])
+    values, mine = {}, set(manual)
+    for key, (automatic, stored) in wanted.items():
+        change = change_for(key, automatic, stored, {"tuning": tuning, "tuning_manual": manual})
+        if change is None:
+            continue
+        values.update(change.get("tuning") or {})
+        if KNOBS[key][0]:
+            mine.discard(key) if automatic else mine.add(key)
+    change = {"tuning": values} if values else {}
+    if mine != set(manual) or any(KNOBS[k][0] for k in values):  # as change_for: a value of yours stays yours
+        change["tuning_manual"] = [k for k in AUTOMATIC if k in mine]
+    return change or None
+
+
 def range_text(key, lang):
     from .learned_overview import number
     _auto, _default, low, high, _step, unit, _scale, decimals = KNOBS[key]

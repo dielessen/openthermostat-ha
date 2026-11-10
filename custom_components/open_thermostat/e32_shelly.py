@@ -760,6 +760,27 @@ def circuits_offered(hass, entry):
             and any(pump_of(c) is not None for c in hub.circuits.values()))
 
 
+def pump_changes(current, control, max_supply_c, run_on_max_minutes):
+    """(changes, errors, wanted) of a circuit pump's settings as asked (Configure's form and the settings panel, 1.4).
+
+    ``current``: pump_settings(); the two numbers whole (a whole float counts) within their limits, else the error
+    whole_number_invalid on that field; ``control`` a bool, else heating_circuit_failed on the whole form. ``changes``
+    holds only what differs from ``current``.
+    """
+    wanted, errors = {"control": control}, {}
+    for key, value, (low, high, _) in (("max_supply_c", max_supply_c, MAX_SUPPLY_C),
+                                       ("run_on_max_minutes", run_on_max_minutes, RUN_ON_MAX_MINUTES)):
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)
+        if type(value) is not int or not low <= value <= high:
+            errors[key] = "whole_number_invalid"
+        wanted[key] = value
+    if type(control) is not bool:
+        errors["base"] = "heating_circuit_failed"
+    changes = {} if errors else {key: value for key, value in wanted.items() if value != current[key]}
+    return changes, errors, wanted
+
+
 class CircuitOptionsSteps:
     """The options flow's heating circuits: per circuit with a pump, "Pump control by the E32", the highest water
     temperature to the floor and the run-on while the water is warm (at most, in minutes)."""
@@ -800,18 +821,10 @@ class CircuitOptionsSteps:
         errors = {}
         shown = dict(current)
         if user_input is not None:
-            wanted = {"control": user_input.get("pump_control")}
-            for key, (low, high, _) in (("max_supply_c", MAX_SUPPLY_C), ("run_on_max_minutes", RUN_ON_MAX_MINUTES)):
-                value = user_input.get(key, current[key])
-                if isinstance(value, float) and value.is_integer():
-                    value = int(value)
-                if type(value) is not int or not low <= value <= high:
-                    errors[key] = "whole_number_invalid"
-                wanted[key] = value
-            if type(wanted["control"]) is not bool:
-                errors["base"] = "heating_circuit_failed"
+            changes, errors, wanted = pump_changes(current, user_input.get("pump_control"),  # 1.4: shared with the panel
+                                                   user_input.get("max_supply_c", current["max_supply_c"]),
+                                                   user_input.get("run_on_max_minutes", current["run_on_max_minutes"]))
             if not errors:
-                changes = {key: value for key, value in wanted.items() if value != current[key]}
                 if not changes:
                     return self.async_abort(reason="e32_room_unchanged")
                 try:

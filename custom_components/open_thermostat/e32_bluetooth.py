@@ -57,6 +57,33 @@ def same_sensors(old, new):
     return new is not None and key(old) == key(new)
 
 
+async def async_read_sensors(link):
+    """The paired sensors as the E32 holds them (GET /config/bluetooth), ControllerLinkError("controller_response_invalid")
+    for an answer this version cannot read."""
+    from .controller_link import ControllerLinkError
+    value, _tag = await link.async_call(lambda c: c.async_bluetooth(), write=False)
+    sensors = decode_sensors(value)
+    if sensors is None:
+        raise ControllerLinkError("controller_response_invalid")
+    return sensors
+
+
+async def async_save_sensors(link, sensors, names, forget):
+    """Rename and forget in one save (Configure and the settings panel, 1.4): read the list again in the same sign-in
+    (its ETag), check that it still holds ``sensors`` (else ControllerLinkError controller_settings_changed: nothing
+    is written), post the remaining list with that ETag. The E32's answer ({"changed", "restart_scheduled"}); a
+    refusal is BluetoothRejected. Every row keeps its key on the E32 ("key_action": "keep")."""
+    from .controller_link import ControllerLinkError
+    document = save_document(sensors, names, forget)
+
+    async def save(client):
+        value, tag = await client.async_bluetooth()
+        if not same_sensors(sensors, decode_sensors(value)):
+            raise ControllerLinkError("controller_settings_changed")
+        return await client.async_bluetooth(document, tag)
+    return await link.async_call(save, write=True)
+
+
 class BluetoothOptionsSteps:
     """Mixin for the product options flow: the Bluetooth sensors, renamed and forgotten in one save."""
 
@@ -172,7 +199,7 @@ class BluetoothOptionsSteps:
         from homeassistant.helpers import selector
         import probatio as vol
         from .controller_link import BluetoothRejected, ControllerLinkError
-        from .e32_system import ABORTS, async_e32_call, failure, link_for
+        from .e32_system import ABORTS, failure, link_for
         if getattr(self, "_ble", None) is None:
             return await self.async_step_ble_sensors()
         sensors, pending, _note = self._ble_summary()
@@ -187,15 +214,8 @@ class BluetoothOptionsSteps:
                 if link is None:
                     return self.async_abort(reason="e32_rooms_unavailable")
                 state = self._ble
-                document = save_document(state["sensors"], state["names"], state["forget"])
-
-                async def save(client):
-                    value, tag = await client.async_bluetooth()
-                    if not same_sensors(state["sensors"], decode_sensors(value)):
-                        raise ControllerLinkError("controller_settings_changed")
-                    return await client.async_bluetooth(document, tag)
                 try:
-                    answer = await async_e32_call(link, save, write=True)
+                    answer = await async_save_sensors(link, state["sensors"], state["names"], state["forget"])
                 except BluetoothRejected as err:
                     errors["base"] = REFUSALS.get(err.error, "ble_rejected")
                     placeholders["error"] = err.error

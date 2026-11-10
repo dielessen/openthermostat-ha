@@ -97,7 +97,7 @@ SOURCES = ["rule", "curve", "learned", "optimum_start", "plan"]  # "plan": the E
 GAS_STATUSES = ["no_meter", "collecting", "calibrated", "meter_stale"]
 # The Learning view's cards (E32 rc.5), the sixth card module (week_planner.card_modules), versioned with the
 # manifest like the other card URLs: "Water temperature by outdoor temperature" and what the E32 knows (a ring).
-CURVE_CARD_URL = "/open_thermostat/heating-curve-card-1.3.0.js"
+CURVE_CARD_URL = "/open_thermostat/heating-curve-card-1.4.0.js"
 CURVE_CARD_TYPE = "custom:openthermostat-heating-curve"
 KNOWLEDGE_CARD_TYPE = "custom:openthermostat-knowledge"
 # WeatherCurve (src/control/WeatherCurve.h): the standard slope follows the water temperature in hard frost
@@ -317,6 +317,118 @@ def smart_warm_up(hass, entry_id):
     link = data.get(DOMAIN, {}).get(entry_id, {}).get(KEY) if isinstance(data, dict) else None
     value = (link.settings or {}).get("apply_learned") if link is not None else None
     return value if type(value) is bool else None
+
+
+
+# -- shared by Configure and the settings panel (1.4): one check and one write for both ----------------------------
+# Configure's forms (e32_room_flow.async_step_e32_flow_limits, options_house_heating.async_step_heating_flow) and the
+# panel's section Heating and boiler (settings_heating.py) call these, so the two never judge a value differently.
+
+DESIGN_CHOICES = (DESIGN_FLOW_AUTOMATIC, *(str(c) for c in range(DESIGN_FLOW_LIMITS[0], DESIGN_FLOW_LIMITS[1] + 1)))
+
+
+def temperature_unit(hass):
+    """The Home Assistant temperature unit (°C or °F) the limits are shown in; the E32 plan itself is always °C."""
+    from .e32_room_flow import CELSIUS, FAHRENHEIT
+    unit = getattr(getattr(getattr(hass, "config", None), "units", None), "temperature_unit", CELSIUS)
+    return FAHRENHEIT if unit == FAHRENHEIT else CELSIUS
+
+
+def limit_edits(plan, automatic, low, high, unit="°C"):
+    """The water temperature limits as asked, checked as the E32 checks them: (edits, lowest °C, highest °C).
+
+    ``plan`` is the room plan the form showed; ``automatic`` the tick "Lowest water temperature: automatic" (only on
+    an E32 that has the choice, plan item 1); ``low`` and ``high`` in the user's unit (the lowest is not used while
+    automatic). ``edits`` holds only what differs from the plan (plan item 1b), so a limit changed on the E32's own
+    page meanwhile stays. Raises FlowError e32_flow_limits_invalid (whole degrees within the E32's ranges) or
+    e32_flow_limits_order (the lowest below the highest).
+    """
+    from .e32_room_flow import (FLOW_LIMIT_FIELDS, FLOW_MAXIMUM_C, FLOW_MINIMUM_C, MINIMUM_AUTOMATIC_KEY,
+                                STANDARD_MINIMUM_FLOW_C, FlowError, flow_celsius)
+    tick = type(plan.get(MINIMUM_AUTOMATIC_KEY)) is bool
+    automatic = tick and automatic is True
+    try:
+        low_c, high_c = (flow_celsius(float(value), unit) for value in (low, high))
+    except (TypeError, ValueError):
+        low_c = high_c = None
+    if automatic and (low_c is None or not FLOW_MINIMUM_C[0] <= low_c <= FLOW_MINIMUM_C[1]):
+        low_c = STANDARD_MINIMUM_FLOW_C  # not used while automatic: whatever the field holds
+    shown = {key: plan.get(key) for key in (*FLOW_LIMIT_FIELDS.values(), *((MINIMUM_AUTOMATIC_KEY,) if tick else ()))}
+    wanted = {MINIMUM_AUTOMATIC_KEY: automatic} if tick else {}
+    if not automatic:
+        wanted["minimum_flow_c"] = low_c
+    wanted["maximum_flow_c"] = high_c
+    if low_c is None or high_c is None or not (FLOW_MINIMUM_C[0] <= low_c <= FLOW_MINIMUM_C[1]
+                                               and FLOW_MAXIMUM_C[0] <= high_c <= FLOW_MAXIMUM_C[1]):
+        raise FlowError("e32_flow_limits_invalid")
+    if (STANDARD_MINIMUM_FLOW_C if automatic else low_c) >= high_c:
+        raise FlowError("e32_flow_limits_order")
+    return {key: value for key, value in wanted.items() if shown.get(key) != value}, low_c, high_c
+
+
+def limit_warnings(plan, high_c, boiler_c):
+    """{field: error key} of a highest water temperature worth a second thought (a warning, not a block: the boiler
+    caps anyway): above 50 °C while a room has floor heating, or above the boiler's own maximum."""
+    from .e32_room_flow import FLOOR_FLOW_WARNING_C
+    warnings = {}
+    if high_c > FLOOR_FLOW_WARNING_C and any(type(room) is dict and room.get("emitter") == "floor"
+                                             for room in plan.get("rooms", [])):
+        warnings["maximum_flow_temperature"] = "e32_flow_limits_floor_warning"
+    if boiler_c is not None and high_c > boiler_c:
+        warnings["base"] = "e32_flow_limits_above_boiler"
+    return warnings
+
+
+async def async_save_limits(link, edits):
+    """Write only ``edits`` on top of the plan the E32 holds now (RoomPlanLink.async_change_plan: its revision, one
+    re-read on a concurrent save); the stored plan, or the link's HomeAssistantError. Automatic: the E32 sets the
+    lowest water temperature to its standard itself."""
+    from copy import deepcopy
+
+    def change(stored):
+        candidate = deepcopy(stored)
+        candidate.update(edits)
+        return candidate
+
+    def confirm(stored):
+        return all(stored.get(key) == value for key, value in edits.items())
+    return await link.async_change_plan(change, confirm)
+
+
+def option_changes(stored, shown, wanted):
+    """The flow options to send: each value of ``wanted`` (apply_learned, weather_curve, curve_design_flow_c, and
+    comfort_style on firmware that has it) that the user changed against what the form showed (``shown``) and that
+    the E32 does not have already (plan item 1b: Home Assistant never puts its copy back over an E32 edit).
+
+    The changes keep the order of ``wanted`` (they are sent one at a time). Raises ValueError("e32_flow_options_failed")
+    for a value the E32 would refuse or a key it does not have.
+    """
+    changes = {}
+    for key, value in wanted.items():
+        if key not in (*OPTIONS, DESIGN_FLOW_KEY, COMFORT_STYLE_KEY):
+            raise ValueError("e32_flow_options_failed")
+        if key == COMFORT_STYLE_KEY and stored.get(key) not in COMFORT_STYLES:
+            continue  # firmware without the comfort style: nothing to send
+        if (key in OPTIONS and type(value) is not bool or key == COMFORT_STYLE_KEY and value not in COMFORT_STYLES
+                or key == DESIGN_FLOW_KEY and (type(value) is not int or value != 0
+                                               and not DESIGN_FLOW_LIMITS[0] <= value <= DESIGN_FLOW_LIMITS[1])):
+            raise ValueError("e32_flow_options_failed")
+        if value != shown.get(key, stored.get(key)) and value != stored.get(key):
+            changes[key] = value
+    return changes
+
+
+async def async_save_options(link, changes):
+    """Send ``changes`` one field at a time, as the E32 device's controls do; None once the E32 stored each as asked,
+    else the form's error key e32_flow_options_failed."""
+    for key, value in changes.items():
+        try:
+            stored = await link.async_change({key: value})
+        except HomeAssistantError:
+            return "e32_flow_options_failed"
+        if stored.get(key) != value:
+            return "e32_flow_options_failed"
+    return None
 
 
 # -- the controls ----------------------------------------------------------------------

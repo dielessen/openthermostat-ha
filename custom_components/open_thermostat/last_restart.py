@@ -17,6 +17,9 @@ why), crash (a panic or a watchdog), unknown. The previous boot's uptime and low
 cause and the crash summary are attributes; the same object is in the diagnostics download.
 
 Firmware without the topic never creates the entity (nothing to go stale). Diagnostic.
+
+1.4 (FW-LOG): the sensor "E32 errors" (below) lives here too: the error lines of the E32's system log since it
+started, from the heartbeat's ``errors``.
 """
 from __future__ import annotations
 
@@ -24,7 +27,7 @@ from datetime import timedelta
 import json
 import re
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -202,3 +205,129 @@ async def async_setup_sensor(hass, entry, async_add_entities):
 def diagnostics(hass, entry):
     """The last boot report for the diagnostics download, or None."""
     return hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get(STATE_KEY)
+
+
+# -- E32 errors (1.4, FW-LOG) ------------------------------------------------------------------------------------------
+#
+# E32 1.4 counts the error lines of its system log since it started and keeps the last one; every fw/heartbeat
+# (60 s) carries them as ``"errors"``: ``[count]`` without an error since the start, else
+# ``[count, uptime_s of the last, "<source>: <message>"]`` (the line at most 120 characters, redacted like the log).
+# The sensor "E32 errors" shows the count (it starts at 0 again after a restart) with the last line and its time as
+# attributes. A figure, not a fault: no Repairs item (the owner's rule: Repairs only for what needs action).
+# Firmware before 1.4 sends no "errors" and never gets the entity.
+
+ERRORS_STATE_KEY = "e32_errors"
+MAX_ERROR_TEXT = 160
+
+
+def decode_errors(beat):
+    """The heartbeat's error lines (E32 1.4): {"count", "at_s", "text"}, or None (older firmware or invalid)."""
+    value = beat.get("errors") if type(beat) is dict else None
+    if type(value) is not list or len(value) not in (1, 3):
+        return None
+    count = _count(value[0])
+    if count is None:
+        return None
+    if len(value) == 1:
+        return {"count": count, "at_s": None, "text": None}
+    at, text = _count(value[1]), value[2]
+    if (count == 0 or at is None or type(text) is not str or not 0 < len(text) <= MAX_ERROR_TEXT
+            or not text.isprintable()):
+        return None
+    return {"count": count, "at_s": at, "text": text}
+
+
+def error_time(beat, errors, now=None):
+    """When the last error line was logged: now minus how long before this heartbeat (whole seconds), or None."""
+    if errors is None or errors["at_s"] is None:
+        return None
+    now = now or dt_util.utcnow()
+    uptime = beat.get("uptime_s") if type(beat) is dict else None
+    ago = uptime - errors["at_s"] if type(uptime) is int and uptime >= errors["at_s"] else 0
+    return (now - timedelta(seconds=ago)).replace(microsecond=0)
+
+
+class E32ErrorsSensor(SensorEntity):
+    """The error lines in the E32's system log since it started, and the last one (a diagnostic of the E32 device)."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    _attr_translation_key = "e32_errors"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    # A count that starts again at every restart: its statistics give the error lines per hour or day.
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+
+    def __init__(self, prefix, hub):
+        self._hub = hub
+        self.errors = None
+        self.last_error_at = None
+        self._shown = None
+        self._attr_unique_id = f"{prefix}_hub_e32_errors"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, prefix)})
+
+    @property
+    def available(self):
+        return self.errors is not None and getattr(self._hub, "alive", True)
+
+    @property
+    def native_value(self):
+        return self.errors["count"] if self.errors is not None else None
+
+    @property
+    def extra_state_attributes(self):
+        if self.errors is None:
+            return None
+        return {"last_error": self.errors["text"],
+                "last_error_at": self.last_error_at.isoformat() if self.last_error_at is not None else None}
+
+    @callback
+    def receive(self, beat, errors, now=None, gone=False):
+        """A heartbeat's errors (None: keep the last ones; gone: a live heartbeat without them, after a firmware
+        downgrade: unavailable). The time of the last line is worked out once per new line, so it stays put;
+        the state is written only when something shown changed (also availability)."""
+        if gone:
+            self.errors = self.last_error_at = None
+        elif errors is not None and errors != self.errors:
+            self.last_error_at = error_time(beat, errors, now)
+            self.errors = errors
+        shown = (self.available, self.errors, self.last_error_at)
+        if shown == self._shown:
+            return
+        self._shown = shown
+        if self.hass is not None and self.entity_id is not None:
+            self.async_write_ha_state()
+
+
+async def async_setup_errors_sensor(hass, entry, async_add_entities):
+    """Product entries: "E32 errors" appears with the first heartbeat that carries them (E32 1.4 and newer)."""
+    from .heating_link import add_options, heating_hub
+    prefix = entry.data[CONF_TOPIC_PREFIX]
+    hub = heating_hub(hass, entry)
+    state = hass.data[DOMAIN][entry.entry_id]
+    holder = {"beat": None}
+
+    @callback
+    def hub_changed():
+        beat = getattr(hub, "heartbeat", None)
+        errors, gone = None, False
+        if beat is not holder["beat"]:
+            holder["beat"] = beat
+            errors = decode_errors(beat)
+            gone = errors is None and beat is not None
+        sensor = holder.get("sensor")
+        if gone:
+            state.pop(ERRORS_STATE_KEY, None)
+        if errors is not None:
+            state[ERRORS_STATE_KEY] = errors
+            if sensor is None:
+                if getattr(hub, "closed", False):
+                    return
+                sensor = holder["sensor"] = E32ErrorsSensor(prefix, hub)
+                sensor.receive(beat, errors)
+                async_add_entities([sensor], **add_options(hass, entry))
+                return
+        if sensor is not None:
+            sensor.receive(beat, errors, gone=gone)  # new errors, none any more, or only whether the E32 is heard
+
+    entry.async_on_unload(hub.add_listener(hub_changed))
+    hub_changed()

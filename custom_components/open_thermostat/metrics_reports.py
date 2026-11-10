@@ -35,31 +35,23 @@ SCHEMA = vol.Schema({
 })
 
 
+# Older versions told the user once that these counters were renewed: first as a Repairs item, later as a notification.
+# Since 1.4 nothing is shown (an "it changed" notice is never a message in Home Assistant); the diagnostics still say
+# whether this run met an old counter or room identity.
 INFO_NOTES = ("legacy_metrics_history", "metrics_definition_v2", "room_model_v2")
-_NOTES_STORE = DOMAIN + ".info_notes"
+_NOTES_STORE = DOMAIN + ".info_notes"  # what older versions kept on disk: forgotten with a removed entry
 _SHOWN = "info_notes_shown"
-_FALLBACK = {
-    "legacy_metrics_history": ("Boiler counters were renewed",
-                               "Boiler counters were renewed. Your history is kept. If you made your own cards "
-                               "with the old sensors, switch them to the new ones."),
-    "metrics_definition_v2": ("Boiler counters were renewed",
-                              "Boiler counters were renewed. Your history is kept. If you made your own cards "
-                              "with the old sensors, switch them to the new ones."),
-    "room_model_v2": ("Room heat estimates were renewed",
-                      "Room heat estimates were renewed. Your history is kept. If you made your own cards "
-                      "with the old sensors, switch them to the new ones."),
-}
 
 
 def info_note_shown(hass, entry_id, key=None):
-    """True when this run showed (or found already shown) the note: for diagnostics."""
+    """True when this run met an old identity that once raised the note: for diagnostics."""
     shown = hass.data.get(SHARED, {}).get(_SHOWN, set())
     return any((entry_id, k) in shown for k in ([key] if key else INFO_NOTES))
 
 
 @callback
 def remove_info_issues(hass, entry_id):
-    """Earlier versions raised these three as Repairs items; they are only information now."""
+    """Earlier versions raised these three as Repairs items (also at every setup: issue_sync.remove_retired_issues)."""
     for key in INFO_NOTES:
         ir.async_delete_issue(hass, DOMAIN, f"{key}_{entry_id}")
 
@@ -81,62 +73,34 @@ async def async_forget_entry(hass, entry_id):
             await store.async_save(data)
 
 
-async def _async_note_once(hass, entry_id, key):
-    from homeassistant.components import persistent_notification
-    from homeassistant.helpers.storage import Store
-    from homeassistant.helpers.translation import async_get_translations
-    store = Store(hass, 1, _NOTES_STORE)
-    lock = _notes_lock(hass)
-    async with lock:
-        data = await store.async_load() or {}
-        done = data.setdefault(entry_id, [])
-        if key in done:
-            return
-        title, message = _FALLBACK[key]
-        try:
-            words = await async_get_translations(hass, hass.config.language, "issues", [DOMAIN])
-            base = f"component.{DOMAIN}.issues.{key}."
-            title = words.get(base + "title", title)
-            message = words.get(base + "description", message)
-        except Exception:  # the English text above is enough
-            pass
-        persistent_notification.async_create(hass, message, title=title, notification_id=f"{DOMAIN}_{key}_{entry_id}")
-        done.append(key)
-        await store.async_save(data)
-
-
 @callback
 def _note(hass, entry_id, key):
-    """Show the information once per installation: a notification, never a Repairs item."""
+    """Remember for the diagnostics that this run met the old identity; no Repairs item, no notification (1.4)."""
     ir.async_delete_issue(hass, DOMAIN, f"{key}_{entry_id}")
-    shown = hass.data.setdefault(SHARED, {}).setdefault(_SHOWN, set())
-    if (entry_id, key) in shown:
-        return
-    shown.add((entry_id, key))
-    hass.async_create_task(_async_note_once(hass, entry_id, key))
+    hass.data.setdefault(SHARED, {}).setdefault(_SHOWN, set()).add((entry_id, key))
 
 
 @callback
 def note_legacy_metrics(hass, entry_id):
-    """Only actual receipt of old-schema numeric counters creates this note."""
+    """Only actual receipt of old-schema numeric counters counts."""
     _note(hass, entry_id, "legacy_metrics_history")
 
 
 @callback
 def note_metric_definition_migration(hass, entry_id):
-    """An actual existing legacy registry identity: tell the user once about the new sensors."""
+    """An actual existing legacy registry identity of the old counters."""
     _note(hass, entry_id, "metrics_definition_v2")
 
 
 @callback
 def note_room_definition_migration(hass, entry_id):
-    """Only an existing legacy room identity triggers the note; no DB migration."""
+    """Only an existing legacy room identity counts; no DB migration."""
     _note(hass, entry_id, "room_model_v2")
 
 
 @callback
 def reconcile_migration_issues(hass, entry, prefix=None):
-    """The three information items are notifications now: remove any Repairs item an older version left."""
+    """The three information items are no Repairs items: remove any an older version left."""
     remove_info_issues(hass, entry.entry_id)
 
 

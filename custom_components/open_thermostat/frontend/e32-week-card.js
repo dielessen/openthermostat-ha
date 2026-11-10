@@ -1,7 +1,7 @@
 /* Dashboard card: the visual week planner for the rooms of the E32 room plan.
    HA authenticates (admin websocket open_thermostat/e32_week/*); the E32 stores and runs the program.
    The planner itself is week-editor.js, the same file the E32 rooms page uses. */
-const EDITOR = '/open_thermostat/week-editor-1.3.0.js';
+const EDITOR = '/open_thermostat/week-editor-1.4.0.js';
 const TEXT = {
  en: {title: 'Week program', loading: 'Loading…', reading: 'Reading the week programs from the E32…', intro: 'The E32 follows this program on its own, also when Home Assistant is offline.',
   follows: 'This room follows {entity} while Home Assistant gives a target temperature; the week program applies when it gives none.',
@@ -11,6 +11,9 @@ const TEXT = {
   outdated: 'OpenThermostat was updated. Reload the page (Ctrl+F5) to use the new version of this card.',
   saved: 'Saved on the E32.', removedNote: 'Without a week program the room keeps its fixed temperature of {value}.', rooms: 'Rooms',
   none: 'No rooms yet. Add one under Settings → Devices & services → OpenThermostat → Configure → Rooms.',
+  resetMark: "Reset time {time}: {value}, set in the room's settings", states: {active: 'On', follow: 'Heat along only', inactive: 'Off'},
+  stateShort: {active: 'on', follow: 'heat along', inactive: 'off'},
+  resetNote: "Marker: reset time, set in the room's settings. On that moment any manual change ends and the room takes this value; the E32 does not work towards it.",
   errors: {plan_changed: 'The room plan was changed elsewhere. Reload to see the current program; your changes were not saved.',
    week_changed: 'This week program was changed elsewhere. Reload to see the current program; your changes were not saved.',
    plan_too_large: 'The plan is too large for the E32: use fewer switch times or rooms.', storage_full: 'The E32 storage is full. Remove switch times or a room, then save again.',
@@ -34,6 +37,9 @@ const TEXT = {
   outdated: 'OpenThermostat is bijgewerkt. Laad de pagina opnieuw (Ctrl+F5) om de nieuwe versie van deze kaart te gebruiken.',
   saved: 'Opgeslagen op de E32.', removedNote: 'Zonder weekprogramma houdt de ruimte de vaste temperatuur van {value} aan.', rooms: 'Ruimtes',
   none: 'Nog geen ruimtes. Voeg er een toe via Instellingen → Apparaten en diensten → OpenThermostat → Configureren → Ruimtes.',
+  resetMark: 'Terugzetmoment {time}: {value}, ingesteld bij de ruimte', states: {active: 'Aan', follow: 'Alleen meeverwarmen', inactive: 'Uit'},
+  stateShort: {active: 'aan', follow: 'mee', inactive: 'uit'},
+  resetNote: 'Streepje: terugzetmoment, ingesteld bij de ruimte. Op dat moment eindigt een handmatige wijziging en krijgt de ruimte deze waarde; de E32 werkt er niet naartoe.',
   errors: {plan_changed: 'Het ruimteplan is elders gewijzigd. Laad opnieuw om het huidige programma te zien; je wijzigingen zijn niet opgeslagen.',
    week_changed: 'Dit weekprogramma is elders gewijzigd. Laad opnieuw om het huidige programma te zien; je wijzigingen zijn niet opgeslagen.',
    plan_too_large: 'Het plan is te groot voor de E32: gebruik minder schakeltijden of ruimtes.', storage_full: 'De opslag van de E32 is vol. Verwijder schakeltijden of een ruimte en sla opnieuw op.',
@@ -57,6 +63,9 @@ const TEXT = {
   outdated: 'OpenThermostat został zaktualizowany. Wczytaj stronę ponownie (Ctrl+F5), aby użyć nowej wersji tej karty.',
   saved: 'Zapisano w E32.', removedNote: 'Bez programu tygodniowego pomieszczenie utrzymuje stałą temperaturę {value}.', rooms: 'Pomieszczenia',
   none: 'Brak pomieszczeń. Dodaj je w Ustawienia → Urządzenia i usługi → OpenThermostat → Konfiguruj → Pomieszczenia.',
+  resetMark: 'Godzina powrotu {time}: {value}, ustawiona w ustawieniach pomieszczenia', states: {active: 'Włączone', follow: 'Grzeje tylko razem z innymi', inactive: 'Wyłączone'},
+  stateShort: {active: 'wł.', follow: 'razem', inactive: 'wył.'},
+  resetNote: 'Znacznik: godzina powrotu, ustawiona w ustawieniach pomieszczenia. O tej godzinie kończy się każda ręczna zmiana i pomieszczenie przyjmuje tę wartość; E32 nie dąży do niej z wyprzedzeniem.',
   errors: {plan_changed: 'Plan pomieszczeń został zmieniony gdzie indziej. Wczytaj ponownie, aby zobaczyć aktualny program; Twoje zmiany nie zostały zapisane.',
    week_changed: 'Ten program tygodniowy został zmieniony gdzie indziej. Wczytaj ponownie, aby zobaczyć aktualny program; Twoje zmiany nie zostały zapisane.',
    plan_too_large: 'Plan jest za duży dla E32: użyj mniej punktów przełączenia lub pomieszczeń.', storage_full: 'Pamięć E32 jest pełna. Usuń punkty przełączenia lub pomieszczenie i zapisz ponownie.',
@@ -117,7 +126,9 @@ button{font:inherit;font-weight:600;color:inherit;background:transparent;border:
 button[aria-selected=true]{border:2px solid var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 16%,transparent)}button.primary{background:var(--primary-color,#03a9f4);border-color:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}
 button:disabled{opacity:.45;cursor:default}button:focus-visible{outline:3px solid var(--primary-color);outline-offset:2px}
 .msg:empty{display:none}.msg{border-left:4px solid var(--primary-color);padding:8px 12px;background:var(--secondary-background-color);border-radius:6px}.msg.error{border-color:var(--error-color,#db4437)}
-.dirty{color:var(--warning-color,#b26b00);font-weight:600}.waiting{font-weight:600;margin:4px 0 8px}.notice{border-left:4px solid var(--warning-color,#b26b00);padding:8px 12px;background:var(--secondary-background-color);border-radius:6px;margin:0 0 12px}@media(max-width:480px){ha-card{padding:12px}}`;
+.dirty{color:var(--warning-color,#b26b00);font-weight:600}.waiting{font-weight:600;margin:4px 0 8px}.notice{border-left:4px solid var(--warning-color,#b26b00);padding:8px 12px;background:var(--secondary-background-color);border-radius:6px;margin:0 0 12px}@media(max-width:480px){ha-card{padding:12px}}
+.wpe-marks{grid-column:2;position:relative;height:22px;margin-top:-3px;overflow:hidden;font-size:.72rem;line-height:14px;color:var(--wm)}
+.wpe-mk{position:absolute;top:0;width:2px;height:7px;margin-left:-1px;background:var(--wt)}.wpe-mk span{position:absolute;top:8px;white-space:nowrap}`;
 // English, Dutch or Polish by the Home Assistant language (English otherwise).
 const language = hass => (/^(nl|pl)\b/i.exec(hass?.locale?.language || hass?.language || '')?.[1] || 'en').toLowerCase();
 const fill = (s, v) => s.replace(/\{(\w+)\}/g, (a, k) => k in v ? v[k] : a);
@@ -127,6 +138,25 @@ const program = week => week && week.some(d => d.length) ? week : null;
 const fahrenheit = hass => hass?.config?.unit_system?.temperature === '°F';
 const degrees = (hass, centi) => (fahrenheit(hass) ? Math.round(centi * 9 / 50 + 320) / 10 : centi / 100)
  .toLocaleString(hass?.locale?.language || 'en') + (fahrenheit(hass) ? ' °F' : ' °C');
+const clock = m => String(m / 60 | 0).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+const resetsOf = r => (Array.isArray(r) ? r : []).map(x => x && Array.isArray(x.days) && /^([01]\d|2[0-3]):[0-5]\d$/.test(x.time) && {days: x.days,
+ m: +x.time.slice(0, 2) * 60 + +x.time.slice(3), state: ['active', 'follow', 'inactive'].includes(x.state) ? x.state : null,
+ c: Number.isFinite(x.temperature_c) ? Math.round(x.temperature_c * 100) : null}).filter(x => x && (x.state || x.c != null));
+// Labels centred under their marker within the bar; touching ones a line lower (measured).
+const stack = root => {
+ for (const strip of root.querySelectorAll('.wpe-marks')) {
+  const s = strip.getBoundingClientRect(), ends = [];
+  if (!s.width) return;
+  for (const mark of strip.children) {
+   const label = mark.firstChild, m = mark.getBoundingClientRect(), w = label.offsetWidth;
+   const left = Math.max(s.left, Math.min(s.right - w, (m.left + m.right - w) / 2));
+   let lane = ends.findIndex(e => e + 4 <= left);
+   if (lane < 0) lane = ends.length;
+   ends[lane] = left + w; label.style.top = 8 + lane * 14 + 'px'; label.style.left = left - m.left + 'px';
+  }
+  strip.style.height = 8 + ends.length * 14 + 'px';
+ }
+};
 let editorReady = null;
 // Codes after which the card tries again by itself (HA still starting, E32 not reachable yet).
 const RETRY = new Set(['not_ready', 'unreachable', 'session_capacity', 'try_again_later']), RETRY_MS = 15000;
@@ -202,6 +232,24 @@ class OpenThermostatE32Week extends HTMLElement {
   this._busy = false; this.render();
  }
  get room() { return this._rooms?.find(r => r.id === this._room); }
+ // 1.4 reset times: markers under the day bars (not controls) and a note under the planner.
+ _marks(root, resets) {
+  const t = this.t, list = resetsOf(resets), el = (tag, cls, text) => Object.assign(document.createElement(tag), {className: cls, textContent: text});
+  if (!list.length) return;
+  root.querySelectorAll('.wpe-bar').forEach((bar, d) => {
+   const marks = list.filter(x => x.days.includes(d)).sort((a, b) => a.m - b.m), strip = el('div', 'wpe-marks', '');
+   for (const x of marks) {
+    const mark = el('span', 'wpe-mk', '');
+    mark.style.left = x.m / 14.4 + '%'; mark.dataset.k = 'reset' + d + '-' + x.m; mark.setAttribute('role', 'img');
+    mark.title = fill(t.resetMark, {time: clock(x.m), value: x.state ? t.states[x.state] : degrees(this._hass, x.c)});
+    mark.append(el('span', '', x.state ? t.stateShort[x.state] : degrees(this._hass, x.c).slice(0, -3) + '°'));
+    strip.append(mark);
+   }
+   if (marks.length) bar.parentElement.append(strip);
+  });
+  root.querySelector('.wpe-grid').after(el('p', 'wpe-note reset-note', t.resetNote));
+  stack(root);
+ }
  // Changed: another program, or (E32 with stored levels) other levels or marks, also without a program change.
  changed(r) {
   const st = r && this._levels[r.id];
@@ -288,7 +336,9 @@ class OpenThermostatE32Week extends HTMLElement {
    lang: language(this._hass), text: PLANNER[language(this._hass)], fahrenheit: fahrenheit(this._hass), theme: this._hass?.themes?.darkMode ? 'dark' : 'light',
    levels: st ? st.levels : r.levels, scheduleLevels: st ? st.schedule_levels : r.schedule_levels, smartWarmUp: this._smartWarmUp !== false,
    onChange: (w, state) => { this._drafts[r.id] = w; if (state) this._levels[r.id] = state; this._message = ''; this.refresh(); },
-   onLevels: () => { this._levels[r.id] = this._planner.state(); this._message = ''; this.refresh(); }});
+   onLevels: () => { this._levels[r.id] = this._planner.state(); this._message = ''; this.refresh(); },
+   decorate: root => this._marks(root, r.resets)});
+  if (r.resets?.length && window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(() => stack(host))).observe(host);
   // What the planner showed at load: levels and marks are compared with this, not with the stored fields.
   if (!(r.id in this._base)) this._base[r.id] = this._planner.state();
   const actions = el('div', null, {class: 'actions'}), save = el('button', t.save, {type: 'button', class: 'primary', 'data-save': ''});

@@ -11,6 +11,9 @@
   sends them to everyone with a phone.
 
 Nothing is on by default. Saving stores the settings without a reload (notifications.save_notifications).
+
+The checks and changes of the three forms are module functions (changed_person, changed_house, changed_room,
+phone_choices, notify_rooms), shared with the settings panel's section Notifications (settings_notifications.py, 1.4).
 """
 from __future__ import annotations
 
@@ -21,6 +24,7 @@ from .const import DOMAIN
 from .notifications import (HOUSE_MAINTENANCE, HOUSE_PROBLEMS, ROOM_KINDS, house_people, notification_options,
                             phone_services, room_people, save_notifications, suggested_phone, with_house,
                             with_house_person, with_phone, with_room)
+from .e32_room_flow import FlowError
 from .options_navigation import async_flow_texts
 
 NO_PHONE = "none"
@@ -30,29 +34,87 @@ def _kinds_selector(key, kinds=ROOM_KINDS):
     return selector.SelectSelector({"options": list(kinds), "multiple": True, "mode": "list", "translation_key": key})
 
 
+# -- shared with the settings panel (settings_notifications.py, 1.4): one check and one change for both ---------------
+
+
+def notify_rooms(hass, entry):
+    """[(room id, name)] of the E32's rooms, by the name the dashboard shows, sorted by name."""
+    hub = (hass.data.get(DOMAIN, {}).get(entry.entry_id) or {}).get("heating_hub")
+    if hub is None:
+        return []
+    from .insight import room_names
+    names = room_names(hub, hass, entry.entry_id)
+    return sorted(((room_id, names.get(room_id) or room_id) for room_id in hub.rooms), key=lambda r: r[1].lower())
+
+
+def person_name(hass, person):
+    state = hass.states.get(person)
+    return state.name if state is not None else person
+
+
+def phone_label(service, services, texts):
+    if not service:
+        return texts["no_phone"]
+    return services.get(service) or texts["phone_gone"].format(service=f"notify.{service}")
+
+
+def phone_choices(settings, services, person, texts):
+    """{value: label} of a person's phone: No phone, every phone or app, and a chosen one that is gone (it stays
+    visible, so saving the form unchanged keeps it)."""
+    current = settings["phones"].get(person)
+    choices = {NO_PHONE: texts["no_phone"], **services}
+    if current and current not in choices:
+        choices[current] = phone_label(current, services, texts)
+    return choices
+
+
+def changed_person(settings, person, chosen, house, choices):
+    """The settings with this person's phone (a key of choices; NO_PHONE: none) and the tick "Also messages about the
+    house"; FlowError notification_phone_invalid on "phone", or notification_invalid for a tick that is no bool."""
+    if chosen not in choices:
+        raise FlowError("notification_phone_invalid", "phone")
+    if type(house) is not bool:
+        raise FlowError("notification_invalid")
+    return with_house_person(with_phone(settings, person, None if chosen == NO_PHONE else chosen), person, house)
+
+
+def changed_house(settings, on, problems, maintenance):
+    """The settings with the house switch and its messages (problems and maintenance); FlowError
+    notification_invalid, or notification_kinds_needed on "kinds" when it is switched on without a message."""
+    if (type(on) is not bool or type(problems) is not list or type(maintenance) is not list
+            or any(k not in HOUSE_PROBLEMS for k in problems) or any(k not in HOUSE_MAINTENANCE for k in maintenance)):
+        raise FlowError("notification_invalid")
+    if on and not problems and not maintenance:
+        raise FlowError("notification_kinds_needed", "kinds")
+    return with_house(settings, on, [*problems, *maintenance])
+
+
+def shown_room(settings, room_id):
+    """A room's switch and messages as the form shows them (every message chosen until the room was set once)."""
+    return settings["rooms"].get(room_id) or {"on": False, "kinds": list(ROOM_KINDS)}
+
+
+def changed_room(settings, room_id, on, kinds):
+    """The settings with one room's switch and messages; FlowError notification_invalid, or
+    notification_kinds_needed on "kinds" when it is switched on without a message."""
+    if type(on) is not bool or type(kinds) is not list or any(k not in ROOM_KINDS for k in kinds):
+        raise FlowError("notification_invalid")
+    if on and not kinds:
+        raise FlowError("notification_kinds_needed", "kinds")
+    return with_room(settings, room_id, on, kinds)
+
+
 class NotificationOptionsSteps:
     """Mixin of the product options flow."""
 
-    def _notify_hub(self):
-        return (self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id) or {}).get("heating_hub")
-
     def _notify_rooms(self):
-        """[(room id, name)] of the E32's rooms, by the name the dashboard shows."""
-        hub = self._notify_hub()
-        if hub is None:
-            return []
-        from .insight import room_names
-        names = room_names(hub, self.hass, self.config_entry.entry_id)
-        return sorted(((room_id, names.get(room_id) or room_id) for room_id in hub.rooms), key=lambda r: r[1].lower())
+        return notify_rooms(self.hass, self.config_entry)
 
     def _person_name(self, person):
-        state = self.hass.states.get(person)
-        return state.name if state is not None else person
+        return person_name(self.hass, person)
 
     def _phone_label(self, service, services, texts):
-        if not service:
-            return texts["no_phone"]
-        return services.get(service) or texts["phone_gone"].format(service=f"notify.{service}")
+        return phone_label(service, services, texts)
 
     async def async_step_notifications(self, user_input=None):
         """The menu, with what is switched on now and who gets what."""
@@ -97,23 +159,19 @@ class NotificationOptionsSteps:
         texts = await async_flow_texts(self.hass, "notification_text")
         settings, services = notification_options(self.config_entry), phone_services(self.hass)
         current = settings["phones"].get(person)
-        choices = {NO_PHONE: texts["no_phone"], **services}
-        if current and current not in choices:
-            choices[current] = self._phone_label(current, services, texts)  # a phone that is gone stays visible
+        choices = phone_choices(settings, services, person, texts)  # a phone that is gone stays visible
         ticked = person in settings["house_people"]
         errors = {}
         if user_input is not None:
-            chosen, house = user_input.get("phone"), user_input.get("house", ticked)
-            if chosen not in choices:
-                errors["phone"] = "notification_phone_invalid"
-            elif type(house) is not bool:
-                errors["base"] = "notification_invalid"
+            try:
+                changed = changed_person(settings, person, user_input.get("phone"), user_input.get("house", ticked),
+                                         choices)
+            except FlowError as err:
+                errors[err.field] = err.key
             else:
-                service = None if chosen == NO_PHONE else chosen
-                if service == current and house == ticked:
+                if changed == settings:
                     return self.async_abort(reason="notifications_unchanged")
-                save_notifications(self.hass, self.config_entry,
-                                   with_house_person(with_phone(settings, person, service), person, house))
+                save_notifications(self.hass, self.config_entry, changed)
                 return self.async_abort(reason="notifications_saved")
         default = current or suggested_phone(self.hass, person, services) or NO_PHONE
         return self.async_show_form(step_id="notify_person", errors=errors, data_schema=vol.Schema({
@@ -129,16 +187,12 @@ class NotificationOptionsSteps:
         house = settings["house"]
         errors = {}
         if user_input is not None:
-            on = user_input.get("on")
-            problems, maintenance = user_input.get("kinds") or [], user_input.get("maintenance") or []
-            if (type(on) is not bool or type(problems) is not list or type(maintenance) is not list
-                    or any(k not in HOUSE_PROBLEMS for k in problems)
-                    or any(k not in HOUSE_MAINTENANCE for k in maintenance)):
-                errors["base"] = "notification_invalid"
-            elif on and not problems and not maintenance:
-                errors["kinds"] = "notification_kinds_needed"
+            try:
+                changed = changed_house(settings, user_input.get("on"), user_input.get("kinds") or [],
+                                        user_input.get("maintenance") or [])
+            except FlowError as err:
+                errors[err.field] = err.key
             else:
-                changed = with_house(settings, on, [*problems, *maintenance])
                 if changed["house"] == house:
                     return self.async_abort(reason="notifications_unchanged")
                 save_notifications(self.hass, self.config_entry, changed)
@@ -181,16 +235,14 @@ class NotificationOptionsSteps:
             return await self.async_step_notify_rooms()
         texts = await async_flow_texts(self.hass, "notification_text")
         settings = notification_options(self.config_entry)
-        room = settings["rooms"].get(room_id) or {"on": False, "kinds": list(ROOM_KINDS)}
+        room = shown_room(settings, room_id)
         errors = {}
         if user_input is not None:
-            on, kinds = user_input.get("on"), user_input.get("kinds") or []
-            if type(on) is not bool or type(kinds) is not list or any(k not in ROOM_KINDS for k in kinds):
-                errors["base"] = "notification_invalid"
-            elif on and not kinds:
-                errors["kinds"] = "notification_kinds_needed"
+            try:
+                changed = changed_room(settings, room_id, user_input.get("on"), user_input.get("kinds") or [])
+            except FlowError as err:
+                errors[err.field] = err.key
             else:
-                changed = with_room(settings, room_id, on, kinds)
                 if changed["rooms"][room_id] == room:
                     return self.async_abort(reason="notifications_unchanged")
                 save_notifications(self.hass, self.config_entry, changed)

@@ -11,6 +11,10 @@ made meanwhile on the E32 page or in the options flow is never overwritten.
 With E32 beta.23 ("plan.levels.v1") the planner's levels (Comfort, Eco,
 Night) and the level of each switch point are stored with the room
 (room_levels); for older firmware the card infers them as before.
+
+E32 1.4: each room's reset times ("resets", set in the room's settings) go to
+the card to be shown, never edited; a save sends no "resets", so the E32 keeps
+them as they are (a missing key means "keep").
 """
 from __future__ import annotations
 
@@ -28,8 +32,8 @@ from .room_levels import room_levels, supported, valid_levels
 from .room_plan import has_room_plan, plan_room
 
 MAX_POINTS = 6
-CARD_URL = "/open_thermostat/e32-week-card-1.3.0.js"
-EDITOR_URL = "/open_thermostat/week-editor-1.3.0.js"
+CARD_URL = "/open_thermostat/e32-week-card-1.4.0.js"
+EDITOR_URL = "/open_thermostat/week-editor-1.4.0.js"
 # RoomPlanLink failures -> the short codes the card explains in plain words.
 FAILURES = {"room_plan_changed": "plan_changed", "room_plan_too_large": "plan_too_large",
             "room_plan_storage_full": "storage_full", "room_plan_unconfirmed": "save_unconfirmed",
@@ -71,6 +75,12 @@ def _program(room):
     return deepcopy(schedule) if type(schedule) is list and any(schedule) else None
 
 
+def _resets(room):
+    """The room's reset times for the card to show ([] without any or from firmware before 1.4)."""
+    resets = room.get("resets")
+    return [deepcopy(reset) for reset in resets if type(reset) is dict] if type(resets) is list else []
+
+
 def _link(hass, entry_id):
     """The entry's RoomPlanLink, or WeekError: unavailable (no such E32 installation),
     disabled (turned off by the user), setup_error (the installation could not start: a clear
@@ -110,7 +120,8 @@ def week_rooms(plan, settings=None):
         "minimum_centi_c": room.get("minimum_centi_c", 500), "maximum_centi_c": room.get("maximum_centi_c", 3000),
         "fallback_centi_c": room.get("fallback_centi_c", 2000), "setpoint_entity": room.get("setpoint_entity") or "",
         "schedule": _program(room), "levels": _levels(room, settings),
-        "schedule_levels": room.get("schedule_levels") if room_levels(room) else None} for room in plan["rooms"]]}
+        "schedule_levels": room.get("schedule_levels") if room_levels(room) else None,
+        "resets": _resets(room)} for room in plan["rooms"]]}
 
 
 def _settings(hass, entry_id):
@@ -165,6 +176,8 @@ async def save_week(hass, entry_id, room_id, schedule, expected, levels=None, sc
             room["levels"] = chosen
             room["schedule_levels"] = schedule_levels if type(schedule_levels) is str else None
         wanted[:] = [week]
+        for other in candidate["rooms"]:  # E32 1.4: the reset times are set in the room's settings, never here
+            other.pop("resets", None)
         return candidate
 
     def confirm(stored):

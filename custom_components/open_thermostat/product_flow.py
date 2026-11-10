@@ -285,7 +285,22 @@ class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingS
         return connection is not None and connection.runtime.native_plan_source is not None
 
     async def async_step_init(self, user_input=None):
-        return self.async_show_menu(step_id="init", menu_options=main_menu(self.config_entry))
+        from .options_navigation import async_flow_texts
+        texts = await async_flow_texts(self.hass, "configure_text")
+        return self.async_show_menu(step_id="init", menu_options=main_menu(self.config_entry), description_placeholders={
+            "intro": texts["settings_page" if settings_page(self.config_entry) else "menu"]})
+
+    async def async_step_open_settings(self, user_input=None):
+        """Configure → "Open the settings page" (1.4): the everyday settings live on the dashboard's Settings tab. An
+        options flow cannot navigate, so this step names the way there (with a link) and Done closes the dialog with
+        the options unchanged."""
+        if user_input is not None:
+            return await self.async_step_done()
+        from .dashboard import RoomDashboard
+        entry = self.config_entry
+        dashboard = RoomDashboard(self.hass, entry.data.get("topic_prefix", entry.unique_id), entry.entry_id)
+        return self.async_show_form(step_id="open_settings", data_schema=vol.Schema({}),
+                                    description_placeholders={"path": dashboard.settings_path})
 
     async def async_step_heating_boiler(self, user_input=None):
         """Configure → Heating and boiler: Smart warm-up, Weather compensation, the water temperature limits,
@@ -325,27 +340,24 @@ class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingS
         weather curve of the Home Assistant room route; for the E32 room plan those
         are under Heating and boiler and on the E32 device page, so only these two stay.
         """
+        # 1.4: the same validation and write as the settings panel's section "Dashboard and name" (settings.py).
+        from .settings import SettingsError, commit_general, general_unchanged, general_values
         entry = self.config_entry
         if not hasattr(self, "_general_before"):
             self._general_before = configuration_snapshot(entry)
         errors = {}
         if user_input is not None:
-            name = str(user_input.get("name", "")).strip()
-            dashboard = user_input.get(CONF_CREATE_DASHBOARD, False)
-            if not name or len(name) > 80:
-                errors["name"] = "invalid_name"
-            elif type(dashboard) is not bool:
-                errors["base"] = "setup_invalid"
-            elif name == entry.title and dashboard == entry.options.get(CONF_CREATE_DASHBOARD, False):
-                return self.async_abort(reason="installation_saved")
+            try:
+                name, dashboard = general_values(user_input)
+            except SettingsError as err:
+                errors[err.field] = err.key
             else:
+                if general_unchanged(entry, name, dashboard):
+                    return self.async_abort(reason="installation_saved")
                 try:
-                    commit_configuration(self.hass, entry, self._general_before, title=name,
-                                         options={**entry.options, CONF_CREATE_DASHBOARD: dashboard})
-                except ValueError as err:
-                    code = str(err)
-                    return self.async_abort(reason=code if code in {"setup_changed", "setup_platform_unsupported"}
-                                            else "setup_save_uncertain")
+                    commit_general(self.hass, entry, self._general_before, name, dashboard)
+                except SettingsError as err:
+                    return self.async_abort(reason=err.key)
                 return self.async_abort(reason="installation_saved")
         schema = vol.Schema({
             vol.Required("name", default=entry.title): str,
@@ -582,12 +594,34 @@ class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingS
                 "connection": connection_text, "runtime": runtime_text, "actuator_checks": actuator_text})
 
     async def async_step_advanced_settings(self, user_input=None):
+        from .options_navigation import async_flow_texts
+        texts = await async_flow_texts(self.hass, "configure_text")
+        return self.async_show_menu(step_id="advanced_settings", menu_options=await self._advanced_options(),
+                                    description_placeholders={
+                                        "intro": texts["advanced_settings_page" if settings_page(self.config_entry)
+                                                       else "advanced_menu"]})
+
+    async def _advanced_options(self):
+        """The rows of Configure → Advanced and diagnostics (also named by the settings panel's Advanced, "More in
+        Configure"). With the settings page (1.4, settings_page) the E32's system log, its time zone and the tester
+        program are on the dashboard's Settings tab → Advanced; here stay what the panel does not hold: the rooms'
+        radiator valves, persons and temperature limits, the boiler settings (preview), restoring a backup, tidying
+        entity IDs and the older Home Assistant rooms and their checks."""
         from .e32_link import legacy_rooms_pending, legacy_zones
         entry = self.config_entry
         e32 = not old_room_route(entry)
+        panel = settings_page(entry)
+        options = []
+        if panel:
+            # Not in the panel yet (Settings → Rooms says "You change these in Configure"): the room form keeps them.
+            options.append("e32_rooms")
+            from .e32_boiler_settings import offered as boiler_settings_offered
+            if boiler_settings_offered(self.hass, entry):
+                options.append("boiler_settings")  # a preview with its own risk: Configure only (design chapter 5)
         # Dashboard and name are on the main menu unless the old room route is (1.1.1, Q6). "Check the old rooms"
         # counts and checks the old Home Assistant rooms only: it is shown while such rooms are left (1.3, Q7).
-        options = [] if e32 else ["general"]
+        if not e32:
+            options.append("general")
         if not e32 or legacy_zones(entry):
             options.append("configuration_status")
         if e32 and legacy_zones(entry):
@@ -602,7 +636,7 @@ class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingS
             # Restore one of the E32 settings backups Home Assistant keeps (e32_backup_flow).
             options.append("e32_restore")
         from .e32_system import link_for
-        if link_for(self.hass, entry) is not None:
+        if link_for(self.hass, entry) is not None and not panel:
             # The E32's system log and time zone (e32_system), as on its System pages. Its Bluetooth sensors are under
             # E32 devices on the main menu since 1.3.
             options += ["e32_logging", "e32_time_zone"]
@@ -612,7 +646,7 @@ class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingS
         options.append("entity_ids")
         if await async_undo_available(self.hass, entry):
             options.append("entity_ids_undo")
-        return self.async_show_menu(step_id="advanced_settings", menu_options=options)
+        return options
 
     async def async_step_entity_ids(self, user_input=None):
         """Optional tidy of long entity IDs: a preview of every old -> new pair and where it is used,
@@ -673,20 +707,33 @@ class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingS
 def main_menu(entry):
     """Configure's top level, in the order a user needs it, without duplicates.
 
-    E32 room plan (connected): Rooms, House, Heating and boiler, Energy and outdoor temperature,
-    Notifications, E32 connection, E32 devices, Dashboard and name, Advanced and diagnostics (1.1.1, the owner's Q6:
-    Dashboard and name on the main menu, its last row before Advanced; 1.3: E32 devices, the Bluetooth sensors and
-    the Shelly devices as on the E32's page System → Devices). A new installation whose E32 is not connected yet
-    starts with E32 connection (rooms and heating need it).
+    E32 room plan with the settings page (1.4, settings_page): Open the settings page, E32 connection, Advanced and
+    diagnostics. The everyday settings live on the dashboard's Settings tab (settings.py); every step stays in the
+    flow, and what the panel does not hold yet is under Advanced and diagnostics (_advanced_options).
+    E32 room plan without the OpenThermostat dashboard (so without its Settings tab): Rooms, House, Heating and boiler,
+    Energy and outdoor temperature, Notifications, E32 connection, E32 devices, Dashboard and name, Advanced and
+    diagnostics (1.1.1, the owner's Q6: Dashboard and name on the main menu, its last row before Advanced; 1.3: E32
+    devices, the Bluetooth sensors and the Shelly devices as on the E32's page System → Devices). A new installation
+    whose E32 is not connected yet starts with E32 connection (rooms and heating need it).
     Older installations on the Home Assistant room route keep their menu.
     """
     from .room_plan import has_room_plan
     if has_room_plan(entry):
+        if settings_page(entry):
+            return ["open_settings", "controller_connection", "advanced_settings"]
         return ["e32_rooms", "house", "heating_boiler", "energy", "notifications", "controller_connection",
                 "e32_devices", "general", "advanced_settings"]
     if not old_room_route(entry):
         return ["controller_connection", "energy", "general", "advanced_settings"]
     return ["room_settings", "controller_connection", "energy", "installation", "advanced_settings"]
+
+
+def settings_page(entry):
+    """True when the everyday settings live on the dashboard's Settings tab (1.4): an installation on the E32 room plan
+    that shows the OpenThermostat dashboard (the tab is part of it). Without the dashboard Configure keeps every
+    setting in its own menu, so nothing is out of reach."""
+    from .room_plan import has_room_plan
+    return has_room_plan(entry) and (getattr(entry, "options", None) or {}).get(CONF_CREATE_DASHBOARD, False) is True
 
 
 def old_room_route(entry):

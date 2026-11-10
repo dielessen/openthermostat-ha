@@ -207,6 +207,129 @@ class Refused(Exception):
         self.code = code
 
 
+# -- shared by Configure and the settings panel (1.4, settings_devices.py): the requests of the E32's own page ------
+
+async def async_read(link):
+    """(record, status) in one sign-in: the Shelly record (GET /config/shelly) and, when it answers, the devices'
+    state (GET /status/shelly, else None). ControllerLinkError when the record cannot be read
+    (controller_response_invalid for an answer this version cannot read)."""
+    from .controller_link import ControllerLinkError
+
+    async def read(client):
+        record = await client.async_shelly()
+        try:
+            status = await client.async_shelly_status()
+        except ControllerLinkError:
+            status = None  # the list without its state is still the list
+        return record, status
+    value, status = await link.async_call(read)
+    record = decode_record(value)
+    if record is None:
+        raise ControllerLinkError("controller_response_invalid")
+    return record, status
+
+
+async def async_change(link, change):
+    """Read the record, change it (change(record) -> devices, or raise Refused) and POST it, in one sign-in.
+
+    Returns the stored record. Raises Refused (the E32's refusal or change's own) or ControllerLinkError.
+    """
+    from .controller_link import ControllerLinkError, HeatingPlanRejected
+
+    async def call(client):
+        record = decode_record(await client.async_shelly())
+        if record is None:
+            raise ControllerLinkError("controller_response_invalid")
+        try:
+            stored = await client.async_shelly(save_document(change(record), record["circuits"]))
+        except HeatingPlanRejected as err:
+            raise Refused(err.error) from None
+        stored = decode_record(stored)
+        if stored is None:
+            raise ControllerLinkError("controller_settings_unconfirmed")
+        return stored
+    return await link.async_call(call, write=True)
+
+
+async def async_probe(link, ip):
+    """Test connection: the E32 asks the device at ``ip`` who it is (POST /config/shelly/probe), then /status/shelly is
+    read until the probe answers (up to 16 s). The device's info ({"id", "app", "ver", "auth_en", ...}); Refused with
+    the probe's error (connect_failed, timeout, auth_required, not_a_shelly, probe_busy), or ControllerLinkError."""
+    from .controller_link import HeatingPlanRejected
+
+    async def test(client):
+        try:
+            await client.async_shelly_probe(ip)
+        except HeatingPlanRejected as err:
+            raise Refused(err.error) from None
+        for _ in range(PROBE_READS):
+            await asyncio.sleep(PROBE_PAUSE)
+            probe = (await client.async_shelly_status() or {}).get("probe")
+            if type(probe) is not dict or probe.get("ip") != ip or probe.get("state") == "pending":
+                continue
+            info = probe.get("info")
+            if probe.get("state") != "ok" or type(info) is not dict or not info.get("id"):
+                raise Refused(probe.get("error") or "not_a_shelly")
+            return info
+        raise Refused("timeout")
+    return await link.async_call(test, write=True)
+
+
+def new_device(info, ip, kind, label, password):
+    """The record entry of a device the probe found: its id, what it does, its address, an optional name and, when
+    given, its password as text (it goes to the E32 only; the E32 keeps it and never sends it back)."""
+    return {"id": info["id"], "kind": kind, "ip": ip, "host": info["id"],
+            **({"label": label} if label else {}), **({"password": password} if password else {})}
+
+
+def adding(device):
+    """change() for async_change: the record with ``device`` added (Refused when its id or address is listed)."""
+    def add(record):
+        if any(d["id"] == device["id"] for d in record["devices"]):
+            raise Refused("duplicate_device")
+        if any(d["ip"] == device["ip"] for d in record["devices"]):
+            raise Refused("duplicate_ip")
+        return [*record["devices"], device]
+    return add
+
+
+def removing(device_id):
+    """change() for async_change: the record without the device ``device_id`` (Refused unknown_device when gone)."""
+    def remove(record):
+        if not any(d["id"] == device_id for d in record["devices"]):
+            raise Refused("unknown_device")
+        return [d for d in record["devices"] if d["id"] != device_id]
+    return remove
+
+
+def adding_valve(gateway_id, valve, name=""):
+    """change() for async_change: valve number ``valve`` (with an optional name) added to the gateway ``gateway_id``."""
+    entry = {"id": valve, **({"name": name} if name else {})}
+
+    def add(record):
+        device = next((d for d in record["devices"] if d["id"] == gateway_id), None)
+        if device is None:
+            raise Refused("unknown_device")
+        valves = list(device.get("valves") or [])
+        if any(type(v) is dict and v.get("id") == valve for v in valves):
+            raise Refused("duplicate_valve")
+        if len(valves) >= MAX_VALVES:
+            raise Refused("invalid_valves")
+        return [{**d, "valves": [*valves, entry]} if d is device else d for d in record["devices"]]
+    return add
+
+
+def removing_valves(gone, ids):
+    """change() for async_change: the gateways' valves ``gone`` ({(device n, valve id)}) removed; ``ids`` maps a
+    device's n to its id as the list showed it."""
+    def remove(record):
+        return [{**d, "valves": [v for v in d.get("valves") or []
+                                 if not (type(v) is dict and (d["n"], v.get("id")) in gone)]}
+                if d["kind"] == "gateway" and d["id"] in {ids[n] for n, _ in gone} else d
+                for d in record["devices"]]
+    return remove
+
+
 class DevicesOptionsSteps:
     """Mixin for the product options flow: Configure → E32 devices and its Shelly steps."""
 
@@ -233,25 +356,8 @@ class DevicesOptionsSteps:
                                 description_placeholders=placeholders)
 
     async def _shelly_change(self, change):
-        """Read the record, change it (change(record) → devices, or raise Refused) and POST it, in one sign-in.
-
-        Returns the stored record. Raises Refused (the E32's refusal or change's own) or ControllerLinkError.
-        """
-        from .controller_link import ControllerLinkError, HeatingPlanRejected
-
-        async def call(client):
-            record = decode_record(await client.async_shelly())
-            if record is None:
-                raise ControllerLinkError("controller_response_invalid")
-            try:
-                stored = await client.async_shelly(save_document(change(record), record["circuits"]))
-            except HeatingPlanRejected as err:
-                raise Refused(err.error) from None
-            stored = decode_record(stored)
-            if stored is None:
-                raise ControllerLinkError("controller_settings_unconfirmed")
-            return stored
-        return await self._devices_link().async_call(call, write=True)
+        """async_change over the stored connection (read, change and POST the record in one sign-in)."""
+        return await async_change(self._devices_link(), change)
 
     def _shelly_form_error(self, err, errors, placeholders):
         """A refusal or a failed write as a form error (the field it belongs to), or an abort result."""
@@ -279,22 +385,13 @@ class DevicesOptionsSteps:
         link = self._devices_link()
         if link is None:
             return self.async_abort(reason="e32_rooms_unavailable")
-
-        async def read(client):
-            record = await client.async_shelly()
-            try:
-                status = await client.async_shelly_status()
-            except ControllerLinkError:
-                status = None  # the list without its state is still the list
-            return record, status
         try:
-            value, status = await link.async_call(read)
+            record, status = await async_read(link)
         except ControllerLinkError as err:
+            if str(err) == "controller_response_invalid":
+                return self.async_abort(reason="e32_settings_unreachable",
+                                        description_placeholders={"error": "controller_response_invalid"})
             return self._shelly_abort(err)
-        record = decode_record(value)
-        if record is None:
-            return self.async_abort(reason="e32_settings_unreachable",
-                                    description_placeholders={"error": "controller_response_invalid"})
         self._shelly = record
         lang = language(self.hass)
         rooms = valve_rooms(heating_hub(self.hass, self.config_entry))
@@ -310,7 +407,7 @@ class DevicesOptionsSteps:
         """The device's address; "Test connection": the E32 asks the device who it is."""
         from homeassistant.helpers import selector
         import probatio as vol
-        from .controller_link import ControllerLinkError, HeatingPlanRejected
+        from .controller_link import ControllerLinkError
         record = getattr(self, "_shelly", None)
         if record is None:
             return await self.async_step_shelly_devices()
@@ -322,23 +419,8 @@ class DevicesOptionsSteps:
             elif any(d["ip"] == ip for d in record["devices"]):
                 errors["ip"] = "shelly_ip_duplicate"
             else:
-                async def test(client):
-                    try:
-                        await client.async_shelly_probe(ip)
-                    except HeatingPlanRejected as err:
-                        raise Refused(err.error) from None
-                    for _ in range(PROBE_READS):
-                        await asyncio.sleep(PROBE_PAUSE)
-                        probe = (await client.async_shelly_status() or {}).get("probe")
-                        if type(probe) is not dict or probe.get("ip") != ip or probe.get("state") == "pending":
-                            continue
-                        info = probe.get("info")
-                        if probe.get("state") != "ok" or type(info) is not dict or not info.get("id"):
-                            raise Refused(probe.get("error") or "not_a_shelly")
-                        return info
-                    raise Refused("timeout")
                 try:
-                    info = await self._devices_link().async_call(test, write=True)
+                    info = await async_probe(self._devices_link(), ip)
                 except (Refused, ControllerLinkError) as err:
                     aborted = self._shelly_form_error(err, errors, placeholders)
                     if aborted is not None:
@@ -374,17 +456,9 @@ class DevicesOptionsSteps:
             elif info.get("auth_en") is True and not password:
                 errors["password"] = "shelly_password_needed"
             else:
-                device = {"id": info["id"], "kind": kind, "ip": found["ip"], "host": info["id"],
-                          **({"label": label} if label else {}), **({"password": password} if password else {})}
-
-                def add(record):
-                    if any(d["id"] == device["id"] for d in record["devices"]):
-                        raise Refused("duplicate_device")
-                    if any(d["ip"] == device["ip"] for d in record["devices"]):
-                        raise Refused("duplicate_ip")
-                    return [*record["devices"], device]
+                device = new_device(info, found["ip"], kind, label, password)
                 try:
-                    stored = await self._shelly_change(add)
+                    stored = await self._shelly_change(adding(device))
                 except (Refused, ControllerLinkError) as err:
                     aborted = self._shelly_form_error(err, errors, placeholders)
                     if aborted is not None:
@@ -428,12 +502,8 @@ class DevicesOptionsSteps:
             elif not user_input.get("confirm"):
                 errors["base"] = "care_confirm"
             else:
-                def remove(current):
-                    if not any(d["id"] == device["id"] for d in current["devices"]):
-                        raise Refused("unknown_device")
-                    return [d for d in current["devices"] if d["id"] != device["id"]]
                 try:
-                    stored = await self._shelly_change(remove)
+                    stored = await self._shelly_change(removing(device["id"]))
                 except (Refused, ControllerLinkError) as err:
                     aborted = self._shelly_form_error(err, errors, placeholders)
                     if aborted is not None:
@@ -480,20 +550,8 @@ class DevicesOptionsSteps:
             elif name and not valid_label(name, quotes=True):
                 errors["name"] = "shelly_valve_name_invalid"
             else:
-                entry = {"id": valve, **({"name": name} if name else {})}
-
-                def add(current):
-                    device = next((d for d in current["devices"] if d["id"] == target["id"]), None)
-                    if device is None:
-                        raise Refused("unknown_device")
-                    valves = list(device.get("valves") or [])
-                    if any(type(v) is dict and v.get("id") == valve for v in valves):
-                        raise Refused("duplicate_valve")
-                    if len(valves) >= MAX_VALVES:
-                        raise Refused("invalid_valves")
-                    return [{**d, "valves": [*valves, entry]} if d is device else d for d in current["devices"]]
                 try:
-                    stored = await self._shelly_change(add)
+                    stored = await self._shelly_change(adding_valve(target["id"], valve, name))
                 except (Refused, ControllerLinkError) as err:
                     aborted = self._shelly_form_error(err, errors, placeholders)
                     if aborted is not None:
@@ -543,14 +601,8 @@ class DevicesOptionsSteps:
             else:
                 gone = {tuple(int(x) for x in v.split(":")) for v in chosen}
                 ids = {d["n"]: d["id"] for d in record["devices"]}
-
-                def remove(current):
-                    return [{**d, "valves": [v for v in d.get("valves") or []
-                                             if not (type(v) is dict and (d["n"], v.get("id")) in gone)]}
-                            if d["kind"] == "gateway" and d["id"] in {ids[n] for n, _ in gone} else d
-                            for d in current["devices"]]
                 try:
-                    stored = await self._shelly_change(remove)
+                    stored = await self._shelly_change(removing_valves(gone, ids))
                 except (Refused, ControllerLinkError) as err:
                     aborted = self._shelly_form_error(err, errors, placeholders)
                     if aborted is not None:

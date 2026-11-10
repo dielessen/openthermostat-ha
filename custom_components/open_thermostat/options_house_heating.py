@@ -88,6 +88,86 @@ def _without(periods, period):
     return [p for p in periods if p != period]
 
 
+# -- the house mode and the holidays without the form (1.4): shared by these steps and the settings panel
+# (settings_house.py). Each raises HolidayInputError(field, error key); a refusal of the E32 carries its word as
+# ``error`` (the form's {error}).
+
+def house_modes(away):
+    """The house modes this E32 offers: At home only with house.mode.v1."""
+    return [mode for mode in MODES if mode != "home" or supports_house_mode(away)]
+
+
+def house_mode_input(mode, until_text, modes):
+    """(mode, until) of a chosen house mode; Holiday needs the moment it ends (unix seconds: in the future, at most
+    a year ahead), the other modes have none."""
+    if mode not in modes:
+        raise HolidayInputError("house_mode", "house_mode_invalid")
+    if mode != "holiday":
+        return mode, None
+    value = dt_util.parse_datetime(str(until_text or ""))
+    if value is None:
+        raise HolidayInputError("holiday_until", "house_holiday_date_needed")
+    try:
+        return mode, holiday_until(value)
+    except HomeAssistantError:
+        raise HolidayInputError("holiday_until", "house_holiday_date_invalid") from None
+
+
+def _refused(code, err):
+    failure = HolidayInputError("base", code)
+    key = getattr(err, "translation_key", None)
+    failure.error = (getattr(err, "translation_placeholders", None) or {}).get("error") or key or "unknown"
+    return failure
+
+
+async def async_set_house_mode(house, mode, until):
+    """Send the house mode (and a holiday's end) with the very command of the house mode select."""
+    try:
+        if until is not None:
+            house.pending_until = until
+        await house.async_command(mode, until)
+    except HomeAssistantError as err:
+        key = getattr(err, "translation_key", None)
+        raise _refused("house_mode_update_required" if key == "house_mode_update_required"
+                       else "house_mode_not_saved", err) from None
+
+
+def holidays_change(shown, wanted):
+    """The change of the planned holidays from the periods shown to the ones wanted: each removed one must still be
+    on the E32 (else house_holiday_changed: changed elsewhere), the added ones join the list as the E32 holds it."""
+    removed = [period for period in shown if period not in wanted]
+    added = [period for period in wanted if period not in shown]
+
+    def change(periods):
+        for period in removed:
+            periods = _without(periods, period)
+        return [*periods, *added]
+    return change
+
+
+async def async_change_planned_holidays(house, change):
+    """Send one change of the planned holidays (read and written in one E32 web session)."""
+    try:
+        await house.async_holidays(change)
+    except HomeAssistantError as err:
+        key = getattr(err, "translation_key", None)
+        code = (getattr(err, "translation_placeholders", None) or {}).get("error") or key or "unknown"
+        failure = HolidayInputError("base", HOLIDAY_ERRORS.get(code, "house_holiday_not_saved"))
+        failure.error = code
+        raise failure from None
+
+
+async def async_set_holiday_temperature(house, value):
+    """Send the temperature on holiday (5–25 °C) with the very command of its number entity."""
+    temperature = number(value, *AWAY_LIMITS)
+    if temperature is None:
+        raise HolidayInputError("holiday_temperature", "house_holiday_temperature_invalid")
+    try:
+        await house.async_holiday_temperature(temperature)
+    except HomeAssistantError as err:
+        raise _refused("house_holiday_not_saved", err) from None
+
+
 class HouseHeatingSteps:
     """Mixin of the product options flow."""
 
@@ -111,39 +191,22 @@ class HouseHeatingSteps:
     async def _house_mode_form(self, step_id, house, user_input):
         away = house.away
         current = house_mode(away)
-        modes = [mode for mode in MODES if mode != "home" or supports_house_mode(away)]
+        modes = house_modes(away)
         errors, placeholders = {}, {"error": ""}
         if user_input is not None:
-            mode = user_input.get("house_mode")
-            until = None
-            if mode not in modes:
-                errors["house_mode"] = "house_mode_invalid"
-            elif mode == "holiday":
-                value = dt_util.parse_datetime(str(user_input.get("holiday_until") or ""))
-                if value is None:
-                    errors["holiday_until"] = "house_holiday_date_needed"
-                else:
-                    try:
-                        until = holiday_until(value)
-                    except HomeAssistantError:
-                        errors["holiday_until"] = "house_holiday_date_invalid"
-            if not errors:
+            try:  # shared with the settings panel (settings_house.py)
+                mode, until = house_mode_input(user_input.get("house_mode"), user_input.get("holiday_until"), modes)
                 # Plan item 1b: unchanged against what the form showed (the E32 may have changed it since).
                 was_mode, was_until = shown_value(self, step_id, (current, away.get("until")))
                 if mode == was_mode and (mode != "holiday" or until == was_until):
                     return self.async_abort(reason="e32_room_unchanged")
-                try:
-                    if until is not None:
-                        house.pending_until = until
-                    await house.async_command(mode, until)
-                except HomeAssistantError as err:
-                    key = getattr(err, "translation_key", None)
-                    errors["base"] = ("house_mode_update_required" if key == "house_mode_update_required"
-                                      else "house_mode_not_saved")
-                    placeholders["error"] = (getattr(err, "translation_placeholders", None) or {}).get("error") or \
-                        key or "unknown"
-                else:
-                    return self.async_abort(reason="house_mode_saved")
+                await async_set_house_mode(house, mode, until)
+            except HolidayInputError as err:
+                errors[err.field] = err.code
+                if hasattr(err, "error"):
+                    placeholders["error"] = err.error
+            else:
+                return self.async_abort(reason="house_mode_saved")
         until = away.get("until") if current == "holiday" else None
         marker = vol.Optional("holiday_until")
         if type(until) is int and until > 0:
@@ -193,12 +256,10 @@ class HouseHeatingSteps:
     async def _holidays_change(self, house, change, errors, placeholders):
         """Sends one change of the list; the menu again ("Saved.") or None with the form's error set."""
         try:
-            await house.async_holidays(change)
-        except HomeAssistantError as err:
-            key = getattr(err, "translation_key", None)
-            code = (getattr(err, "translation_placeholders", None) or {}).get("error") or key or "unknown"
-            errors["base"] = HOLIDAY_ERRORS.get(code, "house_holiday_not_saved")
-            placeholders["error"] = code
+            await async_change_planned_holidays(house, change)  # shared with the settings panel
+        except HolidayInputError as err:
+            errors[err.field] = err.code
+            placeholders["error"] = err.error
             return None
         return self.async_abort(reason="house_mode_saved")
 
@@ -228,7 +289,7 @@ class HouseHeatingSteps:
             except HolidayInputError as err:
                 errors[err.field] = err.code
             else:
-                if (result := await self._holidays_change(house, lambda periods: [*periods, period], errors,
+                if (result := await self._holidays_change(house, holidays_change([], [period]), errors,
                                                           placeholders)) is not None:
                     return result
         schema = vol.Schema({vol.Required("holiday_from"): selector.DateTimeSelector(),
@@ -271,8 +332,7 @@ class HouseHeatingSteps:
         if user_input is not None:
             change = None
             if user_input.get("remove") is True:
-                def change(periods):
-                    return _without(periods, original)
+                change = holidays_change([original], [])
             else:
                 try:
                     period = holiday_input(user_input.get("holiday_from"), user_input.get("holiday_to"))
@@ -281,9 +341,7 @@ class HouseHeatingSteps:
                 else:
                     if period == original:
                         return self.async_abort(reason="e32_room_unchanged")
-
-                    def change(periods):
-                        return [*_without(periods, original), period]
+                    change = holidays_change([original], [period])
             if change is not None and (result := await self._holidays_change(house, change, errors, placeholders)) is not None:
                 return result
 
@@ -315,11 +373,10 @@ class HouseHeatingSteps:
                 return self.async_abort(reason="e32_room_unchanged")
             else:
                 try:
-                    await house.async_holiday_temperature(value)
-                except HomeAssistantError as err:
-                    errors["base"] = "house_holiday_not_saved"
-                    placeholders["error"] = (getattr(err, "translation_placeholders", None) or {}).get("error") or \
-                        getattr(err, "translation_key", None) or "unknown"
+                    await async_set_holiday_temperature(house, value)  # shared with the settings panel
+                except HolidayInputError as err:
+                    errors[err.field] = err.code
+                    placeholders["error"] = getattr(err, "error", "")
                 else:
                     return self.async_abort(reason="house_mode_saved")
         if user_input is None:
@@ -375,11 +432,10 @@ class HouseHeatingSteps:
             changes[key] = value
 
     async def _heating_save(self, link, changes):
-        """None when the E32 stored every change (one field at a time), else the form's error key."""
-        for key, value in changes.items():
-            if (error := await self._e32_save_flow_options(link, {key: value})) is not None:
-                return error
-        return None
+        """None when the E32 stored every change (one field at a time), else the form's error key (1.4: the same
+        write as the settings panel, e32_flow.async_save_options)."""
+        from .e32_flow import async_save_options
+        return await async_save_options(link, changes)
 
     async def async_step_heating_flow(self, user_input=None):
         """Smart warm-up and weather compensation in one form (1.1.1, V12-31): the two switches, the water
@@ -395,15 +451,17 @@ class HouseHeatingSteps:
             was = shown_value(self, "heating_options", stored)
             warm_up, on = user_input.get("smart_warm_up"), user_input.get("weather_compensation")
             choice = (user_input.get("advanced") or {}).get("hard_frost_water_temperature", shown)
-            changes = {}
-            if (type(warm_up) is not bool or type(on) is not bool or choice not in DESIGN_CHOICES
-                    or not self._comfort_change(stored, user_input, changes, was)):
+            # 1.4: the same check as the settings panel (e32_flow.option_changes); the comfort style first, as before.
+            from .e32_flow import option_changes
+            try:
+                if type(warm_up) is not bool or type(on) is not bool or choice not in DESIGN_CHOICES:
+                    raise ValueError("e32_flow_options_failed")
+                style = {COMFORT_STYLE_KEY: user_input.get("comfort_style")} if "comfort_style" in user_input else {}
+                changes = option_changes(stored, was, {**style, "apply_learned": warm_up, "weather_curve": on,
+                                                       DESIGN_FLOW_KEY: 0 if choice == DESIGN_FLOW_AUTOMATIC else int(choice)})
+            except ValueError:
                 errors["base"] = "e32_flow_options_failed"
             else:
-                self._option_change(changes, "apply_learned", warm_up, was, stored)
-                self._option_change(changes, "weather_curve", on, was, stored)
-                wanted = 0 if choice == DESIGN_FLOW_AUTOMATIC else int(choice)
-                self._option_change(changes, DESIGN_FLOW_KEY, wanted, was, stored)
                 if not changes:
                     return self.async_abort(reason="e32_room_unchanged")
                 if (error := await self._heating_save(link, changes)) is None:

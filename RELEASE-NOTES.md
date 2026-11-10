@@ -1,3 +1,84 @@
+# HA 1.4.0 — a Settings tab on the dashboard, reset times, Heat along only as a preset and fewer Repairs
+<!-- user-release-notes:v2:en -->
+
+Companion of E32 1.4.0; also runs with E32 1.3.0 and 1.2.0. Needs Home
+Assistant 2026.10.0 or newer.
+
+## New
+
+- **A Settings tab.** The last tab of the OpenThermostat dashboard holds the
+  settings of the installation in eight sections: Rooms, House, Heating and
+  boiler, Devices, Notifications, Energy and outdoor temperature, Dashboard and
+  name, and Advanced. The overview says what is set now. Each screen shows the
+  value in use beside its field and an explanation beside each choice, and
+  saves only what you changed; a setting changed on the E32 meanwhile is
+  shown, with your change kept. Each room card has a Settings button that opens
+  its room. Only an administrator of Home Assistant can save.
+- **A shorter Configure.** While the dashboard is shown, Configure has three
+  items: Open the settings page, E32 connection, and Advanced and diagnostics.
+  Advanced keeps what the tab does not hold yet: a room's radiator valves,
+  persons and temperature limits, the boiler settings (preview), restoring a
+  backup and tidying entity IDs. Without the dashboard, Configure is as before.
+- **Reset times.** Settings → Rooms → the room → Reset times, at most four:
+  on that moment any manual change ends and the room takes this value; the E32
+  does not work towards it. The week planner shows them as markers under the
+  days, the room card names the next one ("Resets at 22:00 to 14 °C"), the
+  room's thermostat has the attributes `next_reset` and `next_reset_value`, and
+  a setting device on the wall gets the reset time's temperature.
+- **Heat along only as a preset** on the room's thermostat (issue #10), so a
+  card, a voice assistant or an automation can choose all three room states. A
+  temperature, Heat or another preset switches the room to On; Auto leaves it
+  as it is.
+- **Smart warm-up per room** (issue #8): As the house, On or Off, in the
+  room's settings. A room that is off for it says so: "Smart warm-up is off for
+  this room: heating starts at 07:00."
+- **A room that is Off shows its temperature** (issue #9) on its thermostat,
+  its card and its page on the Rooms tab ("Off · 17.2 °C (Bluetooth sensor)").
+- **The sensor Errors** on the OpenThermostat E32 device: the error lines in
+  the E32's system log since the last restart, with the last one and when. It
+  is a figure, never a repair.
+
+## Fixed
+
+- **An empty week program stays empty** (issue #7). Editing a room without a
+  week program no longer gives it "Workdays and weekend", and after saving the
+  room list says which week program the room has. Only a new room starts with
+  the standard program, and you can clear it.
+- **Fewer Repairs.** Repairs only name what needs your attention. Gone: a room
+  with one temperature source (the sentence is now in the room's help), a room
+  group that came back, "Give your rooms a week program", and the notices about
+  renewed boiler counters and room estimates. Items left by 1.3.0 go by
+  themselves.
+- **A weather forecast you chose now reaches the E32.** Home Assistant read the
+  choice wrongly, so it was never sent, and saving the energy settings cleared
+  it.
+- **A comfort style changed in Configure** is no longer reported as not saved.
+
+## Updating
+
+Update under Settings → Updates (the Marketplace, Home Assistant 2026.11 and
+newer; HACS on 2026.10 and older) and restart Home Assistant. Then install E32
+1.4.0 from its Firmware entity and confirm the takeover again (the repair
+"Confirm again that the E32 may control the boiler").
+
+- Entities, IDs and history stay. The E32 device gets the sensor Errors once
+  E32 1.4.0 runs.
+- Going back to 1.3.0 is safe: the Settings tab goes, and Configure has all
+  its items again.
+
+## Limitations
+
+- Reset times, Smart warm-up per room, the temperature of a room that is Off
+  and the sensor Errors need E32 1.4.0; on older firmware they are not shown.
+- The Settings tab does not yet hold a room's radiator valves, persons and
+  temperature limits, the boiler settings (preview) or restoring a backup;
+  they stay in Configure → Advanced and diagnostics. The week program is
+  changed in the week planner.
+- The Settings tab and the shorter Configure exist only while the
+  OpenThermostat dashboard is shown.
+- Pairing a Bluetooth sensor, The Pill's probe roles and looking for valves at
+  a BLU Gateway stay on the E32's Devices page.
+
 # HA 1.3.0 — an E32 devices menu, Heat along only, a visible setting-device link and fixes for the first field tester
 <!-- user-release-notes:v2:en -->
 

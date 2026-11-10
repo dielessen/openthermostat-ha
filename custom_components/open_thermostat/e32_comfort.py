@@ -8,7 +8,10 @@ without Home Assistant. This module adds, on top of that plan (E32 beta.19,
   current temperature, target, mode auto / heat / off and the presets comfort,
   eco, sleep (shown as "Night") and boost: the room's week planner levels
   (stored per room since E32 beta.23, see room_levels; inferred for older
-  firmware). "Away" is the house mode only, not a room preset. "Off" makes the room inactive in the room plan; a new
+  firmware). "Away" is the house mode only, not a room preset. E32 1.3's room state "Heat along only" is a preset
+  too (1.4, issue #10: ``heat_along``, offered while the E32 knows the state): choosing it sets the room's state,
+  as the room's Heating select does; a temperature, the Heat mode or another preset takes the room out of it to On
+  (Auto keeps it: Heat along only is on). "Off" makes the room inactive in the room plan; a new
   target becomes an override "until the next switch point" of the room's week
   program (or for the configured time when the room has no program); a room
   with only a fixed target changes that target in the plan.
@@ -112,6 +115,9 @@ PENDING_SECONDS = 60
 CONTACT_CLASSES = ("window", "door", "opening", "garage_door")
 # No "away" preset per room (owner, 31 Oct 2026): away is the house mode (e32_house.py), not one room's choice.
 PRESETS = [PRESET_NONE, PRESET_COMFORT, PRESET_ECO, PRESET_SLEEP, PRESET_BOOST]
+# 1.4 (issue #10): the room state "Heat along only" (plan state "follow", E32 1.3) as a preset, for cards, voice
+# assistants and automations; only for an E32 that knows the state (plan.room_follow.v1) or a room already on it.
+PRESET_HEAT_ALONG = "heat_along"
 # Preset -> index in program_levels(): the planner's Comfort, Eco and Night.
 LEVEL_PRESETS = {PRESET_COMFORT: 0, PRESET_ECO: 1, PRESET_SLEEP: 2}
 OVERRIDES = ("boost", "timed", "next")
@@ -432,6 +438,50 @@ def validate_away_temperature(user_input, current):
     if temperature is None:
         raise ComfortError("away_temperature", "comfort_away_temperature_invalid")
     return None if current is not None and float(temperature) == float(current) else float(temperature)
+
+
+# -- the house settings without the form (1.4): shared by the options steps and the settings panel (settings_house.py)
+
+async def async_save_presence(hass, entry, house, user_input, shown_away):
+    """Store the people of the house, the away delay and the away temperature (Configure → House → Presence).
+
+    ``house``: the E32's house state (None: no away temperature to send); ``shown_away``: the away temperature the
+    form showed, so one changed on the E32 meanwhile stays unless the user changed it too. The temperature goes to
+    the E32 first: when the E32 refuses it, nothing is saved. Raises ComfortError (field, code; ``error``: the E32's
+    word for a refusal)."""
+    settings = validate_presence(hass, user_input, comfort_options(entry))
+    temperature = validate_away_temperature(user_input, shown_away) if house is not None else None
+    if temperature is not None:
+        try:
+            await house.async_command(temperature=temperature)
+        except HomeAssistantError as err:
+            key = getattr(err, "translation_key", None)
+            failure = ComfortError("away_temperature", "away_temperature_update_required"
+                                   if key == "house_mode_update_required" else "away_temperature_not_saved")
+            failure.error = (getattr(err, "translation_placeholders", None) or {}).get("error") or key or "unknown"
+            raise failure from None
+    save_comfort(hass, entry, settings)
+
+
+def save_room_defaults(hass, entry, user_input):
+    """Store the room defaults (Configure → House → Room defaults): the temperatures of a room without a week
+    program, the pause after a window or door opens (minutes in the form, seconds stored) and the length of a
+    manual change. Raises ComfortError."""
+    for field in ("contact_delay", "door_delay"):
+        minutes = user_input.get(field)
+        if type(minutes) in (int, float) and type(minutes) is not bool:  # the form shows minutes
+            user_input = {**user_input, field: round(minutes * 60, 6)}
+    save_comfort(hass, entry, validate_settings(hass, user_input, comfort_options(entry)))
+
+
+def save_room_contacts(hass, entry, room_id, windows, doors):
+    """Store one room's window and door contacts (Configure → House → Window and door contacts); the room's own
+    pause delays stay. A sensor the room had may be unavailable now. Raises ComfortError."""
+    current = comfort_options(entry)
+    known = current["contacts"].get(room_id, [])
+    contacts, door_ids = validate_kinds(validate_contacts(hass, list(windows or []), known),
+                                        validate_contacts(hass, list(doors or []), known))
+    save_comfort(hass, entry, with_room_contacts(current, room_id, contacts, doors=door_ids))
 
 
 def contacts_room_schema(vol, rooms, room_id):
@@ -926,7 +976,6 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_target_temperature_step = 0.5
     _attr_hvac_modes = [HVACMode.AUTO, HVACMode.HEAT, HVACMode.OFF]
-    _attr_preset_modes = PRESETS
     _attr_supported_features = (ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
                                 | ClimateEntityFeature.TURN_ON | ClimateEntityFeature.TURN_OFF)
     # A translated sentence that changes with every step and message: shown, not kept in the history.
@@ -1004,7 +1053,22 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         return HVACAction.HEATING if room.get("demand") is True else HVACAction.IDLE
 
     @property
+    def preset_modes(self):
+        from .room_plan import follows
+        if follows(getattr(self.link, "plan", None)) or self._state() == "follow":
+            return [*PRESETS, PRESET_HEAT_ALONG]
+        return PRESETS
+
+    def _state(self):
+        """The room's state as its Heating select shows it: the E32's report, unless our plan write is newer."""
+        operation = getattr(self.link, "operation", None)
+        room = operation(self.room_id) if operation is not None else self.room
+        return (room or {}).get("state")
+
+    @property
     def preset_mode(self):
+        if self._state() == "follow":  # 1.4: the room state Heat along only, whatever holds its target
+            return PRESET_HEAT_ALONG
         comfort = self.comfort
         if comfort.get("override") == "boost":
             return PRESET_BOOST
@@ -1039,9 +1103,22 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
                 # E32 1.3: in Smart warm-up's lead the target is already the coming one: the moment it warms up
                 # for and the program's target then (None outside a lead; setpoint_source "warmup").
                 **self._warming_up(room),
+                # E32 1.4: the coming reset time (ISO) and what the room then gets: a temperature (°C) or a state
+                # (active, follow, inactive); None without one or on older firmware.
+                **self._next_reset(room),
                 "smart_warm_up": self._smart_warm_up(),
                 # The room's setting device: which one, what was written and taken, the last failure.
                 **setting_device_attributes(self.hass, self.entry, self.room_id, self.plan_room)}
+
+    @staticmethod
+    def _next_reset(room):
+        reset = room.get("next_reset")
+        at = _iso(reset.get("utc")) if type(reset) is dict else None
+        if at is None:
+            return {"next_reset": None, "next_reset_value": None}
+        from .room_plan import ROOM_STATES
+        value = reset.get("state") if reset.get("state") in ROOM_STATES else number(reset.get("temperature_c"), 5, 35)
+        return {"next_reset": at, "next_reset_value": value}
 
     def _warming_up(self, room):
         from homeassistant.util import dt as dt_util
@@ -1055,12 +1132,13 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
     def _smart_warm_up(self):
         """What Smart warm-up does for the next program step (E32 rc.3) and how the last step up turned out
         (E32 rc.4: "Yesterday warm at 09:12 (12 min late); next time it starts a little earlier.", or "about 10 min
-        earlier" where the E32's numbers tell it, E32 SL-A), in the Home Assistant language, or None."""
+        earlier" where the E32's numbers tell it, E32 SL-A), in the Home Assistant language, or None. E32 1.4 (#8):
+        as this room has it (its own choice or the house switch); off for this room only, the sentence says so."""
         if self.hass is None or (self.room or {}).get("state") == "follow":  # E32 1.3: Heat along only has none
             return None
         from .e32_flow import smart_warm_up
         from .learned_overview import (HELD_MODES, arrival_line, free_heat_later, language, local_clock, local_day,
-                                       smart_warm_up_line, trial_run)
+                                       room_smart_warm_up, smart_warm_up_line, trial_run)
         plan = self.hub.warmup.get(self.room_id) if type(getattr(self.hub, "warmup", None)) is dict else None
         plan = plan if type(plan) is dict else {}
         lang, clock = language(self.hass), local_clock(self.hass)
@@ -1071,8 +1149,9 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         held = comfort.get("mode") in HELD_MODES or comfort.get("window") == "open"
         trial = trial_run(self.hub.status)
         later = free_heat_later((getattr(self.hub, "learned", None) or {}).get(self.room_id), plan)
-        line = None if held else smart_warm_up_line(plan.get("optimum_start"),
-                                                    smart_warm_up(self.hass, self.entry.entry_id), lang, clock, trial, later)
+        on, room_off = room_smart_warm_up(self.room, smart_warm_up(self.hass, self.entry.entry_id))
+        line = None if held else smart_warm_up_line(plan.get("optimum_start"), on, lang, clock, trial, later,
+                                                    room_off=room_off)
         arrived = arrival_line(plan.get("arrival"), lang, clock, *local_day(self.hass), plan.get("optimum_start"))
         return " ".join(item[0] for item in (line, arrived) if item) or None
 
@@ -1116,15 +1195,21 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
     def _inactive(self):
         return (self.room or {}).get("state") == "inactive" or (self.plan_room or {}).get("state") == "inactive"
 
-    async def _ensure_active(self):
+    async def _ensure_active(self, leave_heat_along=False):
+        """Switch the room on when it is off; leave_heat_along (1.4, issue #10: a temperature, the Heat mode or a
+        preset): to On, also from Heat along only and from Off that would return to it."""
+        from .room_plan import on_state, set_state
         if self._inactive():
-            from .room_plan import on_state, set_state
-            # E32 1.3: a room switched off from Heat along only goes back to it, not to On.
-            await self._change_plan(set_state(on_state(self.plan_room)))
+            # E32 1.3: a room switched off from Heat along only goes back to it when it is just switched on.
+            await self._change_plan(set_state("active" if leave_heat_along else on_state(self.plan_room)))
+        elif leave_heat_along and self._state() == "follow":
+            await self._change_plan(set_state("active"))
 
-    def _one_sign_in(self):
-        """R4-27: switching an inactive room on and its new target share one E32 sign-in (RoomPlanLink.async_session)."""
-        session = getattr(self.link, "async_session", None) if self._inactive() else None
+    def _one_sign_in(self, leave_heat_along=False):
+        """R4-27: switching a room on (or out of Heat along only) and its new target share one E32 sign-in
+        (RoomPlanLink.async_session)."""
+        switching = self._inactive() or (leave_heat_along and self._state() == "follow")
+        session = getattr(self.link, "async_session", None) if switching else None
         return session() if session is not None else nullcontext()
 
     async def async_hold(self, temperature):
@@ -1153,8 +1238,8 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
             return
         if kwargs.get("hvac_mode") == HVACMode.OFF:
             return await self.async_set_hvac_mode(HVACMode.OFF)
-        async with self._target_pending(float(temperature)), self._one_sign_in():
-            await self._ensure_active()
+        async with self._target_pending(float(temperature)), self._one_sign_in(True):
+            await self._ensure_active(leave_heat_along=True)
             await self.async_hold(float(temperature))
 
     async def async_set_hvac_mode(self, hvac_mode):
@@ -1166,7 +1251,8 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
             if self.comfort.get("override") in OVERRIDES:
                 await self._command(override_command(self.room_id, "none"))
         elif hvac_mode == HVACMode.HEAT:
-            await self._ensure_active()
+            # Off: back to what it was (1.3); Heat along only: Heat means On (1.4).
+            await self._ensure_active(leave_heat_along=not self._inactive())
             target = self.target_temperature
             if self.comfort.get("override") not in OVERRIDES and target is not None:
                 await self.async_hold(target)
@@ -1180,16 +1266,24 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         await self.async_set_hvac_mode(HVACMode.OFF)
 
     async def async_set_preset_mode(self, preset_mode):
-        if preset_mode == PRESET_BOOST:
-            await self._ensure_active()
+        if preset_mode == PRESET_HEAT_ALONG and preset_mode in self.preset_modes:
+            # The same plan write as the room's Heating select (also from Off); its target stays as it is.
+            from .room_plan import set_state
+            await self._change_plan(set_state("follow"))
+        elif preset_mode == PRESET_BOOST:
+            await self._ensure_active(leave_heat_along=True)
             await self._command(override_command(self.room_id, "boost"))
         elif preset_mode in LEVEL_PRESETS:
             levels = program_levels(self.plan_room, comfort_options(self.entry))
-            async with self._target_pending(levels[LEVEL_PRESETS[preset_mode]]), self._one_sign_in():
-                await self._ensure_active()
+            async with self._target_pending(levels[LEVEL_PRESETS[preset_mode]]), self._one_sign_in(True):
+                await self._ensure_active(leave_heat_along=True)
                 await self.async_hold(levels[LEVEL_PRESETS[preset_mode]])
         elif preset_mode == PRESET_NONE:
-            # Back to the week program; the house mode (away, holiday) is its own select (e32_house.py).
+            # Back to the week program; the house mode (away, holiday) is its own select (e32_house.py). From Heat
+            # along only: On (1.4); a room that is off stays off.
+            if self._state() == "follow":
+                from .room_plan import set_state
+                await self._change_plan(set_state("active"))
             if self.comfort.get("override") in OVERRIDES:
                 await self._command(override_command(self.room_id, "none"))
         else:
@@ -1328,25 +1422,16 @@ class ComfortOptionsSteps:
         errors, placeholders = {}, {"error": ""}
         if user_input is not None:
             try:
-                settings = validate_presence(self.hass, user_input, current)
                 # 1.3 (plan item 1b): against the away temperature the form showed, so an E32 edit meanwhile stays.
-                temperature = (validate_away_temperature(user_input, shown_value(self, "house_presence", away))
-                               if house is not None else None)
+                # Shared with the settings panel (settings_house.py).
+                await async_save_presence(self.hass, self.config_entry, house, user_input,
+                                          shown_value(self, "house_presence", away))
             except ComfortError as err:
                 errors[err.field] = err.code
+                if hasattr(err, "error"):
+                    placeholders["error"] = err.error
             else:
-                try:
-                    if temperature is not None:  # first: refused by the E32, nothing is saved
-                        await house.async_command(temperature=temperature)
-                except HomeAssistantError as err:
-                    key = getattr(err, "translation_key", None)
-                    errors["away_temperature"] = ("away_temperature_update_required" if key == "house_mode_update_required"
-                                                  else "away_temperature_not_saved")
-                    placeholders["error"] = (getattr(err, "translation_placeholders", None) or {}).get("error") or \
-                        key or "unknown"
-                else:
-                    save_comfort(self.hass, self.config_entry, settings)
-                    return self.async_abort(reason="presence_saved")
+                return self.async_abort(reason="presence_saved")
         if user_input is None:
             remember_shown(self, "house_presence", away)
         schema = presence_schema(vol, current, away if house is not None else False)
@@ -1361,15 +1446,10 @@ class ComfortOptionsSteps:
         errors = {}
         if user_input is not None:
             try:
-                for field in ("contact_delay", "door_delay"):
-                    minutes = user_input.get(field)
-                    if type(minutes) in (int, float):  # the form shows minutes; the settings keep seconds
-                        user_input = {**user_input, field: round(minutes * 60, 6)}
-                settings = validate_settings(self.hass, user_input, current)
+                save_room_defaults(self.hass, self.config_entry, user_input)  # shared with the settings panel
             except ComfortError as err:
                 errors[err.field] = err.code
             else:
-                save_comfort(self.hass, self.config_entry, settings)
                 return self.async_abort(reason="comfort_saved")
         return self.async_show_form(step_id="comfort_settings", data_schema=settings_schema(vol, current), errors=errors)
 
@@ -1412,17 +1492,15 @@ class ComfortOptionsSteps:
         if room_id not in rooms:
             return self.async_abort(reason="comfort_no_rooms")
         current = comfort_options(self.config_entry)
-        known, windows, doors = current["contacts"].get(room_id, []), windows_of(current, room_id), doors_of(current, room_id)
+        windows, doors = windows_of(current, room_id), doors_of(current, room_id)
         errors = {}
         if user_input is not None:
-            try:
-                contacts, door_ids = validate_kinds(
-                    validate_contacts(self.hass, list(user_input.get("contacts") or []), known),
-                    validate_contacts(self.hass, list(user_input.get("door_contacts") or []), known))
+            try:  # shared with the settings panel (settings_house.py)
+                save_room_contacts(self.hass, self.config_entry, room_id, user_input.get("contacts"),
+                                   user_input.get("door_contacts"))
             except ComfortError as err:
                 errors[err.field] = err.code
             else:
-                save_comfort(self.hass, self.config_entry, with_room_contacts(current, room_id, contacts, doors=door_ids))
                 return self.async_abort(reason="comfort_saved")
         if errors:
             windows, doors = (user_input or {}).get("contacts", windows), (user_input or {}).get("door_contacts", doors)

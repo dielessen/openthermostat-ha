@@ -166,6 +166,9 @@ async def async_setup_entry(
             from .last_restart import async_setup_sensor as async_setup_last_restart
             # "Last restart" (fw/state/boot, E32 1.1.1): when the E32 started and why
             await _optional_step("last restart", async_setup_last_restart, hass, entry, async_add_entities)
+            from .last_restart import async_setup_errors_sensor
+            # "E32 errors" (fw/heartbeat "errors", E32 1.4): the system log's error lines since the restart
+            await _optional_step("E32 errors", async_setup_errors_sensor, hass, entry, async_add_entities)
             from .e32_boiler_settings_entities import async_setup_sensors as async_setup_boiler_settings
             # "Boiler settings writes", once the E32 sends fw/telemetry/boiler_settings (track W)
             await _optional_step("boiler settings", async_setup_boiler_settings, hass, entry, async_add_entities)

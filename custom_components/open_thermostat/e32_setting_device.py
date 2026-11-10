@@ -5,10 +5,12 @@ temperatuur instellen / overrulen met een thermostaatfunctie: een trv, een tado
 thermostaat, alleen een virtuele thermostaat, of een losse sensor waarmee je de
 temperatuur kunt instellen", and yes: push the program target to the knob.
 
-- The week program lives on the E32 and runs without Home Assistant. A room
-  without one gets "Workdays and weekend" (comfort 20 °C, away 18 °C, night
-  16 °C, the week planner's defaults) when it is saved in the room editor or
-  through the Repairs fix below.
+- The week program lives on the E32 and runs without Home Assistant. A new
+  room starts from "Workdays and weekend" (comfort 20 °C, away 18 °C, night
+  16 °C, the week planner's defaults) in the room editor; a room without a
+  program keeps its temperature without a week program (1.4, issue #7: a
+  deliberate choice, so no Repairs item asks to give it one any more; the
+  item ``room_programs`` an older version raised goes at the next start).
 - The room's **setting device** is its plan ``setpoint_entity``: a climate
   entity (a radiator valve such as a TV02, a tado, any thermostat) or a
   number / input_number with a target. Without one, our room thermostat and
@@ -47,7 +49,6 @@ are the E32's and unchanged.
 """
 from __future__ import annotations
 
-from copy import deepcopy
 import logging
 import math
 import time
@@ -59,6 +60,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
+from .issue_sync import remove_retired_issues
 from .const import DOMAIN
 from .heating_link import celsius, number
 
@@ -71,7 +73,7 @@ PENDING_SECONDS = 60    # a knob change waits this long for the E32 to report it
 TARGET_TEMPERATURE, TARGET_TEMPERATURE_RANGE = 1, 2  # ClimateEntityFeature bits (no import of the enum needed)
 SCHEDULE_DAYS = 3       # unasked changes at the same quarter on this many days: its own schedule
 SCHEDULE_WINDOW_DAYS = 8
-ROOM_PROGRAMS_ISSUE = "room_programs"
+# Retired in 1.4 (issue #7): "Give your rooms a week program"; only removed where an older version left it.
 OWN_SCHEDULE_ISSUE = "device_own_schedule"
 WRITE_FAILED_ISSUE = "setting_device_write_failed"
 FAILURES_FOR_REPAIR = 3  # failed writes in a row to one device before Repairs says so
@@ -295,12 +297,13 @@ class SettingDevicePusher:
         back as its base, so the override or away would outlive its end.
 
         E32 1.3: also a room on Heat along only ("follow": it keeps its target) and Smart warm-up's lead
-        (setpoint source "warmup": the program's coming target, already the room's).
+        (setpoint source "warmup": the program's coming target, already the room's). E32 1.4: also a reset time's
+        temperature as the room's base (setpoint source "reset"; it needs the clock, like the program).
         """
         if not status_room or status_room.get("state") not in ("active", "follow"):
             return None
         comfort = status_room.get("comfort") if type(status_room.get("comfort")) is dict else {}
-        if comfort.get("mode") == "window_open" or status_room.get("setpoint_source") not in ("schedule", "warmup"):
+        if comfort.get("mode") == "window_open" or status_room.get("setpoint_source") not in ("schedule", "warmup", "reset"):
             return None
         return number(status_room.get("setpoint"), 5, 35)
 
@@ -320,7 +323,6 @@ class SettingDevicePusher:
         if not self.hub.fresh:
             return
         self._follow_devices()
-        update_room_programs_issue(self.hass, self.entry, self.hub)
         self._clear_own_schedule_issues()
         self._forget_gone_links()
         wait = None
@@ -537,6 +539,7 @@ class SettingDevicePusher:
 
     @callback
     def start(self):
+        remove_retired_issues(self.hass, self.entry.entry_id)  # 1.4: the retired item room_programs of older versions
         remove = self.hub.add_listener(self.evaluate)
         self.evaluate()
 
@@ -549,111 +552,3 @@ class SettingDevicePusher:
                 self._retry = None
         return stop
 
-
-# -- migration: a program (and the proposed setting device) for each room ------------------
-
-
-def room_program_changes(plan):
-    """[(room id, room name, adds program, proposed device or None)] for rooms without a week program.
-
-    The proposed setting device travels with that explicit confirmation only: a room that has a
-    program but no setting device was left so by its owner (the room form suggests one, never
-    pre-selects it), so it does not raise a Repairs issue of its own.
-    """
-    changes = []
-    for room in (plan or {}).get("rooms", []):
-        if not has_program(room):
-            changes.append((room["id"], room.get("name") or room["id"], True, proposed_device(room)))
-    return changes
-
-
-def issue_id(entry):
-    return f"{ROOM_PROGRAMS_ISSUE}_{entry.entry_id}"
-
-
-@callback
-def update_room_programs_issue(hass, entry, hub):
-    """A Repairs fix while a room has no week program (a missing setting device alone is the owner's choice)."""
-    link = hub.plan
-    if link is None or link.plan is None:
-        return
-    changes = room_program_changes(link.plan)
-    if not changes:
-        ir.async_delete_issue(hass, DOMAIN, issue_id(entry))
-        return
-    ir.async_create_issue(hass, DOMAIN, issue_id(entry), is_fixable=True, is_persistent=False,
-                          severity=ir.IssueSeverity.WARNING, translation_key=ROOM_PROGRAMS_ISSUE,
-                          translation_placeholders={"rooms": ", ".join(name for _, name, *_ in changes)},
-                          data={"entry_id": entry.entry_id})
-
-
-def apply_room_program_changes(plan, room_ids=None):
-    """The plan with the template program and the proposed setting device for these rooms."""
-    candidate = deepcopy(plan)
-    for room in candidate["rooms"]:
-        if room_ids is not None and room["id"] not in room_ids or has_program(room):
-            continue
-        room["schedule"] = default_program(room.get("minimum_centi_c", 500), room.get("maximum_centi_c", 3000))
-        if device := proposed_device(room):
-            room["setpoint_entity"] = device
-    return candidate
-
-
-def describe_changes(changes, language):
-    nl = str(language or "").startswith("nl")
-    lines = []
-    for _, name, program, device in changes:
-        parts = []
-        if program:
-            parts.append("weekprogramma Werkdagen en weekend (20 °C)" if nl else "week program Workdays and weekend (20 °C)")
-        if device:
-            parts.append(("instelapparaat " if nl else "setting device ") + device)
-        lines.append(f"- {name}: " + ", ".join(parts))
-    return "\n".join(lines)
-
-
-try:
-    from homeassistant.components.repairs import RepairsFlow
-except ImportError:  # pragma: no cover
-    RepairsFlow = object
-
-
-class RoomProgramsRepairFlow(RepairsFlow):
-    """One confirmation: the template program and the proposed setting device for the listed rooms."""
-
-    def __init__(self, issue, data):
-        self._issue, self._data, self._ids = issue, data, None
-
-    async def async_step_init(self, user_input=None):
-        # Home Assistant opens a repair with data={"issue_id": ...} as this step's input: never a submitted form.
-        return await self.async_step_room_programs()
-
-    async def async_step_room_programs(self, user_input=None):
-        entry = self.hass.config_entries.async_get_entry(self._data.get("entry_id"))
-        hub = self.hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("heating_hub") if entry else None
-        if hub is None or hub.plan is None:
-            return self.async_abort(reason="e32_rooms_unavailable")
-        if user_input is None:
-            try:
-                plan = await hub.plan.async_read()
-            except HomeAssistantError as err:
-                # No free E32 web session or another read error: the plan as last read serves the form (the issue
-                # was raised from it); without one the dialog says so instead of failing with a server error.
-                plan = hub.plan.plan
-                if plan is None:
-                    return self.async_abort(reason="e32_rooms_unavailable")
-                _LOGGER.warning("OpenThermostat: the E32 room plan could not be read for the week-program fix (%s); "
-                                "the plan as last read is shown", err)
-            changes = room_program_changes(plan)
-            if not changes:
-                ir.async_delete_issue(self.hass, DOMAIN, self._issue)
-                return self.async_abort(reason="room_programs_done")
-            self._ids = {room_id for room_id, *_ in changes}
-            return self.async_show_form(step_id="room_programs", description_placeholders={
-                "changes": describe_changes(changes, self.hass.config.language)})
-        try:
-            await hub.plan.async_change_plan(lambda plan: apply_room_program_changes(plan, getattr(self, "_ids", None)))
-        except HomeAssistantError as err:
-            return self.async_abort(reason="e32_write_failed", description_placeholders={"error": str(err)})
-        ir.async_delete_issue(self.hass, DOMAIN, self._issue)
-        return self.async_create_entry(data={})

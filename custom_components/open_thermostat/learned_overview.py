@@ -105,6 +105,8 @@ TEXT = {
         "warmup_learning_mean": "Until the room has been learned, it does not start early on an estimate.",
         "warmup_off": "Smart warm-up is off: heating starts at {time}.",
         "warmup_off_mean": "Turn Smart warm-up on to be warm on time.",
+        "warmup_room_off": "Smart warm-up is off for this room: heating starts at {time}.",
+        "warmup_room_off_mean": "Chosen in the settings of this room (Configure → Rooms).",
         "warmup_estimate": "Smart warm-up: starts at {start} (estimate; it learns from every morning) so it is {target} °C at {time}.",
         "timing_learned": "The warm-up time is learned; the coolest water is still being learned.",
         "timing_learned_mean": "Smart warm-up already plans with it; the coolest water needs a few more warm-ups at other water temperatures.",
@@ -267,6 +269,8 @@ TEXT = {
         "warmup_learning_mean": "Zolang de ruimte niet geleerd is, begint hij niet eerder op een schatting.",
         "warmup_off": "Slim opwarmen staat uit: verwarmen begint om {time}.",
         "warmup_off_mean": "Zet Slim opwarmen aan om op tijd warm te zijn.",
+        "warmup_room_off": "Slim opwarmen staat uit voor deze ruimte: verwarmen begint om {time}.",
+        "warmup_room_off_mean": "Zo gekozen in de instellingen van deze ruimte (Configureren → Ruimtes).",
         "warmup_estimate": "Slim opwarmen: begint om {start} (schatting; hij leert van elke ochtend), zodat het om {time} {target} °C is.",
         "timing_learned": "De opwarmtijd is geleerd; het koelste water leert hij nog.",
         "timing_learned_mean": "Slim opwarmen plant daar al mee; voor het koelste water zijn nog een paar keer opwarmen bij andere watertemperaturen nodig.",
@@ -428,6 +432,8 @@ TEXT = {
         "warmup_learning_mean": "Dopóki pomieszczenie nie zostanie wyuczone, nie zaczyna grzać wcześniej na podstawie szacunku.",
         "warmup_off": "Inteligentne nagrzewanie jest wyłączone: grzanie zaczyna się o {time}.",
         "warmup_off_mean": "Włącz Inteligentne nagrzewanie, aby było ciepło na czas.",
+        "warmup_room_off": "Inteligentne nagrzewanie jest wyłączone dla tego pomieszczenia: grzanie zaczyna się o {time}.",
+        "warmup_room_off_mean": "Wybrane w ustawieniach tego pomieszczenia (Konfiguruj → Pomieszczenia).",
         "warmup_estimate": "Inteligentne nagrzewanie: start o {start} (szacunek; uczy się z każdego poranka), aby o {time} było {target} °C.",
         "timing_learned": "Czas nagrzewania jest wyuczony; najchłodniejszej wody wciąż się uczy.",
         "timing_learned_mean": "Inteligentne nagrzewanie już z tego korzysta; do najchłodniejszej wody potrzeba jeszcze kilku nagrzewań przy innych temperaturach wody.",
@@ -664,11 +670,25 @@ def _line(text, meaning):
     return {"text": text, "meaning": meaning}
 
 
-def smart_warm_up_line(start, on, lang, clock, trial=False, later_min=0, now=None):
+def room_smart_warm_up(room, house):
+    """E32 1.4 (#8): (on, room_off) of Smart warm-up as one room has it. ``room``: the room's status (its
+    ``smart_warm_up`` "on" / "off" is the value in effect: its own choice or the house switch); ``house``: the house
+    switch (``apply_learned``; None: not known). Older firmware names no value: the house switch. room_off: off for this
+    room only (the house switch is not off), so the line can say so."""
+    value = room.get("smart_warm_up") if type(room) is dict else None
+    if value == "on":
+        return True, False
+    if value == "off":
+        return False, house is not False
+    return house, False
+
+
+def smart_warm_up_line(start, on, lang, clock, trial=False, later_min=0, now=None, room_off=False):
     """(text, meaning) for the room's next program step with Smart warm-up (E32 rc.3), or None.
 
     ``start``: the room's ``optimum_start``; ``on``: the stored option (``apply_learned``; None: not
-    known, on by default). ``applies``: the E32 uses this start (older firmware: a learned warm-up);
+    known, on by default), E32 1.4 the room's own value in effect (room_smart_warm_up); room_off: off for this room
+    only. ``applies``: the E32 uses this start (older firmware: a learned warm-up);
     otherwise it is an estimate and heating starts at the program time. The E32 page says the same
     (``data/html/index.html`` smartWarmupLine), "heating now (estimate; ...)" too.
 
@@ -690,7 +710,8 @@ def smart_warm_up_line(start, on, lang, clock, trial=False, later_min=0, now=Non
     # With the free heat the E32 starts later: "heating now" only once that later start has come.
     heating = start.get("start_now") is True and (not shift or begin <= (time.time() if now is None else now))
     if on is False:
-        return t["warmup_off"].format(**values), t["warmup_off_mean"]
+        key = "warmup_room_off" if room_off else "warmup_off"
+        return t[key].format(**values), t[key + "_mean"]
     if not applies:
         return t["warmup_learning"].format(**values), t["warmup_learning_mean"]
     if start.get("lead_minutes") == 0 and start.get("start_now") is not True:
@@ -936,7 +957,7 @@ def model_line(name, learned, lang, planning=False):
 
 
 def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=None, room_id=None, comfort=None,
-                  trial=False, currency=None, now=None, planning=False):
+                  trial=False, currency=None, now=None, planning=False, room_off=False):
     """{name, room_id, progress, summary, lines: [{text, meaning}]} of one room; clock: utc -> "07:10" in local time.
 
     day: utc -> the local date, today: the local date now (for "Yesterday warm at 09:12", arrival_line).
@@ -974,7 +995,7 @@ def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=
     comfort = comfort if type(comfort) is dict else {}
     held = comfort.get("mode") in HELD_MODES or comfort.get("window") == "open"
     later = free_heat_later(learned, plan)
-    warm = None if held else smart_warm_up_line(start, smart, lang, clock, trial, later, now)
+    warm = None if held else smart_warm_up_line(start, smart, lang, clock, trial, later, now, room_off)
     if warm is not None:
         lines.append(_line(*warm))
     elif not held and start.get("reason") == "planned" and _ok(start.get("predicted_start_utc")):
@@ -1282,10 +1303,12 @@ class LearnedOverviewSensor(RestoreEntity, SensorEntity):
         currency = getattr(getattr(getattr(self, "hass", None), "config", None), "currency", None)
         from .heating_plan import plan_state
         planning = plan_state(self.hub) == "planning"
-        rooms = [room_overview(name, self.hub.learned.get(room_id), self.hub.warmup.get(room_id), lang, clock, smart,
+        # E32 1.4 (#8): each room's own Smart warm-up in effect (room_smart_warm_up), else the house switch.
+        rooms = [room_overview(name, self.hub.learned.get(room_id), self.hub.warmup.get(room_id), lang, clock, on,
                                day, today, room_id, self.hub.rooms[room_id].get("comfort"), trial, currency,
-                               planning=planning)
-                 for room_id, name in active]
+                               planning=planning, room_off=room_off)
+                 for room_id, name in active
+                 for on, room_off in (room_smart_warm_up(self.hub.rooms[room_id], smart),)]
         manual = tuning.get("manual") if type(tuning.get("manual")) is list else []
         from .insight import insight_lines  # E32 rc.5: yesterday against the house's own usual days
         attributes = {"explanation": t.get("state." + str(tuning.get("state")), "") if tuning else t["unavailable"],

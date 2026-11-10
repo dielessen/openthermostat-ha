@@ -159,6 +159,7 @@ const CSS = `.wpe{--wt:var(--primary-text-color,var(--ot-text,#173b40));--wm:var
 function mount(host, options) {
  // o.text: a host's own table in another language (the Home Assistant card's Polish), over English.
  // o.smartWarmUp: false when the owner turned Smart warm-up off (rc.3); the hint line says what a time means.
+ // o.decorate(root): after every render (HA card markers).
  const o = Object.assign({min: 500, max: 3000, lang: 'en', smartWarmUp: true}, options), t = o.text ? {...T.en, ...o.text} : tr(o.lang);
  // Stored levels (o.levels, o.scheduleLevels) when the firmware has them, else inferred from the program.
  const load = (w, lv, marks) => {
@@ -453,6 +454,7 @@ function mount(host, options) {
    el('p', o.smartWarmUp === false ? t.warmUpOff : t.warmUp, {class: 'wpe-note', 'data-k': 'warm-up'}), grid, ...(narrow && !empty ? [renderList()] : []),
    ...(copyFrom != null ? [renderCopy()] : sel ? [renderPanel()] : []), el('p', msg, {class: 'wpe-msg', role: 'status', 'aria-live': 'polite'}),
    ...(empty ? [] : [el('h4', t.preview), renderChart()]), renderText());
+  if (o.decorate) o.decorate(root);
   const again = focus && root.querySelector('[data-k="' + focus + '"]');
   if (again && !again.disabled) again.focus();
  }

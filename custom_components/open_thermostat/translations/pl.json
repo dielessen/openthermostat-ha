@@ -139,8 +139,9 @@
       },
       "init": {
         "title": "OpenThermostat",
-        "description": "{saved}Wybierz, co chcesz ustawić. E32 przechowuje te ustawienia i steruje ogrzewaniem, także bez Home Assistant.",
+        "description": "{saved}{intro}",
         "menu_options": {
+          "open_settings": "Otwórz stronę ustawień",
           "e32_rooms": "Pomieszczenia",
           "house": "Dom",
           "heating_boiler": "Ogrzewanie i kocioł",
@@ -155,6 +156,11 @@
           "done": "Gotowe",
           "general": "Panel i nazwa"
         }
+      },
+      "open_settings": {
+        "title": "Otwórz stronę ustawień",
+        "description": "Ustawienia pomieszczeń, domu, ogrzewania, urządzeń i powiadomień są w panelu OpenThermostat: [Panel OpenThermostat → Ustawienia]({path}).\n\nTam widzisz każdą część instalacji wraz z tym, co jest teraz ustawione, i od razu ją zmieniasz. Wybierz Gotowe, aby zamknąć Konfiguruj.",
+        "submit": "Gotowe"
       },
       "graph_review": {
         "title": "Sprawdź ustawienia ogrzewania",
@@ -434,8 +440,10 @@
       },
       "advanced_settings": {
         "title": "Zaawansowane i diagnostyka",
-        "description": "{saved}Strefa czasowa i dziennik systemowy E32, przywracanie kopii zapasowej, porządkowanie identyfikatorów encji i kontrole. Codzienne ustawienia, także Panel i nazwa, są w menu głównym.",
+        "description": "{saved}{intro}",
         "menu_options": {
+          "e32_rooms": "Zawory grzejnikowe, osoby i limity temperatury",
+          "boiler_settings": "Ustawienia kotła (wersja wstępna)",
           "configuration_status": "Sprawdź stare pomieszczenia",
           "graph_status": "Stan starych pomieszczeń w E32",
           "graph_prepare": "Napraw stare pomieszczenia w E32",
@@ -564,19 +572,23 @@
           "setpoint_entity": "Urządzenie nastawcze (opcjonalnie)",
           "fallback_temperature": "Temperatura bez programu tygodniowego",
           "program": "Program tygodniowy na E32",
-          "inactive_until": "Wyłączony do (opcjonalnie)"
+          "resets": "Godziny powrotu (opcjonalnie)",
+          "inactive_until": "Wyłączony do (opcjonalnie)",
+          "smart_warm_up": "Inteligentne nagrzewanie"
         },
         "data_description": {
           "name": "Nazwa widoczna w Home Assistant i na E32. Do 40 liter (mniej przy znakach diakrytycznych lub emoji); zmiana nazwy zachowuje pomieszczenie i jego historię.",
-          "state": "Wł.: pomieszczenie może prosić o ciepło. Grzeje tylko razem z innymi: pomieszczenie zachowuje swoją temperaturę docelową, a zawory grzejnikowe otwierają się dla niej, ale nigdy nie prosi o ciepło; nagrzewa się, gdy kocioł grzeje dla innych pomieszczeń. Wył.: pomieszczenie nie prosi o ciepło. Na tymczasowe wyłączenie ustaw poniżej „Wyłączony do”.",
+          "state": "Włączone: pomieszczenie może prosić o ciepło. Grzeje tylko razem z innymi: pomieszczenie zachowuje swoją temperaturę docelową, a zawory grzejnikowe otwierają się dla niej, ale nigdy nie prosi o ciepło; nagrzewa się, gdy kocioł grzeje dla innych pomieszczeń. Wyłączone: pomieszczenie nie prosi o ciepło. Na tymczasowe wyłączenie ustaw poniżej „Wyłączony do”.",
           "emitter": "Grzejniki lub ogrzewanie podłogowe. Podłogówka nagrzewa się powoli i potrzebuje chłodniejszej wody, więc każdy rodzaj ma własną temperaturę wody.",
-          "ha_sources": "Termostaty lub czujniki temperatury (°C lub °F) w Home Assistant, które mierzą to pomieszczenie. Używany jest pierwszy ze świeżą wartością; pozostałe są zapasowe. Przeciągnij, aby zmienić kolejność.",
+          "ha_sources": "Termostaty lub czujniki temperatury (°C lub °F) w Home Assistant, które mierzą to pomieszczenie. Używany jest pierwszy ze świeżą wartością; pozostałe są zapasowe. Przeciągnij, aby zmienić kolejność. Przy jednym źródle: gdy przestanie działać, pomieszczenie po 30 minutach przestaje prosić o ciepło. Drugie źródło, np. czujnik Bluetooth, temu zapobiega.",
           "ble_sources": "Czujniki sparowane bezpośrednio z E32; działają także bez Home Assistant.",
-          "bluetooth_first": "Wł.: E32 używa swoich czujników Bluetooth przed źródłami z Home Assistant.",
+          "bluetooth_first": "Włączone: E32 używa swoich czujników Bluetooth przed źródłami z Home Assistant.",
           "setpoint_entity": "Opcjonalnie: termostat lub głowica grzejnikowa (na przykład tado lub TV02) albo liczba z wartością docelową, którymi ustawiasz pomieszczenie. Home Assistant w każdym punkcie przełączenia zapisuje na nim temperaturę z programu tygodniowego; zmiana na nim obowiązuje do następnego punktu przełączenia. Wyłącz własny harmonogram urządzenia (tryb ręczny), inaczej samo zmienia temperaturę. Puste: brak urządzenia nastawczego; ustawiaj pomieszczenie jego termostatem w Home Assistant lub na stronie E32.{setting_hint}",
           "fallback_temperature": "Temperatura, którą E32 utrzymuje, gdy Home Assistant nie podaje celu, a pomieszczenie nie ma programu tygodniowego lub zegar E32 nie jest jeszcze ustawiony.",
-          "program": "Najprościej: wizualny planer w widoku Program tygodniowy na pulpicie OpenThermostat. Ten tekst to zaawansowany widok tego samego programu: jedna linia na grupę dni, na przykład mon-fri: 06:30 20.5; 22:30 18 oraz sat-sun: 08:00 20.5; 23:00 18. Temperatury w jednostce Twojego Home Assistant. Linia bez dni obowiązuje każdego dnia. Do 6 punktów przełączenia na dzień; każda temperatura obowiązuje do następnego punktu. Każde pomieszczenie ma program tygodniowy: gdy zostawisz to pole puste, pomieszczenie dostanie standardowy program \"Dni robocze i weekend\" (20 °C w dzień, 18 °C podczas nieobecności w dni robocze, 16 °C w nocy).",
-          "inactive_until": "Tylko przy wyłączonym ogrzewaniu: data i godzina, od której pomieszczenie samo znów grzeje. Puste: wyłączone, dopóki go nie włączysz."
+          "program": "Najprościej: wizualny planer w widoku Program tygodniowy na pulpicie OpenThermostat. Ten tekst to zaawansowany widok tego samego programu: jedna linia na grupę dni, na przykład mon-fri: 06:30 20.5; 22:30 18 oraz sat-sun: 08:00 20.5; 23:00 18. Temperatury w jednostce Twojego Home Assistant. Linia bez dni obowiązuje każdego dnia. Do 6 punktów przełączenia na dzień; każda temperatura obowiązuje do następnego punktu. Puste: brak programu tygodniowego; pomieszczenie utrzymuje swoją temperaturę bez programu tygodniowego. Nowe pomieszczenie zaczyna ze standardowym programem \"Dni robocze i weekend\" (20 °C w dzień, 18 °C podczas nieobecności w dni robocze, 16 °C w nocy); wyczyść pole, jeśli pomieszczenie go nie potrzebuje.{resets_note}",
+          "resets": "W tym momencie kończy się każda ręczna zmiana i pomieszczenie przyjmuje tę wartość; E32 nie dąży do niej z wyprzedzeniem. Najwyżej cztery. Jedna w linii: dni, godzina i temperatura lub stan (on, heat along, off), na przykład mon-fri 22:00 14 lub daily 09:00 heat along. W pomieszczeniu bez programu tygodniowego nadaj wieczornej godzinie powrotu temperaturę bez programu tygodniowego: wtedy obowiązuje ona także po ponownym uruchomieniu.",
+          "inactive_until": "Tylko przy wyłączonym ogrzewaniu: data i godzina, od której pomieszczenie samo znów grzeje. Puste: wyłączone, dopóki go nie włączysz.",
+          "smart_warm_up": "Jak cały dom: zgodnie z inteligentnym nagrzewaniem domu (Konfiguruj → Ogrzewanie i kocioł). Włączone: to pomieszczenie jest ciepłe w swoich punktach przełączenia. Wyłączone: to pomieszczenie zaczyna grzać dopiero w swoich punktach przełączenia."
         },
         "sections": {
           "window": {
@@ -637,7 +649,7 @@
               "gateway_valves": "Shelly BLU TRV bramki BLU Gateway E32 w tym pomieszczeniu (zawór dodaje się do jego bramki w Urządzenia E32 → Urządzenia Shelly albo na stronie E32 System → Devices). Razem z nimi do 8 zaworów na pomieszczenie.",
               "loop_valves": "Które z wybranych zaworów są na rozdzielaczu podłogowym (zawór pętli podłogowej): E32 sam je otwiera i zamyka. Pozostałe to zawory grzejnikowe.",
               "keep_open": "Zostaw ten grzejnik otwarty jako drogę dla wody: E32 trzyma ten zawór otwarty, dopóki żadna inna droga dla wody nie jest otwarta (dopóki nie wiesz, że kocioł ma obejście). Nie dla zaworu pętli podłogowej.",
-              "control": "Wł.: te zawory podążają za pomieszczeniem (tylko gdy E32 sam steruje kotłem). Wył.: zawory zachowują własne ustawienia i nic do nich nie jest wysyłane.",
+              "control": "Włączone: te zawory podążają za pomieszczeniem (tylko gdy E32 sam steruje kotłem). Wyłączone: zawory zachowują własne ustawienia i nic do nich nie jest wysyłane.",
               "choose_models": "Potrzebne tylko dla zaworu Zigbee2MQTT, którego model nie został rozpoznany (działa wtedy przez Home Assistant). Po zapisaniu wybierasz model każdego zaworu Zigbee2MQTT albo Przez Home Assistant."
             }
           }
@@ -693,7 +705,7 @@
       },
       "e32_rooms_saved": {
         "title": "Pomieszczenia",
-        "description": "{saved}{name} zapisano na E32. Dodaj lub edytuj kolejne pomieszczenie albo zamknij to okno.{valves}\n\n{rooms}",
+        "description": "{saved}{name} zapisano na E32. Dodaj lub edytuj kolejne pomieszczenie albo zamknij to okno.{program}{valves}\n\n{rooms}",
         "menu_options": {
           "e32_room_add": "Dodaj pomieszczenie",
           "e32_room_pick": "Edytuj lub usuń pomieszczenie",
@@ -1489,6 +1501,11 @@
       "e32_program_invalid": "Nie udało się odczytać linii {line} programu tygodniowego: {text}. Użyj jednej linii na grupę dni, na przykład mon-fri: 06:30 20.5; 22:30 18, i wymień każdy dzień tylko w jednej linii.",
       "e32_program_too_many": "Linia {line}: dzień może mieć najwyżej 6 punktów przełączenia.",
       "e32_program_outside_limits": "Linia {line}: temperatura jest poza limitami temperatury pomieszczenia.",
+      "e32_resets_invalid": "Nie udało się odczytać linii {line} godzin powrotu: {text}. Użyj jednej linii na godzinę powrotu: dni, godzina i temperatura albo on, heat along lub off, na przykład mon-fri 22:00 14 lub daily 09:00 heat along. Temperatury w pełnych lub połówkowych stopniach.",
+      "e32_resets_too_many": "Najwyżej cztery godziny powrotu na pomieszczenie.",
+      "e32_resets_outside_limits": "Linia {line} godzin powrotu: temperatura jest poza limitami temperatury pomieszczenia.",
+      "e32_resets_same_moment": "Linia {line} godzin powrotu: na ten dzień i tę godzinę jest już ustawiona godzina powrotu.",
+      "e32_rejected_resets": "E32 nie przyjął godzin powrotu ({error}). Sprawdź dni, godziny i temperatury.",
       "e32_plan_changed": "Plan pomieszczeń został dwukrotnie zmieniony na E32 podczas zapisywania. Nic nie zapisano; spróbuj ponownie.",
       "e32_flow_limits_order": "Najniższa temperatura wody musi być niższa od najwyższej.",
       "e32_flow_limits_invalid": "Podaj pełne stopnie: minimum {minimum_range}, maksimum {maximum_range}.",
@@ -1772,7 +1789,8 @@
             "name": "Ustawienie wstępne",
             "state": {
               "eco": "Eko",
-              "sleep": "Noc"
+              "sleep": "Noc",
+              "heat_along": "Grzeje tylko razem z innymi"
             }
           },
           "warming_up_for": {
@@ -1780,6 +1798,17 @@
           },
           "scheduled_target": {
             "name": "Planowana temperatura docelowa"
+          },
+          "next_reset": {
+            "name": "Następna godzina powrotu"
+          },
+          "next_reset_value": {
+            "name": "Wartość o następnej godzinie powrotu",
+            "state": {
+              "active": "Włączone",
+              "follow": "Grzeje tylko razem z innymi",
+              "inactive": "Wyłączone"
+            }
           }
         }
       }
@@ -1977,7 +2006,8 @@
               "window_open": "Otwarte okno",
               "door_open": "Otwarte drzwi",
               "window_pending": "Otwarte okno, wkrótce wstrzymanie",
-              "door_pending": "Otwarte drzwi, wkrótce wstrzymanie"
+              "door_pending": "Otwarte drzwi, wkrótce wstrzymanie",
+              "settings": "Ustawienia"
             }
           },
           "program": {
@@ -3346,6 +3376,17 @@
           }
         }
       },
+      "e32_errors": {
+        "name": "Błędy",
+        "state_attributes": {
+          "last_error": {
+            "name": "Ostatni błąd"
+          },
+          "last_error_at": {
+            "name": "Czas ostatniego błędu"
+          }
+        }
+      },
       "heating_plan": {
         "name": "Plan ogrzewania"
       }
@@ -3601,7 +3642,7 @@
             "days": "Dni, w których obowiązuje ten blok.",
             "start_time": "Kiedy blok się zaczyna.",
             "end_time": "Kiedy blok się kończy; później niż początek.",
-            "end_at_midnight": "Wł.: blok trwa do północy.",
+            "end_at_midnight": "Włączone: blok trwa do północy.",
             "temperature": "Temperatura docelowa podczas tego bloku."
           }
         },
@@ -4410,13 +4451,20 @@
       "options": {
         "active": "Włączone",
         "follow": "Grzeje tylko razem z innymi",
-        "inactive": "Wył. (brak zapotrzebowania na ciepło)"
+        "inactive": "Wyłączone (brak zapotrzebowania na ciepło)"
       }
     },
     "e32_room_emitter": {
       "options": {
         "radiator": "Grzejniki",
         "floor": "Ogrzewanie podłogowe"
+      }
+    },
+    "e32_smart_warm_up": {
+      "options": {
+        "house": "Jak cały dom",
+        "on": "Włączone",
+        "off": "Wyłączone"
       }
     },
     "e32_room_action": {
@@ -4705,26 +4753,17 @@
         "probes": "The Pill: sondy temperatury na rurach",
         "gateway": "BLU Gateway: zawory grzejnikowe Shelly BLU TRV"
       }
+    },
+    "configure_text": {
+      "options": {
+        "menu": "Wybierz, co chcesz ustawić. E32 przechowuje te ustawienia i steruje ogrzewaniem, także bez Home Assistant.",
+        "settings_page": "Większość ustawień jest na karcie Ustawienia panelu OpenThermostat. Tutaj łączysz E32, a w Zaawansowane i diagnostyka jest to, czego rzadko potrzebujesz.",
+        "advanced_menu": "Strefa czasowa i dziennik systemowy E32, przywracanie kopii zapasowej, porządkowanie identyfikatorów encji i kontrole. Codzienne ustawienia, także Panel i nazwa, są w menu głównym.",
+        "advanced_settings_page": "Czego karta Ustawienia jeszcze nie zawiera: zawory grzejnikowe, osoby i limity temperatury pomieszczenia, ustawienia kotła (wersja wstępna), przywracanie kopii zapasowej, porządkowanie identyfikatorów encji i stare pomieszczenia Home Assistant. Dziennik systemowy E32, jego strefa czasowa i program testerów są na karcie Ustawienia w części Zaawansowane."
+      }
     }
   },
   "issues": {
-    "room_programs": {
-      "title": "Nadaj pomieszczeniom program tygodniowy: {rooms}",
-      "fix_flow": {
-        "step": {
-          "room_programs": {
-            "title": "Program tygodniowy i urządzenie nastawcze",
-            "description": "Każde pomieszczenie ma własny program tygodniowy na E32, działający także bez Home Assistant. Te pomieszczenia otrzymają program \"Dni robocze i weekend\" (około 20 °C, do zmiany w planerze tygodniowym) oraz, jeśli je mają, własny termostat lub głowicę jako urządzenie nastawcze:\n{changes}\n\nHome Assistant w każdym punkcie przełączenia ustawi wtedy na tym urządzeniu temperaturę z programu, a zmiana na urządzeniu obowiązuje do następnego punktu przełączenia. Wyłącz własny harmonogram urządzenia (tryb ręczny)."
-          }
-        },
-        "abort": {
-          "room_programs_done": "Każde pomieszczenie ma już program tygodniowy.",
-          "e32_rooms_unavailable": "Nie można teraz odczytać pomieszczeń z E32. Spróbuj ponownie za chwilę.",
-          "e32_write_failed": "E32 nie przyjął zmiany ({error}). Spróbuj ponownie za chwilę."
-        }
-      },
-      "description": "Te pomieszczenia nie mają jeszcze programu tygodniowego: {rooms}. Wybierz Napraw, aby nadać im program standardowy. Możesz go zmienić w planerze tygodnia."
-    },
     "reconfirm_takeover": {
       "title": "Potwierdź ponownie, że E32 może sterować kotłem",
       "fix_flow": {
@@ -4778,18 +4817,6 @@
     "setting_device_write_failed": {
       "title": "{device} nie przyjmuje temperatury pomieszczenia",
       "description": "Home Assistant trzy razy z rzędu nie mógł ustawić {device}, urządzenia nastawczego pomieszczenia {room}. Ostatnia próba: {error}\n\nSprawdź, czy urządzenie jest włączone i w trybie grzania, czy przyjmuje temperaturę zadaną (termostat, który ma tylko zakres, dostaje jego dolną wartość) oraz czy nadal istnieje w Ustawienia → Urządzenia i usługi → Encje. Ten komunikat zniknie sam, gdy ustawienie znów się powiedzie. Inne urządzenie wybierzesz w polu Urządzenie nastawcze w ustawieniach pomieszczenia (Konfiguruj → Pomieszczenia)."
-    },
-    "legacy_metrics_history": {
-      "title": "Liczniki kotła zostały odnowione",
-      "description": "Liczniki kotła zostały odnowione. Twoja historia jest zachowana. Jeśli zrobiłeś własne karty ze starymi czujnikami, przełącz je na nowe."
-    },
-    "metrics_definition_v2": {
-      "title": "Liczniki kotła zostały odnowione",
-      "description": "Liczniki kotła zostały odnowione. Twoja historia jest zachowana. Jeśli zrobiłeś własne karty ze starymi czujnikami, przełącz je na nowe. Energia to oszacowanie, a nie licznik gazu ani ciepła."
-    },
-    "room_model_v2": {
-      "title": "Szacunki ciepła w pomieszczeniach zostały odnowione",
-      "description": "Szacunki ciepła w pomieszczeniach zostały odnowione. Twoja historia jest zachowana. Jeśli zrobiłeś własne karty ze starymi czujnikami, przełącz je na nowe. To oszacowania, a nie zmierzone ciepło."
     },
     "measurement_clock": {
       "title": "Pomiary pomieszczeń wstrzymane: zegar Home Assistant przeskoczył",
@@ -4954,10 +4981,6 @@
         }
       }
     },
-    "room_group_restored": {
-      "title": "{room} wróciło na stronę integracji",
-      "description": "Usunięto grupę pomieszczenia {room} w {installation}, ale {room} nadal jest pomieszczeniem w planie pomieszczeń E32 i E32 nadal je ogrzewa. Grupa, urządzenie i encje zostały przywrócone z tymi samymi nazwami, obszarami i historią. Aby usunąć pomieszczenie, otwórz {installation} → Konfiguruj → Pomieszczenia → Edytuj lub usuń pomieszczenie, wybierz {room} i usuń je tam. Możesz zignorować ten komunikat."
-    },
     "valve_battery_low": {
       "title": "Słaba bateria zaworu w pomieszczeniu {room}",
       "description": "Bateria prawie pusta (około 20 % lub mniej) w pomieszczeniu {room}: {valves}. Wymień ją wkrótce: zawór z pustą baterią przestaje słuchać E32. Komunikat zniknie sam, gdy zawór zgłosi baterię, która nie jest już słaba."
@@ -4965,10 +4988,6 @@
     "valve_offline": {
       "title": "Zawór grzejnikowy nie odpowiada w pomieszczeniu {room}",
       "description": "Brak zgłoszeń od ponad dwóch godzin w pomieszczeniu {room}: {valves}. Sprawdź baterię i połączenie zaworu (Zigbee lub BLU Gateway). Pomieszczenie dalej grzeje według innych źródeł temperatury; zawór dalej otwiera się i zamyka według ostatniej otrzymanej temperatury docelowej."
-    },
-    "valve_single_source": {
-      "title": "{room} ma tylko jedno źródło temperatury",
-      "description": "E32 steruje zaworami w pomieszczeniu {room}, które ma tylko jedno źródło temperatury. Gdy ono przestanie działać, E32 po 30 minutach przestaje żądać ciepła dla tego pomieszczenia zamiast grzać na ślepo. Dodaj drugie źródło, np. osobny czujnik Bluetooth, w ustawieniach pomieszczenia."
     },
     "heating_problem": {
       "title": "Ogrzewanie wymaga uwagi",

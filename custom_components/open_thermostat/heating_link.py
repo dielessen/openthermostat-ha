@@ -2293,8 +2293,10 @@ class RoomHeatingStartSensor(RoomEntity, SensorEntity):
     @property
     def native_value(self):
         start = _dict(self.warmup, "optimum_start")
-        # E32 1.3: a room on Heat along only takes no part in Smart warm-up (the E32 still predicts every room).
-        if start.get("reason") != "planned" or (self.room or {}).get("state") == "follow":
+        # E32 1.3: a room on Heat along only takes no part in Smart warm-up (the E32 still predicts every room);
+        # E32 1.4 (#8): nor does a room with Smart warm-up off (it starts heating at its switch time).
+        room = self.room or {}
+        if start.get("reason") != "planned" or room.get("state") == "follow" or room.get("smart_warm_up") == "off":
             return None
         if (exact := _utc(start.get("predicted_start_utc"))) is not None:
             # The start the E32 really uses: later by what the free heat gives (rc7, sentences review R1-2).
