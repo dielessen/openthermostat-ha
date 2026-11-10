@@ -442,7 +442,6 @@
         "title": "Advanced and diagnostics",
         "description": "{saved}{intro}",
         "menu_options": {
-          "e32_rooms": "Radiator valves, persons and temperature limits",
           "boiler_settings": "Boiler settings (preview)",
           "configuration_status": "Check the old rooms",
           "graph_status": "Status of the old rooms on the E32",
@@ -1080,7 +1079,7 @@
           "holiday_until": "Holiday ends"
         },
         "data_description": {
-          "house_mode": "Automatic: the people you set under Presence decide. At home: always the week programs. Away: every room at most the away temperature. Holiday: away until the date below.",
+          "house_mode": "Automatic: the people you set under Presence decide. At home: always the week programs. Away: every room at most the away temperature. Holiday: away until the date below. Summer mode: the heating stays off until you switch this off; hot water and frost protection stay.",
           "holiday_until": "Only for Holiday: the day and time you are back. At most a year ahead."
         }
       },
@@ -1137,7 +1136,7 @@
           "holiday_until": "Holiday ends"
         },
         "data_description": {
-          "house_mode": "Automatic: the people you set under Presence decide. At home: always the week programs. Away: every room at most the away temperature. Holiday: from now until the date below.",
+          "house_mode": "Automatic: the people you set under Presence decide. At home: always the week programs. Away: every room at most the away temperature. Holiday: from now until the date below. Summer mode: the heating stays off until you switch this off; hot water and frost protection stay.",
           "holiday_until": "Only for Holiday: the day and time you are back. At most a year ahead."
         }
       },
@@ -1350,7 +1349,7 @@
         "data_description": {
           "on": "Off: no messages about the house.",
           "kinds": "Choose which problems you want to hear about.",
-          "maintenance": "The boiler asking for maintenance, a new version of the E32 firmware or of this integration, and the daily backup of the E32 settings that keeps failing."
+          "maintenance": "The boiler asking for maintenance, a new version of the E32 firmware or of this integration, the daily backup of the E32 settings that keeps failing, the E32 ready to plan the heating, and the question whether to switch summer mode on or off."
         }
       },
       "notify_rooms": {
@@ -1809,6 +1808,12 @@
               "follow": "Heat along only",
               "inactive": "Off"
             }
+          },
+          "reason": {
+            "name": "Reason",
+            "state": {
+              "summer": "Summer"
+            }
           }
         }
       }
@@ -1895,6 +1900,7 @@
         "name": "Reason",
         "state": {
           "off": "Frost protection only (room off)",
+          "summer": "Summer",
           "window_open": "Paused: window or door open",
           "window_pending": "Window or door open, pausing soon",
           "no_measurement": "No measurement",
@@ -1918,6 +1924,7 @@
             "name": "Sentence",
             "state": {
               "off": "Frost protection only (room off)",
+              "summer": "Summer mode: the heating stays off until you switch this off; hot water and frost protection stay.",
               "window_open": "Paused: a window or door is open",
               "window_open_contact": "Paused: {contact} open since {since}",
               "window_open_window": "Paused: a window is open",
@@ -1977,6 +1984,7 @@
             "name": "Status word",
             "state": {
               "off": "Off",
+              "summer": "Summer",
               "window_open": "Paused",
               "window_pending": "Pausing soon",
               "no_measurement": "No measurement",
@@ -3468,7 +3476,8 @@
           "auto": "Automatic",
           "home": "At home",
           "away": "Away",
-          "holiday": "Holiday"
+          "holiday": "Holiday",
+          "summer": "Summer"
         }
       },
       "boiler_setting": {
@@ -4518,7 +4527,8 @@
         "auto": "Automatic",
         "home": "At home",
         "away": "Away",
-        "holiday": "Holiday"
+        "holiday": "Holiday",
+        "summer": "Summer"
       }
     },
     "flow_design_choice": {
@@ -4722,7 +4732,8 @@
         "maintenance": "Boiler asks for maintenance (H code)",
         "update": "New version of the E32 firmware or of this integration",
         "backup": "Daily backup of the E32 settings keeps failing",
-        "plan_ready": "E32 ready to plan the heating (asks for your confirmation once)"
+        "plan_ready": "E32 ready to plan the heating (asks for your confirmation once)",
+        "season": "Season: switch summer mode on or off?"
       }
     },
     "notification_text": {
@@ -4757,9 +4768,8 @@
     "configure_text": {
       "options": {
         "menu": "Choose what you want to set up. The E32 keeps these settings and runs the heating, also without Home Assistant.",
-        "settings_page": "Most settings are on the Settings tab of the OpenThermostat dashboard. Here you connect the E32, and Advanced and diagnostics holds what you rarely need.",
-        "advanced_menu": "The E32 time zone and system log, restoring a backup, tidying entity IDs and checks. Everyday settings, also Dashboard and name, are in the main menu.",
-        "advanced_settings_page": "What the Settings tab does not hold yet: the radiator valves, persons and temperature limits of a room, the boiler settings (preview), restoring a backup, tidying entity IDs and the older Home Assistant rooms. The E32 system log, its time zone and the tester program are on the Settings tab under Advanced."
+        "settings_page": "Every setting is on the Settings tab of the OpenThermostat dashboard. Here you connect the E32.",
+        "advanced_menu": "The E32 time zone and system log, restoring a backup, tidying entity IDs and checks. Everyday settings, also Dashboard and name, are in the main menu."
       }
     }
   },
@@ -5348,6 +5358,9 @@
     },
     "house_mode_invalid": {
       "message": "Choose Automatic, At home, Away or Holiday."
+    },
+    "summer_mode_on": {
+      "message": "Summer mode is on: switch it off first."
     },
     "house_holiday_date_needed": {
       "message": "To go on holiday, set \"Holiday until\" to the day you are back; the house mode then becomes Holiday by itself."

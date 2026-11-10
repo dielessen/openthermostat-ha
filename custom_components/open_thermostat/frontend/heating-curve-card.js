@@ -36,7 +36,21 @@ const KNOWLEDGE_TEXT = {title: 'The E32 knows your house', ring: 'The E32 knows 
 const X0 = -15, X1 = 20, Y0 = 20, Y1 = 80, FROST = -10;
 const COLORS = `--hc-learned:#00876f;--hc-now:#b5600c;--hc-learned-soft:rgba(0,135,111,.13);--hc-now-soft:rgba(181,96,12,.18)`;
 const DARK = `--hc-learned:#239c8a;--hc-now:#c97a2c;--hc-learned-soft:rgba(35,156,138,.2);--hc-now-soft:rgba(201,122,44,.24)`;
-const BASE = `:host{display:block}ha-card{display:block;padding:16px;color:var(--primary-text-color);${COLORS};
+// 1.4.1: the design tokens of CONTRACT-1.4.1 §8 on the host (the kit, the cards and the planner share names and values).
+const BASE = `:host{display:block;
+--ot-space:8px;--ot-radius:12px;--ot-radius-s:8px;--ot-touch:44px;--ot-motion:150ms ease;
+--ot-text-xl:22px;--ot-line-xl:28px;--ot-text-l:17px;--ot-line-l:24px;--ot-text-m:15px;--ot-line-m:22px;--ot-text-s:13px;--ot-line-s:18px;
+--ot-bg:var(--card-background-color);--ot-fg:var(--primary-text-color);--ot-fg-2:var(--secondary-text-color);
+--ot-line:var(--divider-color);--ot-accent:var(--primary-color);--ot-on-accent:var(--text-primary-color, #fff);
+--ot-heat-ink:#a1500f;--ot-heat-fill:#fbe9db;--ot-along-ink:#886100;--ot-along-fill:#f8efcf;--ot-water-ink:#1f5fa8;--ot-water-fill:#dde9f8;
+--ot-rest-ink:#5f6368;--ot-rest-fill:#ebedf0;--ot-attention-ink:#b3261e;--ot-attention-fill:#f9dedc;
+/* CONTRACT-1.4.1 §8 (amended): filled buttons and text buttons, readable on HA's default accent */
+--ot-fill:color-mix(in srgb,var(--ot-accent) 72%,#000);--ot-link:color-mix(in srgb,var(--ot-accent) 60%,var(--ot-fg));
+color:var(--ot-fg)}
+:host([data-theme="dark"]){--ot-heat-ink:#f0a060;--ot-heat-fill:rgba(240,160,96,.18);--ot-along-ink:#e6c35c;--ot-along-fill:rgba(230,195,92,.18);
+--ot-water-ink:#7fb3f0;--ot-water-fill:rgba(127,179,240,.18);--ot-rest-ink:#b0b4ba;--ot-rest-fill:rgba(176,180,186,.18);
+--ot-attention-ink:#f2857c;--ot-attention-fill:rgba(242,133,124,.18)}
+ha-card{display:block;padding:16px;border-radius:var(--ot-radius);color:var(--ot-fg);${COLORS};
 --hc-surface:var(--ha-card-background,var(--card-background-color,#fff));--hc-muted:var(--secondary-text-color,#6b6b6b);--hc-grid:var(--divider-color,rgba(127,127,127,.22))}
 ha-card.dark{${DARK}}h2{margin:0 0 4px;font-size:1.05rem;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
 p{margin:0;line-height:1.45}.muted{color:var(--hc-muted);font-size:.9rem}@media(max-width:480px){ha-card{padding:12px}}`;
@@ -75,6 +89,12 @@ li.more{color:var(--hc-muted)}li.more::before{background:var(--hc-muted)}.done{m
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const numeric = value => { const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value; return finite(n) ? n : null; };
 const locale = hass => hass?.locale?.language || hass?.language || 'en';
+// Dark: Home Assistant's theme when it says so, else the browser's colour scheme (CONTRACT-1.4.1 §8).
+const darkOf = hass => {
+ if (typeof hass?.themes?.darkMode === 'boolean') return hass.themes.darkMode;
+ try { return window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { return false; }
+};
+const theme = (host, hass) => { if (darkOf(hass)) host.setAttribute('data-theme', 'dark'); else host.removeAttribute('data-theme'); };
 const SVG = 'http://www.w3.org/2000/svg';
 const make = (tag, attrs = {}, text) => {
  const e = tag.startsWith('svg:') ? document.createElementNS(SVG, tag.slice(4)) : document.createElement(tag);
@@ -282,7 +302,7 @@ class OpenThermostatCard extends HTMLElement {
  set hass(hass) {
   this._hass = hass;
   // Only a new state, language or theme redraws; Home Assistant sets hass on every change in the house.
-  const st = hass?.states?.[this._config?.entity], key = [st, locale(hass), hass?.themes?.darkMode, this.trial()];
+  const st = hass?.states?.[this._config?.entity], key = [st, locale(hass), darkOf(hass), this.trial()];
   if (this._key && key.every((v, i) => v === this._key[i])) return;
   this._key = key; this.render();
  }
@@ -304,7 +324,8 @@ class OpenThermostatCard extends HTMLElement {
   return value.toLocaleString(locale(this._hass), {maximumFractionDigits: digits, minimumFractionDigits: 0, useGrouping: false}).replace('-', '−');
  }
  frame(style) {
-  const card = make('ha-card', this._hass?.themes?.darkMode ? {class: 'dark'} : {});
+  theme(this, this._hass);
+  const card = make('ha-card', darkOf(this._hass) ? {class: 'dark'} : {});
   this.shadowRoot.replaceChildren(make('style', {}, style), card);
   return card;
  }

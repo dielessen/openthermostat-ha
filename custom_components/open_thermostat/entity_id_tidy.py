@@ -219,6 +219,20 @@ async def async_apply(hass, config_entry, renames: list[Rename]) -> dict[str, st
     return done
 
 
+def chosen(plan: Plan, only_unused: bool) -> list[Rename]:
+    """The renames of the user's choice: only entities used nowhere, or all of them."""
+    return plan.unused if only_unused else plan.renames
+
+
+async def async_apply_plan(hass, config_entry, plan: Plan, only_unused: bool) -> tuple[dict[str, str], str]:
+    """The confirmed tidy (Configure's step and the settings panel): rename the chosen entities and list, per renamed
+    entity that is used somewhere, the places the user updates. Returns (new -> old, the list as text or "-")."""
+    picked = chosen(plan, only_unused)
+    done = await async_apply(hass, config_entry, picked)
+    todo = [f"- {r.old} → {r.new}: {', '.join(r.used_in)}" for r in picked if r.used_in and r.new in done]
+    return done, "\n".join(todo) or "-"
+
+
 def _fresh(saved) -> bool:
     at = dt_util.parse_datetime(saved.get("at", "")) if saved else None
     return at is not None and dt_util.utcnow() - at <= timedelta(days=UNDO_DAYS)

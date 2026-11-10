@@ -55,6 +55,50 @@ def restore_error(err):
     return code if code in CONNECTION_ERRORS else "e32_restore_failed"
 
 
+def restore_login(entry, address, password):
+    """(address, password) of the E32 to check a backup on, as the form takes them (also the settings panel, 1.4.1):
+    the address normalised; no password means the stored one, which is never sent to another address. Raises
+    ControllerLinkError (controller_address_invalid, controller_password_required)."""
+    from .controller_setup_flow import CONTROLLER_ADDRESS
+    address = controller_address(address)
+    if type(password) is not str:
+        raise ControllerLinkError("controller_password_required")
+    if not password:
+        # Never send the stored password to another address.
+        if address != entry.data.get(CONTROLLER_ADDRESS):
+            raise ControllerLinkError("controller_password_required")
+        password = credentials(entry)[1]
+    if not 1 <= len(password) <= 128:
+        raise ControllerLinkError("controller_password_required")
+    return address, password
+
+
+def check_outcome(hass, entry, check):
+    """What follows the E32's check of a backup (the confirm step, and the settings panel): an error key
+    (e32_restore_other_e32, e32_restore_other_installation), "adopt" (another E32 that holds the settings already),
+    "nothing" (this E32 holds them) or "confirm" (settings change)."""
+    from .controller_setup_flow import CONTROLLER_ID
+    from .native_provisioning import SOURCE_OPTION
+    if (check.identity is not None and entry.data.get(CONTROLLER_ID) not in (None, check.identity)
+            and SOURCE_OPTION in entry.options):
+        # Another E32 cannot take over the older Home Assistant room profile of this installation.
+        return "e32_restore_other_e32"
+    if other_installation(hass, entry, check):
+        # Never restore onto (or take over) the E32 of another installation in this Home Assistant.
+        return "e32_restore_other_installation"
+    if not check.summary["changes"]:
+        # It holds the backup's settings already; another E32 than this installation uses is offered to adopt.
+        return "adopt" if other_e32(entry, check) else "nothing"
+    return "confirm"
+
+
+def done_reason(result):
+    """The closing sentence's key of a finished restore (async_restore's answer)."""
+    return ("e32_restore_done_online" if result["online"] is True
+            else "e32_restore_done_waiting" if result["restart_scheduled"]
+            else "e32_restore_done_restart" if result["restart"] else "e32_restore_done")
+
+
 class E32RestoreSteps:
     """The options-flow steps of a restore (mixed into ProductOptionsFlow)."""
 
@@ -79,17 +123,8 @@ class E32RestoreSteps:
                 record = manager.record(user_input.get("backup"))
                 if record is None:
                     raise ControllerLinkError("e32_restore_failed")
-                address = controller_address(user_input.get("address", ""))
-                password = user_input.get("password") or ""
-                if type(password) is not str:
-                    raise ControllerLinkError("controller_password_required")
-                if not password:
-                    # Never send the stored password to another address.
-                    if address != entry.data.get(CONTROLLER_ADDRESS):
-                        raise ControllerLinkError("controller_password_required")
-                    password = credentials(entry)[1]
-                if not 1 <= len(password) <= 128:
-                    raise ControllerLinkError("controller_password_required")
+                address, password = restore_login(entry, user_input.get("address", ""),
+                                                  user_input.get("password") or "")
             except ControllerLinkError as err:
                 errors["base"] = restore_error(err)
             else:
@@ -136,8 +171,6 @@ class E32RestoreSteps:
         return await self._restore_progress("e32_restore_checking", "e32_restore_check", "e32_restore_confirm")
 
     async def async_step_e32_restore_confirm(self, user_input=None):
-        from .native_provisioning import SOURCE_OPTION
-        from .controller_setup_flow import CONTROLLER_ID
         entry = self.config_entry
         manager = backups(self.hass, entry)
         check = getattr(self, "_restore_result", None)
@@ -145,19 +178,13 @@ class E32RestoreSteps:
                   else None)
         if record is None:
             return self.async_abort(reason="e32_restore_unavailable")
-        if (check.identity is not None and entry.data.get(CONTROLLER_ID) not in (None, check.identity)
-                and SOURCE_OPTION in entry.options):
-            # Another E32 cannot take over the older Home Assistant room profile of this installation.
-            self._restore_error = "e32_restore_other_e32"
+        outcome = check_outcome(self.hass, entry, check)
+        if outcome in ("e32_restore_other_e32", "e32_restore_other_installation"):
+            self._restore_error = outcome
             return await self.async_step_e32_restore()
-        if other_installation(self.hass, entry, check):
-            # Never restore onto (or take over) the E32 of another installation in this Home Assistant.
-            self._restore_error = "e32_restore_other_installation"
-            return await self.async_step_e32_restore()
-        if not check.summary["changes"]:
-            if other_e32(entry, check):
-                # It holds the backup's settings already, but this installation still uses another E32.
-                return await self.async_step_e32_restore_adopt()
+        if outcome == "adopt":
+            return await self.async_step_e32_restore_adopt()
+        if outcome == "nothing":
             return self.async_abort(reason="e32_restore_nothing")
         errors = {}
         if user_input is not None:
@@ -198,10 +225,7 @@ class E32RestoreSteps:
 
     async def async_step_e32_restore_done(self, user_input=None):
         result = self._restore_result
-        reason = ("e32_restore_done_online" if result["online"] is True
-                  else "e32_restore_done_waiting" if result["restart_scheduled"]
-                  else "e32_restore_done_restart" if result["restart"] else "e32_restore_done")
-        return self.async_abort(reason=reason, description_placeholders={
+        return self.async_abort(reason=done_reason(result), description_placeholders={
             "reenter": reenter_text(result["reenter"], self._restore_language())})
 
     @callback

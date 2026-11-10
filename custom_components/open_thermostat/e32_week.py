@@ -12,9 +12,14 @@ With E32 beta.23 ("plan.levels.v1") the planner's levels (Comfort, Eco,
 Night) and the level of each switch point are stored with the room
 (room_levels); for older firmware the card infers them as before.
 
-E32 1.4: each room's reset times ("resets", set in the room's settings) go to
-the card to be shown, never edited; a save sends no "resets", so the E32 keeps
-them as they are (a missing key means "keep").
+E32 1.4: each room's reset times ("resets") go to the card. 1.4.1: the planner edits them too (markers on the
+day bars, a card and a list) together with the room's own Smart warm-up ("smart_warm_up": house / on / off), and
+one save writes the program, the reset times and the Smart warm-up choice of the room as one plan change. The
+reset times are checked by the room form's own rules (e32_room_flow.valid_resets). A save without "resets" (a
+1.4 card) leaves them alone: the E32 treats a missing key as "keep" and a present one (also []) as "replace";
+an E32 without reset times (before 1.4) never gets the key, nor one without the room's Smart warm-up its key.
+``expected`` is the program the card loaded (1.4) or {"schedule", "resets", "smart_warm_up"} as it loaded them
+(1.4.1): a save only goes through while each of them is still as loaded.
 """
 from __future__ import annotations
 
@@ -28,12 +33,14 @@ from homeassistant.exceptions import HomeAssistantError
 from .const import DOMAIN
 from .heating_link import heating_hub
 from .e32_comfort import comfort_options, program_levels
+from .e32_room_flow import (CELSIUS, SMART_WARM_UP_FEATURE, SMART_WARM_UP_FIELD, FlowError, resets_supported,
+                            valid_resets)
 from .room_levels import room_levels, supported, valid_levels
 from .room_plan import has_room_plan, plan_room
 
 MAX_POINTS = 6
-CARD_URL = "/open_thermostat/e32-week-card-1.4.0.js"
-EDITOR_URL = "/open_thermostat/week-editor-1.4.0.js"
+CARD_URL = "/open_thermostat/e32-week-card-1.4.1.js"
+EDITOR_URL = "/open_thermostat/week-editor-1.4.1.js"
 # RoomPlanLink failures -> the short codes the card explains in plain words.
 FAILURES = {"room_plan_changed": "plan_changed", "room_plan_too_large": "plan_too_large",
             "room_plan_storage_full": "storage_full", "room_plan_unconfirmed": "save_unconfirmed",
@@ -42,6 +49,10 @@ FAILURES = {"room_plan_changed": "plan_changed", "room_plan_too_large": "plan_to
             # The E32's web sign-ins (room_plan.SIGN_IN_ERRORS): busy for a while, the card retries.
             "e32_session_capacity": "session_capacity", "e32_try_again_later": "try_again_later",
             "e32_no_free_session": "session_capacity"}
+# The room form's reset time errors (e32_room_flow.valid_resets) -> the card's codes.
+RESET_FAILURES = {"e32_resets_invalid": "invalid_resets", "e32_resets_too_many": "too_many_resets",
+                  "e32_resets_outside_limits": "resets_outside_limits", "e32_resets_same_moment": "resets_same_moment"}
+SMART_WARM_UP_CHOICES = ("house", "on", "off")
 
 
 class WeekError(Exception):
@@ -81,6 +92,40 @@ def _resets(room):
     return [deepcopy(reset) for reset in resets if type(reset) is dict] if type(resets) is list else []
 
 
+def _smart_supported(plan):
+    features = plan.get("features")
+    return type(features) is list and SMART_WARM_UP_FEATURE in features
+
+
+def _smart(room):
+    """The room's own Smart warm-up as the card shows it: "on", "off" or "house" (no key: as the house)."""
+    value = room.get(SMART_WARM_UP_FIELD)
+    return value if value in ("on", "off") else "house"
+
+
+def checked_resets(items, room):
+    """The card's reset times (the plan's form: days, time, temperature_c or state) by the room form's rules, in
+    the plan's form; WeekError with the card's code. A reset time as stored is kept exactly."""
+    if type(items) is not list:
+        raise WeekError("invalid_resets")
+    shown = []
+    for item in items:
+        if type(item) is not dict:
+            shown.append(item)
+            continue
+        one = {"days": item.get("days"), "time": item.get("time")}
+        if "state" in item:
+            one["state"] = item["state"]
+        if "temperature_c" in item or "state" not in item:
+            one["temperature"] = item.get("temperature_c")
+        shown.append(one)
+    try:
+        return valid_resets(shown, room.get("minimum_centi_c", 500), room.get("maximum_centi_c", 3000), CELSIUS,
+                            room.get("resets"))
+    except FlowError as err:
+        raise WeekError(RESET_FAILURES.get(err.key, "invalid_resets")) from None
+
+
 def _link(hass, entry_id):
     """The entry's RoomPlanLink, or WeekError: unavailable (no such E32 installation),
     disabled (turned off by the user), setup_error (the installation could not start: a clear
@@ -114,14 +159,18 @@ def _levels(room, settings):
 
 
 def week_rooms(plan, settings=None):
-    """What the card shows: per room its name, limits, fallback, program and levels."""
-    return {"revision": plan["revision"], "levels_supported": supported(plan), "rooms": [{
-        "id": room["id"], "name": room.get("name") or room["id"],
-        "minimum_centi_c": room.get("minimum_centi_c", 500), "maximum_centi_c": room.get("maximum_centi_c", 3000),
-        "fallback_centi_c": room.get("fallback_centi_c", 2000), "setpoint_entity": room.get("setpoint_entity") or "",
-        "schedule": _program(room), "levels": _levels(room, settings),
-        "schedule_levels": room.get("schedule_levels") if room_levels(room) else None,
-        "resets": _resets(room)} for room in plan["rooms"]]}
+    """What the card shows: per room its name, limits, fallback, program, levels, reset times and (an E32 that has
+    it) its own Smart warm-up; ``features`` says what the card may edit besides the program."""
+    smart = _smart_supported(plan)
+    return {"revision": plan["revision"], "levels_supported": supported(plan),
+            "features": {"resets": resets_supported(plan), "smart_warm_up": smart}, "rooms": [{
+                "id": room["id"], "name": room.get("name") or room["id"],
+                "minimum_centi_c": room.get("minimum_centi_c", 500), "maximum_centi_c": room.get("maximum_centi_c", 3000),
+                "fallback_centi_c": room.get("fallback_centi_c", 2000), "setpoint_entity": room.get("setpoint_entity") or "",
+                "schedule": _program(room), "levels": _levels(room, settings),
+                "schedule_levels": room.get("schedule_levels") if room_levels(room) else None,
+                "resets": _resets(room), **({SMART_WARM_UP_FIELD: _smart(room)} if smart else {})}
+                for room in plan["rooms"]]}
 
 
 def _settings(hass, entry_id):
@@ -152,18 +201,24 @@ async def read_week(hass, entry_id, fresh=False):
         raise WeekError(_code(err)) from None
 
 
-async def save_week(hass, entry_id, room_id, schedule, expected, levels=None, schedule_levels=None):
+async def save_week(hass, entry_id, room_id, schedule, expected, levels=None, schedule_levels=None, resets=None,
+                    smart_warm_up=None):
     """Replace one room's program (and, for an E32 with "plan.levels.v1", its levels and the level of each
-    point); WeekError("week_changed") when the program changed since it was loaded."""
+    point), and with ``resets`` / ``smart_warm_up`` (1.4.1) its reset times and its own Smart warm-up, as one plan
+    change. WeekError("week_changed") when anything ``expected`` names changed since it was loaded."""
     link = _link(hass, entry_id)
     wanted = []
+    guard = expected if type(expected) is dict else {"schedule": expected}
 
     def change(plan):
         candidate = deepcopy(plan)
         room = plan_room(candidate, room_id)
         if room is None:
             raise WeekError("room_missing")
-        if _program(room) != expected:
+        with_resets, with_smart = resets_supported(plan), _smart_supported(plan)
+        if (_program(room) != guard.get("schedule")
+                or with_resets and "resets" in guard and _resets(room) != guard["resets"]
+                or with_smart and SMART_WARM_UP_FIELD in guard and _smart(room) != guard[SMART_WARM_UP_FIELD]):
             raise WeekError("week_changed")
         week = valid_schedule(schedule, room.get("minimum_centi_c", 500), room.get("maximum_centi_c", 3000))
         if week is None:
@@ -175,14 +230,26 @@ async def save_week(hass, entry_id, room_id, schedule, expected, levels=None, sc
             # room_levels.normalize (on every save) makes the marks fit the program, or derives them.
             room["levels"] = chosen
             room["schedule_levels"] = schedule_levels if type(schedule_levels) is str else None
-        wanted[:] = [week]
-        for other in candidate["rooms"]:  # E32 1.4: the reset times are set in the room's settings, never here
+        # 1.4.1: the room's reset times as the planner shows them (also when unchanged: what was shown is what is
+        # meant); every other room's are not sent, so the E32 keeps them. Never to an E32 without reset times.
+        own = checked_resets(resets, room) if with_resets and resets is not None else None
+        for other in candidate["rooms"]:
             other.pop("resets", None)
+        if own is not None:
+            room["resets"] = own
+        smart = smart_warm_up if with_smart and smart_warm_up in SMART_WARM_UP_CHOICES else None
+        if smart == "house":
+            room.pop(SMART_WARM_UP_FIELD, None)  # no key: as the house
+        elif smart is not None:
+            room[SMART_WARM_UP_FIELD] = smart
+        wanted[:] = [week, own, smart]
         return candidate
 
     def confirm(stored):
         room = plan_room(stored, room_id)
-        return room is not None and _program(room) == wanted[0]
+        week, own, smart = wanted
+        return (room is not None and _program(room) == week and (own is None or _resets(room) == own)
+                and (smart is None or _smart(room) == smart))
     try:
         stored = await link.async_change_plan(change, confirm)
     except HomeAssistantError as err:
@@ -210,15 +277,18 @@ async def ws_week_get(hass, connection, msg):
 @websocket_api.websocket_command({vol.Required("type"): "open_thermostat/e32_week/save",
                                   vol.Required("entry_id"): str, vol.Required("room_id"): str,
                                   vol.Required("schedule"): vol.Any(None, list),
-                                  vol.Required("expected"): vol.Any(None, list),
+                                  vol.Required("expected"): vol.Any(None, list, dict),
                                   vol.Optional("levels"): vol.Any(None, dict),
-                                  vol.Optional("schedule_levels"): vol.Any(None, str)})
+                                  vol.Optional("schedule_levels"): vol.Any(None, str),
+                                  vol.Optional("resets"): list,
+                                  vol.Optional("smart_warm_up"): vol.In(SMART_WARM_UP_CHOICES)})
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_week_save(hass, connection, msg):
     try:
         result = await save_week(hass, msg["entry_id"], msg["room_id"], msg["schedule"], msg["expected"],
-                                 msg.get("levels"), msg.get("schedule_levels"))
+                                 msg.get("levels"), msg.get("schedule_levels"), msg.get("resets"),
+                                 msg.get("smart_warm_up"))
     except WeekError as err:
         connection.send_error(msg["id"], str(err), "The week program was not saved")
     else:

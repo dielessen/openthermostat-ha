@@ -567,6 +567,9 @@ class HeatingHub:
     def __init__(self, prefix, clock=time.monotonic):
         self.prefix = prefix
         self.clock = clock
+        # has_record(domain, unique_id): whether this entry's entity registry holds that record of ours, so an
+        # entity that exists only once its figure came keeps existing (entity_was_there); set by heating_hub.
+        self.has_record = lambda domain, unique_id: False
         self.status = None
         # The E32's active-control block (``fw/state/heating`` ``active``), or None (heating_problem reads it).
         self.active = None
@@ -1453,6 +1456,7 @@ def heating_hub(hass, entry):
     hub = state.get("heating_hub")
     if hub is None:
         hub = state["heating_hub"] = HeatingHub(entry.data[CONF_TOPIC_PREFIX])
+        hub.has_record = registry_records(hass, entry)
         from .room_plan import RoomPlanLink
         hub.plan = RoomPlanLink.for_entry(hass, entry, hub)
         entry.async_on_unload(hub.stop)
@@ -1461,6 +1465,33 @@ def heating_hub(hass, entry):
         from .e32_access import clear
         entry.async_on_unload(lambda: clear(hass, entry))
     return hub
+
+
+def registry_records(hass, entry):
+    """has_record(domain, unique_id): whether Home Assistant's entity registry holds that record for this entry.
+
+    Read live (a dict lookup), so a record the user or a cleanup removed counts as gone at once.
+    """
+    from homeassistant.helpers import entity_registry as er
+    registry = er.async_get(hass)
+
+    def has_record(domain, unique_id):
+        entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
+        record = registry.async_get(entity_id) if entity_id is not None else None
+        return record is not None and record.config_entry_id == entry.entry_id
+    return has_record
+
+
+def entity_was_there(hub, suffix, domain="sensor"):
+    """Whether the entity with unique ID f"{hub.prefix}_{suffix}" existed before: its registry record is there.
+
+    An entity that appears only once its figure arrives (yesterday's scoreboard, a Bluetooth reading, the smart
+    warm-up start) is created again at every later setup while its record is there, even on a day without the
+    figure: then it says "unknown" or is unavailable for a reason the E32 gives, never "no longer provided"
+    (Unavailable, restored) on the device page (1.4.1, the owner's cleanup rule). The first time still waits for
+    a figure, so a new installation gets no entity that would stand "unknown" from the start.
+    """
+    return hub.has_record(domain, f"{hub.prefix}_{suffix}")
 
 
 def add_options(hass, entry, options=None):
@@ -2499,8 +2530,10 @@ def wanted_sensors(hub):
     # Firmware that compares (E32 beta.18), and only once a thermostat to compare with shows up.
     # In active mode without one they are removed (native_entity_cleanup.note_heating_status); a
     # removed one is forgotten (track_entities) and comes again with a thermostat in a trial run.
-    if shadow_has_thermostat(hub.status):
-        for key in SHADOW_SENSORS:
+    # In a trial run one that existed stays on a day the thermostat is not heard (yet) (entity_was_there).
+    trial = type(hub.status) is dict and hub.status.get("mode") == "shadow"
+    for key in SHADOW_SENSORS:
+        if shadow_has_thermostat(hub.status) or (trial and entity_was_there(hub, f"hub_shadow_{key}")):
             yield ("shadow", key), lambda key=key: ShadowSensor(hub, key)
     from .native_entity_cleanup import readiness_over
     from .takeover_readiness import TakeoverReadinessSensor, readiness_status
@@ -2522,17 +2555,20 @@ def wanted_sensors(hub):
         # Why it heats or not, in words (room_overview.py, 1.1): the room status card reads it.
         from .room_overview import RoomReasonSensor
         yield ("room", room_id, "reason"), lambda room=room: RoomReasonSensor(hub, room)
-        if room_id in hub.learned:  # firmware that learns the rooms (E32 beta.18)
-            yield ("room", room_id, "learning"), lambda room=room: RoomLearningSensor(hub, room)
-            yield ("room", room_id, "flow_advice"), lambda room=room: RoomFlowAdviceSensor(hub, room)
-        if room_id in hub.warmup:  # only while the E32 clock is trusted
-            yield ("room", room_id, "heating_start"), lambda room=room: RoomHeatingStartSensor(hub, room)
+        # Firmware that learns the rooms (E32 beta.18); the start only while the E32 clock is trusted. Each stays
+        # once it existed (entity_was_there), unavailable while the E32 sends nothing for it.
+        for key, factory, wanted in (("learning", RoomLearningSensor, room_id in hub.learned),
+                                     ("flow_advice", RoomFlowAdviceSensor, room_id in hub.learned),
+                                     ("heating_start", RoomHeatingStartSensor, room_id in hub.warmup)):
+            if wanted or entity_was_there(hub, f"e32_room_{room_id}_{key}"):
+                yield ("room", room_id, key), lambda room=room, factory=factory: factory(hub, room)
     for sensor_id, sensor in hub.ble.items():
         for metric in BLE_METRICS:
-            # Only readings the sensor actually reports (not every profile has humidity).
-            if sensor.get(metric) is not None:
+            # Only readings the sensor actually reports (not every profile has humidity); one it reported before
+            # stays ("unknown" until the next reading after an E32 restart).
+            if sensor.get(metric) is not None or entity_was_there(hub, f"e32_ble_{sensor_id}_{metric}"):
                 yield ("ble", sensor_id, metric), lambda sensor=sensor, metric=metric: BleSensor(hub, sensor, metric)
-    # Yesterday's scoreboard (E32 rc.4): each figure once the E32 reported a value for it.
+    # Yesterday's scoreboard (E32 rc.4): each figure once the E32 reported a value for it, then for good.
     from .scoreboard import wanted_scoreboard
     yield from wanted_scoreboard(hub)
     # 1.1.1 stage B: the E32's heating plan, once it reports one (heating_plan.py).

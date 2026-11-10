@@ -5,7 +5,7 @@ never edit by hand (--check fails on drift). fw/config/boiler_capabilities names
 nvs_id (never reused) and the table of the E32 by TABLE_VERSION; PRODUCT_NAMES names a boiler outside the rows.
 """
 
-TABLE_VERSION = '44b86d12'
+TABLE_VERSION = '013b5111'
 # nvs_id: (row id, model, family, product ids, route, control state)
 ROWS = {
     1: ('classic-206-adapter', 'Nefit EcomLine + Bosch EasyControl Adapter', 'classic', (206,), 'classic_1a', 'probe_passed'),

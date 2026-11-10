@@ -85,7 +85,7 @@
       },
       "house_presence": {
         "title": "Obecność i temperatura podczas nieobecności",
-        "description": "W trybie domu Automatyczny pomieszczenia przechodzą na temperaturę nieobecności, gdy wszyscy wyszli. Ktoś w domu albo ktoś, kogo położenie jest nieznane, utrzymuje ciepło w domu.",
+        "description": "Gdy tryb domu to Automatycznie, pomieszczenia przechodzą na temperaturę nieobecności, gdy wszyscy wyszli. Ktoś w domu albo ktoś, kogo położenie jest nieznane, utrzymuje ciepło w domu.",
         "data": {
           "presence_entities": "Kto tu mieszka",
           "away_delay": "Nieobecność po",
@@ -442,7 +442,6 @@
         "title": "Zaawansowane i diagnostyka",
         "description": "{saved}{intro}",
         "menu_options": {
-          "e32_rooms": "Zawory grzejnikowe, osoby i limity temperatury",
           "boiler_settings": "Ustawienia kotła (wersja wstępna)",
           "configuration_status": "Sprawdź stare pomieszczenia",
           "graph_status": "Stan starych pomieszczeń w E32",
@@ -1080,7 +1079,7 @@
           "holiday_until": "Koniec urlopu"
         },
         "data_description": {
-          "house_mode": "Automatyczny: decydują osoby ustawione w Obecności. W domu: zawsze programy tygodniowe. Nieobecność: każde pomieszczenie najwyżej do temperatury nieobecności. Urlop: nieobecność do daty poniżej.",
+          "house_mode": "Automatycznie: decydują osoby ustawione w Obecności. W domu: zawsze programy tygodniowe. Nieobecność: każde pomieszczenie najwyżej do temperatury nieobecności. Urlop: nieobecność do daty poniżej. Tryb letni: ogrzewanie pozostaje wyłączone, dopóki tego nie wyłączysz; ciepła woda i ochrona przed mrozem działają.",
           "holiday_until": "Tylko dla Urlopu: dzień i godzina powrotu. Najwyżej rok naprzód."
         }
       },
@@ -1137,7 +1136,7 @@
           "holiday_until": "Koniec urlopu"
         },
         "data_description": {
-          "house_mode": "Automatyczny: decydują osoby ustawione w Obecności. W domu: zawsze programy tygodniowe. Nieobecność: każde pomieszczenie najwyżej do temperatury nieobecności. Urlop: od teraz do daty poniżej.",
+          "house_mode": "Automatycznie: decydują osoby ustawione w Obecności. W domu: zawsze programy tygodniowe. Nieobecność: każde pomieszczenie najwyżej do temperatury nieobecności. Urlop: od teraz do daty poniżej. Tryb letni: ogrzewanie pozostaje wyłączone, dopóki tego nie wyłączysz; ciepła woda i ochrona przed mrozem działają.",
           "holiday_until": "Tylko dla Urlopu: dzień i godzina powrotu. Najwyżej rok naprzód."
         }
       },
@@ -1350,7 +1349,7 @@
         "data_description": {
           "on": "Wyłączone: brak wiadomości o domu.",
           "kinds": "Wybierz, o których problemach chcesz otrzymywać wiadomości.",
-          "maintenance": "Kocioł wymagający konserwacji, nowa wersja oprogramowania E32 lub tej integracji oraz codzienna kopia ustawień E32, która stale się nie udaje."
+          "maintenance": "Kocioł wymagający konserwacji, nowa wersja oprogramowania E32 lub tej integracji, codzienna kopia ustawień E32, która stale się nie udaje, E32 gotowy do planowania ogrzewania oraz pytanie, czy włączyć lub wyłączyć tryb letni."
         }
       },
       "notify_rooms": {
@@ -1809,6 +1808,12 @@
               "follow": "Grzeje tylko razem z innymi",
               "inactive": "Wyłączone"
             }
+          },
+          "reason": {
+            "name": "Powód",
+            "state": {
+              "summer": "Lato"
+            }
           }
         }
       }
@@ -1895,6 +1900,7 @@
         "name": "Powód",
         "state": {
           "off": "Tylko ochrona przed mrozem (pomieszczenie wyłączone)",
+          "summer": "Lato",
           "window_open": "Wstrzymane: otwarte okno lub drzwi",
           "window_pending": "Otwarte okno lub drzwi, wkrótce wstrzymanie",
           "no_measurement": "Brak pomiaru",
@@ -1918,6 +1924,7 @@
             "name": "Zdanie",
             "state": {
               "off": "Tylko ochrona przed mrozem (pomieszczenie wyłączone)",
+              "summer": "Tryb letni: ogrzewanie pozostaje wyłączone, dopóki tego nie wyłączysz; ciepła woda i ochrona przed mrozem działają.",
               "window_open": "Wstrzymane: otwarte jest okno lub drzwi",
               "window_open_contact": "Wstrzymane: {contact} otwarte od {since}",
               "window_open_window": "Wstrzymane: otwarte jest okno",
@@ -1977,6 +1984,7 @@
             "name": "Stan jednym słowem",
             "state": {
               "off": "Wyłączone",
+              "summer": "Lato",
               "window_open": "Wstrzymane",
               "window_pending": "Wkrótce wstrzymanie",
               "no_measurement": "Brak pomiaru",
@@ -3465,10 +3473,11 @@
       "house_mode": {
         "name": "Tryb domu",
         "state": {
-          "auto": "Automatyczny",
+          "auto": "Automatycznie",
           "home": "W domu",
           "away": "Nieobecność",
-          "holiday": "Urlop"
+          "holiday": "Urlop",
+          "summer": "Lato"
         }
       },
       "boiler_setting": {
@@ -4515,10 +4524,11 @@
     },
     "house_mode_choice": {
       "options": {
-        "auto": "Automatyczny",
+        "auto": "Automatycznie",
         "home": "W domu",
         "away": "Nieobecność",
-        "holiday": "Urlop"
+        "holiday": "Urlop",
+        "summer": "Lato"
       }
     },
     "flow_design_choice": {
@@ -4722,7 +4732,8 @@
         "maintenance": "Kocioł wymaga konserwacji (kod H)",
         "update": "Nowa wersja oprogramowania E32 lub tej integracji",
         "backup": "Codzienna kopia ustawień E32 stale się nie udaje",
-        "plan_ready": "E32 gotowy do planowania ogrzewania (raz prosi o potwierdzenie)"
+        "plan_ready": "E32 gotowy do planowania ogrzewania (raz prosi o potwierdzenie)",
+        "season": "Pora roku: włączyć lub wyłączyć tryb letni?"
       }
     },
     "notification_text": {
@@ -4757,9 +4768,8 @@
     "configure_text": {
       "options": {
         "menu": "Wybierz, co chcesz ustawić. E32 przechowuje te ustawienia i steruje ogrzewaniem, także bez Home Assistant.",
-        "settings_page": "Większość ustawień jest na karcie Ustawienia panelu OpenThermostat. Tutaj łączysz E32, a w Zaawansowane i diagnostyka jest to, czego rzadko potrzebujesz.",
-        "advanced_menu": "Strefa czasowa i dziennik systemowy E32, przywracanie kopii zapasowej, porządkowanie identyfikatorów encji i kontrole. Codzienne ustawienia, także Panel i nazwa, są w menu głównym.",
-        "advanced_settings_page": "Czego karta Ustawienia jeszcze nie zawiera: zawory grzejnikowe, osoby i limity temperatury pomieszczenia, ustawienia kotła (wersja wstępna), przywracanie kopii zapasowej, porządkowanie identyfikatorów encji i stare pomieszczenia Home Assistant. Dziennik systemowy E32, jego strefa czasowa i program testerów są na karcie Ustawienia w części Zaawansowane."
+        "settings_page": "Wszystkie ustawienia są na karcie Ustawienia panelu OpenThermostat. Tutaj łączysz E32.",
+        "advanced_menu": "Strefa czasowa i dziennik systemowy E32, przywracanie kopii zapasowej, porządkowanie identyfikatorów encji i kontrole. Codzienne ustawienia, także Panel i nazwa, są w menu głównym."
       }
     }
   },
@@ -5234,7 +5244,7 @@
     },
     "clear_away": {
       "name": "Zakończ nieobecność",
-      "description": "Przywraca tryb domu na Automatyczny: każde pomieszczenie znów działa według swojego programu tygodniowego."
+      "description": "Przywraca tryb domu na Automatycznie: każde pomieszczenie znów działa według swojego programu tygodniowego."
     },
     "export_metrics_csv": {
       "name": "Eksportuj historię do CSV",
@@ -5347,7 +5357,10 @@
       "message": "E32 nie ma wolnej sesji internetowej: zamknij nieużywane strony E32 lub poczekaj dwie minuty."
     },
     "house_mode_invalid": {
-      "message": "Wybierz Automatyczny, W domu, Nieobecność lub Urlop."
+      "message": "Wybierz Automatycznie, W domu, Nieobecność lub Urlop."
+    },
+    "summer_mode_on": {
+      "message": "Tryb letni jest włączony: najpierw go wyłącz."
     },
     "house_holiday_date_needed": {
       "message": "Aby rozpocząć urlop, ustaw \"Urlop do\" na dzień powrotu; tryb domu sam zmieni się na Urlop."

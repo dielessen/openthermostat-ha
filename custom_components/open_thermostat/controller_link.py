@@ -98,7 +98,11 @@ SHELLY_CONFIG = "/config/shelly"
 SHELLY_CIRCUIT = "/config/shelly/circuit"
 SHELLY_STATUS = "/status/shelly"
 SHELLY_PROBE = "/config/shelly/probe"
-SHELLY_PATHS = (SHELLY_CONFIG, SHELLY_CIRCUIT, SHELLY_STATUS, SHELLY_PROBE)
+# 1.4.1 (the settings panel, settings_devices.py): POST /config/shelly/scan {"n"} asks BLU Gateway n which valves are
+# paired with it (E32 1.1 P9, 202 with the Shelly status; its "scan" shows the result once the gateway answered).
+# Refusals: 404 unknown_device (no such gateway), 404 unknown_command (firmware before P9), 409 scan_busy.
+SHELLY_SCAN = "/config/shelly/scan"
+SHELLY_PATHS = (SHELLY_CONFIG, SHELLY_CIRCUIT, SHELLY_STATUS, SHELLY_PROBE, SHELLY_SCAN)
 # The E32 system log: syslog forwarding and the kept log levels (diagnostics/LogSettings.h).
 # Not part of a settings backup; refusals are plain text (400 invalid, 503 not confirmed or unavailable).
 LOGGING = "/config/logging"
@@ -111,6 +115,10 @@ BOILER_MATCH_ACKNOWLEDGE = "/boiler/match/acknowledge"
 # list with If-Match; a change restarts the E32 about 30 s later. The answer lists the sensors and the
 # discovery, so it may be larger than the other settings.
 BLUETOOTH = "/config/bluetooth"
+# 1.4.1: the Search of the E32's Bluetooth page (REST.h): POST without a body, 202 {"scan_started": true}, or 409
+# {"error": "bluetooth_scan_not_started"} (a search runs already, or Bluetooth scanning is off). What it hears shows
+# in the GET's "nearby_devices".
+BLUETOOTH_SCAN = "/config/bluetooth/scan"
 BLUETOOTH_RESPONSE_BYTES = 32768
 # The boiler's own settings (E32 V2 with track W, ClassicBoilerSettingsService.h): GET the table with the values
 # and the open change; POST one write, a keep / put back (confirm) or the owner's switch (persistent). Every answer
@@ -622,6 +630,7 @@ class ControllerClient:
                          HEATING_PLAN, HEATING_COMFORT, HEATING_FLOW, HEATING_HANDOVER, HEATING_PLAN_MODE,
                          HEATING_TRV, CONFIG_BACKUP,
                          LOGGING, BOILER_DISPLAY, BLUETOOTH, *BOILER_SETTINGS_POSTS, SHELLY_CONFIG, SHELLY_CIRCUIT, SHELLY_PROBE,
+                         SHELLY_SCAN, BLUETOOTH_SCAN,
                          BOILER_MATCH_ACKNOWLEDGE, *RECORDING_POSTS))
 
     def __init__(self, address):
@@ -734,6 +743,8 @@ class ControllerClient:
                     raise ControllerLinkError("controller_update_required")  # firmware before beta.19
                 if path == BLUETOOTH and response.status in (400, 413, 503, 507):
                     raise BluetoothRejected(response.status, await _error_name(response))
+                if path == BLUETOOTH_SCAN and response.status == 409:
+                    raise BluetoothRejected(response.status, await _error_name(response))
                 if path == BOILER_MATCH_ACKNOWLEDGE and response.status in (404, 409):
                     # 404: firmware without the route; 409: no other boiler to confirm (already done), or busy.
                     raise ControllerLinkError("controller_update_required" if response.status == 404
@@ -744,7 +755,7 @@ class ControllerClient:
                     raise ControllerLinkError("controller_update_required")  # firmware without the tester programme
                 if path == RECORDING_START and response.status == 503:
                     raise ControllerLinkError("controller_recording_unavailable")  # no PSRAM for the ring
-                if path in (BLUETOOTH, BOILER_DISPLAY) and response.status == 404:
+                if path in (BLUETOOTH, BLUETOOTH_SCAN, BOILER_DISPLAY) and response.status == 404:
                     raise ControllerLinkError("controller_update_required")
                 if path in (LOGGING, BOILER_DISPLAY) and response.status in (400, 404, 503):
                     raise ControllerLinkError({400: "controller_settings_invalid", 404: "controller_update_required",
@@ -762,7 +773,8 @@ class ControllerClient:
                 if response.status == 409:
                     raise ControllerLinkError("controller_busy_or_conflict")
                 accepted = ({200, 201} if method == "POST" and path in ("/config/device", CONFIG_BACKUP, BLUETOOTH)
-                            else {202} if method == "POST" and path in ("/updates/reboot", SHELLY_PROBE)
+                            else {202} if method == "POST" and path in ("/updates/reboot", SHELLY_PROBE, SHELLY_SCAN,
+                                                                        BLUETOOTH_SCAN)
                             else {204} if method == "POST" and path == "/auth/password"
                             else {200, 202} if method == "POST" and settings
                             else {200})
@@ -1052,6 +1064,25 @@ class ControllerClient:
         if type(ip) is not str:
             raise ControllerLinkError("controller_request_invalid")
         raw, _, _ = await self._request("POST", SHELLY_PROBE, document={"ip": ip})
+        return _decode(raw)
+
+    async def async_shelly_scan(self, n):
+        """POST /config/shelly/scan {"n"}: the E32 asks BLU Gateway ``n`` which valves are paired with it (E32 1.1 P9,
+        "Look for valves at the gateway"); returns the Shelly status, whose "scan" shows the result once it came.
+
+        A refusal raises HeatingPlanRejected (unknown_device, unknown_command on firmware before P9: 404;
+        scan_busy: 409; invalid_request: 400).
+        """
+        if type(n) is not int or isinstance(n, bool):
+            raise ControllerLinkError("controller_request_invalid")
+        raw, _, _ = await self._request("POST", SHELLY_SCAN, document={"n": n})
+        return _decode(raw)
+
+    async def async_bluetooth_scan(self):
+        """POST /config/bluetooth/scan (no body): the E32 starts a Bluetooth search (at most 30 s at the next scan
+        boundary); returns {"scan_started": true}. A refusal raises BluetoothRejected (409
+        bluetooth_scan_not_started); firmware without it raises controller_update_required."""
+        raw, _, _ = await self._request("POST", BLUETOOTH_SCAN)
         return _decode(raw)
 
     async def async_shelly_circuit(self, command):

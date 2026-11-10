@@ -15,11 +15,54 @@ frontend/openthermostat-settings-devices.js): the three blocks of the E32's page
 One sign-in reads the Bluetooth list, the Shelly record and the Shelly devices' state. What only informs (the
 readings and battery of a sensor through its Home Assistant entities, the rooms that use it, a device's state, the
 boiler bus, what a save just did) is under ``live``, left out of the token (settings.LIVE).
+
+Actions (1.4.1, ``open_thermostat/settings/action``, plan 3.4): what the E32's page System → Devices does besides
+saving, each with the requests that page makes and the integration's E32 session (one sign-in per action):
+
+- ``scan`` → ``{"started": true}``: the Bluetooth search (``POST /config/bluetooth/scan``, about 30 s once the E32's
+  current scan ends); ``scan_result`` → ``{"sensors": [{address, name, rssi, kind, encryption, known}], "done",
+  "paired", "max", "full"}``: what it hears (the ``GET /config/bluetooth`` "nearby_devices", strongest first; ``kind``
+  and ``encryption`` the E32 page's guess from the name, None without one; ``known`` already paired). ``done`` once
+  the E32 scans no more or SEARCH_SECONDS after the start (with paired sensors the E32 keeps scanning for them).
+- ``pair {address, name, profile?, encryption?, bindkey?}`` → ``{"saved": true, "restart": bool, "restart_in_s"?}``:
+  the sensor added to the list with the 1.4 save's ETag write (every other row keeps its key), then read back. The
+  E32 restarts by itself about 30 s later (``restart`` false: later, after an update or boiler test). The bindkey goes
+  to the E32 only: in no answer, error or log.
+- ``pill_roles {device?}`` → ``{"device", "probes": [{c, role, health, t_c}], "roles": {"<c>": role}, "choices",
+  "in_use": {role: circuit}}``: The Pill's probes (``device`` its id or number; left out: the only Pill);
+  ``set_pill_roles {device?, roles: {"<c>": role | null}}`` → ``{"saved": true, "roles"}``: the whole record written
+  with that Pill's probes (as "Save probe roles"). Home Assistant's probe sensors follow the E32's fw/state/probes
+  (e32_shelly.remove_stale_entities removes a role's sensor once the E32 no longer reports it).
+- ``gateway_scan {gateway}`` → ``{"started": true}`` (``POST /config/shelly/scan {"n"}``); ``gateway_scan_result
+  {gateway}`` → ``{"state", "done", "valves": [{id, name, known}], "more", "full", "reason"?, "error"?}`` from ``GET
+  /status/shelly`` "scan". Adding a found valve is the ``valve-add`` save.
 """
 from __future__ import annotations
 
+import time
+
 from .const import DOMAIN
 from .settings import SettingsError, register_section
+
+# The longest a Bluetooth search the panel started can take: it waits for the current scan to end (60 s at most with
+# paired sensors, BleScanPlan) and then listens 30 s; after that the result counts as done.
+SEARCH_SECONDS = 95
+# entry_id -> monotonic start of the last Bluetooth search the panel started (RAM only).
+_SEARCHES: dict[str, float] = {}
+CLOCK = time.monotonic  # the clock of SEARCH_SECONDS (a test moves it)
+# The E32's refusals of the panel's actions that Configure never meets, as the panel's codes.
+PANEL_ERRORS = {"duplicate_probe_role": "shelly_probe_role_duplicate", "invalid_probe": "shelly_probe_invalid",
+                "invalid_probe_role": "shelly_probe_invalid", "duplicate_probe": "shelly_probe_invalid",
+                "invalid_probes": "shelly_probe_invalid", "scan_busy": "scan_busy"}
+# The Bluetooth page's refusals (bluetooth.js errors) as the panel's codes, with the field they belong to.
+BLE_ERRORS = {"invalid_device_name": ("ble_name_invalid", "name"), "bluetooth_storage_full": ("ble_storage_full", "base"),
+              "bluetooth_resources_unavailable": ("e32_settings_busy", "base"),
+              "invalid_device_address": ("ble_address_invalid", "address"),
+              "duplicate_device_address": ("ble_already_paired", "address"), "invalid_device_count": ("ble_full", "base"),
+              "device_settings_too_large": ("ble_full", "base"), "invalid_device_key": ("ble_key_invalid", "bindkey"),
+              "unsupported_device_profile": ("ble_profile_invalid", "profile"),
+              "invalid_device_encryption": ("ble_encryption_invalid", "encryption"),
+              "bluetooth_scan_not_started": ("ble_scan_not_started", "base")}
 
 
 def _link(hass, entry):
@@ -35,7 +78,9 @@ def _failure(err):
     from .e32_devices import ERRORS, FIELDS, Refused
     from .e32_system import failure
     if isinstance(err, Refused):
-        key = ERRORS.get(err.code, "shelly_rejected")
+        if err.code == "unknown_command":  # firmware before the gateway search
+            return SettingsError("e32_settings_update_required", error=err.code)
+        key = ERRORS.get(err.code) or PANEL_ERRORS.get(err.code, "shelly_rejected")
         return SettingsError(key, FIELDS.get(key, "base"), error=err.code)
     if str(err) == "controller_update_required":
         return SettingsError("shelly_unsupported")
@@ -326,6 +371,224 @@ async def _save_valve_add(hass, entry, values):
     return model
 
 
+# -- actions (1.4.1): pair a Bluetooth sensor, The Pill's probe roles, the gateway's valve search -----------------
+
+def _ble_failure(err):
+    """A failed Bluetooth request of an action as the panel's code: the E32's refusal on its field, else _failure."""
+    from .controller_link import BluetoothRejected
+    if isinstance(err, BluetoothRejected):
+        key, field = BLE_ERRORS.get(err.error, ("ble_rejected", "base"))
+        return SettingsError(key, field, error=err.error)
+    if str(err) == "controller_settings_changed":
+        return SettingsError("ble_changed")
+    return _failure(err)
+
+
+async def _action_scan(hass, entry, item, values):
+    from .controller_link import ControllerLinkError
+    from .e32_bluetooth import async_scan
+    link = _link(hass, entry)
+    try:
+        await async_scan(link)
+    except ControllerLinkError as err:
+        raise _ble_failure(err) from None
+    _SEARCHES[entry.entry_id] = CLOCK()
+    return {"started": True}
+
+
+async def _action_scan_result(hass, entry, item, values):
+    from .controller_link import ControllerLinkError
+    from .e32_bluetooth import MAX_SENSORS, decode_nearby, decode_sensors, guess
+    link = _link(hass, entry)
+    try:
+        value, _tag = await link.async_call(lambda c: c.async_bluetooth(), write=False)
+    except ControllerLinkError as err:
+        raise _ble_failure(err) from None
+    sensors, nearby = decode_sensors(value), decode_nearby(value)
+    if sensors is None or nearby is None:
+        raise SettingsError("e32_settings_unreachable", error="controller_response_invalid")
+    paired = {s["address"] for s in sensors}
+    found = []
+    for row in nearby:
+        kind, encryption = guess(row["name"])
+        found.append({**row, "kind": kind, "encryption": encryption, "known": row["address"] in paired})
+    started = _SEARCHES.get(entry.entry_id)
+    done = value.get("scan_pending") is not True or started is None or CLOCK() - started >= SEARCH_SECONDS
+    if done:
+        _SEARCHES.pop(entry.entry_id, None)
+    return {"sensors": found, "done": done, "paired": len(sensors), "max": MAX_SENSORS,
+            "full": value.get("discovery_full") is True}
+
+
+async def _action_pair(hass, entry, item, values):
+    from .controller_link import ControllerLinkError
+    from .e32_bluetooth import (KEY, PROFILE_ENCRYPTIONS, address_of, async_pair, decode_nearby, guess, pairing_row,
+                                valid_name)
+    link = _link(hass, entry)
+    address = address_of(values.get("address"))
+    if address is None:
+        raise SettingsError("ble_address_invalid", "address")
+    name = values.get("name")
+    name = name.strip() if type(name) is str else name
+    if not valid_name(name):
+        raise SettingsError("ble_name_invalid", "name")
+    profile, encryption = values.get("profile") or None, values.get("encryption") or None
+    if profile is None:
+        # As the E32 page: the guess from the name the search heard (one read), else from the name given.
+        try:
+            value, _tag = await link.async_call(lambda c: c.async_bluetooth(), write=False)
+        except ControllerLinkError as err:
+            raise _ble_failure(err) from None
+        heard = next((r["name"] for r in decode_nearby(value) or [] if r["address"] == address), "")
+        profile = guess(heard)[0] or guess(name)[0]
+        if profile is None:
+            raise SettingsError("ble_profile_needed", "profile")
+    if type(profile) is not str or profile not in PROFILE_ENCRYPTIONS:
+        raise SettingsError("ble_profile_invalid", "profile")
+    bindkey = values.get("bindkey")
+    bindkey = bindkey.strip().lower() if type(bindkey) is str and bindkey.strip() else None
+    if encryption is None:
+        choices = PROFILE_ENCRYPTIONS[profile]
+        encryption = (next((e for e in choices if e != "none"), choices[0]) if bindkey
+                      else "none" if "none" in choices else choices[0])
+    if encryption not in PROFILE_ENCRYPTIONS[profile]:
+        raise SettingsError("ble_encryption_invalid", "encryption")
+    if encryption == "none":
+        if bindkey is not None:
+            raise SettingsError("ble_key_not_used", "bindkey")
+    elif bindkey is None:
+        raise SettingsError("ble_key_needed", "bindkey")
+    elif KEY.fullmatch(bindkey) is None:
+        raise SettingsError("ble_key_invalid", "bindkey")
+    try:
+        answer, confirmed = await async_pair(link, pairing_row(address, name, profile, encryption, bindkey))
+    except ControllerLinkError as err:
+        raise _ble_failure(err) from None
+    if type(answer) is not dict or answer.get("changed") is not True or not confirmed:
+        raise SettingsError("e32_settings_unconfirmed")
+    scheduled = answer.get("restart_scheduled") is not False
+    seconds = answer.get("restart_in_s")
+    return {"saved": True, "restart": scheduled,
+            **({"restart_in_s": seconds} if scheduled and type(seconds) is int else {})}
+
+
+async def _record(link):
+    from .controller_link import ControllerLinkError
+    from .e32_devices import async_read
+    try:
+        return await async_read(link)
+    except ControllerLinkError as err:
+        if str(err) == "controller_update_required":
+            raise SettingsError("shelly_unsupported") from None
+        raise _failure(err) from None
+
+
+def _the_pill(record, wanted):
+    from .e32_devices import find_device
+    if wanted in (None, ""):
+        pills = [d for d in record["devices"] if d["kind"] == "probes"]
+        device = pills[0] if len(pills) == 1 else None
+    else:
+        device = find_device(record, wanted, "probes")
+    if device is None:
+        raise SettingsError("shelly_rejected", "device", error="unknown_device")
+    return device
+
+
+def _pill_answer(record, status, device):
+    from .e32_devices import circuit_roles, pill_probes
+    from .heating_link import PROBE_ROLES
+    state = next((s for s in (status or {}).get("devices") or [] if type(s) is dict and s.get("n") == device["n"]), None)
+    probes = pill_probes(device, state)
+    return {"device": {"n": device["n"], "id": device["id"], "label": device.get("label") or ""},
+            "probes": probes, "roles": {str(p["c"]): p["role"] for p in probes if p["role"]},
+            "choices": list(PROBE_ROLES), "in_use": circuit_roles(record)}
+
+
+async def _action_pill_roles(hass, entry, item, values):
+    record, status = await _record(_link(hass, entry))
+    return _pill_answer(record, status, _the_pill(record, values.get("device")))
+
+
+async def _action_set_pill_roles(hass, entry, item, values):
+    from .controller_link import ControllerLinkError
+    from .e32_devices import MAX_PROBES, PROBE_IDS, Refused, async_change, circuit_roles, setting_roles
+    from .heating_link import PROBE_ROLES
+    link = _link(hass, entry)
+    record, _status = await _record(link)
+    device = _the_pill(record, values.get("device"))
+    given = values.get("roles")
+    if type(given) is not dict:
+        raise SettingsError("shelly_probe_invalid", "roles")
+    roles = {}
+    for key, role in given.items():
+        if not str(key).isdigit() or not PROBE_IDS[0] <= int(key) <= PROBE_IDS[1]:
+            raise SettingsError("shelly_probe_invalid", "roles")
+        if role in (None, ""):
+            continue
+        if role not in PROBE_ROLES:
+            raise SettingsError("shelly_probe_invalid", f"role:{int(key)}")
+        if role in roles.values():
+            raise SettingsError("shelly_probe_role_duplicate", f"role:{int(key)}")
+        roles[int(key)] = role
+    if len(roles) > MAX_PROBES:
+        raise SettingsError("shelly_probe_invalid", "roles")
+    others = {p.get("role") for d in record["devices"] if d is not device for p in d.get("probes") or []
+              if type(p) is dict}
+    for c, role in roles.items():
+        if role in others:
+            raise SettingsError("shelly_probe_role_duplicate", f"role:{c}")
+    for role, circuit in circuit_roles(record).items():
+        if role not in others and role not in roles.values():
+            held = next((p["c"] for p in device.get("probes") or [] if type(p) is dict and p.get("role") == role), None)
+            raise SettingsError("shelly_probe_in_use", f"role:{held}" if held is not None else "roles",
+                                role=role, circuit=circuit)
+    try:
+        stored = await async_change(link, setting_roles(device["id"], roles))
+    except (Refused, ControllerLinkError) as err:
+        raise _failure(err) from None
+    after = next((d for d in stored["devices"] if d["id"] == device["id"]), None)
+    kept = {p["c"]: p.get("role") for p in (after or {}).get("probes") or [] if type(p) is dict and type(p.get("c")) is int}
+    if after is None or kept != roles:
+        raise SettingsError("e32_settings_unconfirmed")
+    return {"saved": True, "roles": {str(c): role for c, role in sorted(kept.items())}}
+
+
+def _gateway(record, values):
+    from .e32_devices import find_device
+    wanted = values.get("gateway")
+    device = find_device(record, wanted, "gateway") if wanted not in (None, "") else None
+    if device is None:
+        raise SettingsError("shelly_rejected", "gateway", error="unknown_device")
+    return device
+
+
+async def _action_gateway_scan(hass, entry, item, values):
+    from .controller_link import ControllerLinkError
+    from .e32_devices import Refused, async_gateway_scan
+    link = _link(hass, entry)
+    record, _status = await _record(link)
+    device = _gateway(record, values)
+    try:
+        await async_gateway_scan(link, device["n"])
+    except (Refused, ControllerLinkError) as err:
+        raise _failure(err) from None
+    return {"started": True}
+
+
+async def _action_gateway_scan_result(hass, entry, item, values):
+    from .e32_devices import MAX_VALVES, scan_found
+    record, status = await _record(_link(hass, entry))
+    device = _gateway(record, values)
+    listed = [v for v in device.get("valves") or [] if type(v) is dict]
+    return {**scan_found(status, device), "full": len(listed) >= MAX_VALVES}
+
+
+ACTIONS = {"scan": _action_scan, "scan_result": _action_scan_result, "pair": _action_pair,
+           "pill_roles": _action_pill_roles, "set_pill_roles": _action_set_pill_roles,
+           "gateway_scan": _action_gateway_scan, "gateway_scan_result": _action_gateway_scan_result}
+
+
 # -- the section ----------------------------------------------------------------------------------------------------
 
 async def read_devices(hass, entry, item=None):
@@ -349,4 +612,4 @@ async def save_devices(hass, entry, item, values):
     raise SettingsError("unknown_section")
 
 
-register_section("devices", read_devices, save_devices)
+register_section("devices", read_devices, save_devices, actions=ACTIONS)

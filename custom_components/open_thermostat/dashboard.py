@@ -13,13 +13,16 @@ planner and, per room, the room status card (frontend/room-status-card.js):
   stand there instead); under it, side by side on a wide screen and in this
   order on a phone, Rooms (one status card per other room: now, why it heats or
   not, what it does in a word), Today (when each room warms up and how yesterday
-  went, what weather compensation asks) and House (home or away, the holiday
-  planner, the outdoor temperature, the next holiday). Nothing else;
+  went, what weather compensation asks) and House (the holiday planner and the
+  outdoor temperature; home or away and the next holiday only while there is no
+  house card, which shows them since 1.4.1). Nothing else;
 * Rooms: per room its thermostat, 24-hour graph, sensors, windows and people,
   and what it learned for that room; then the sensors that feed no single room;
-* Week program (with an E32 room plan): the visual week planner card; with
-  rooms of the older Home Assistant setup instead, Room settings (the first
-  such room's editor) and one subview per such room;
+* Room settings, only with rooms of the older Home Assistant setup: the first
+  such room's editor, and one subview per such room. (The Week program tab of
+  1.4 is gone in 1.4.1: a room's week program is on its own screen in the
+  Settings tab, #room/<id>, where the planner is built in; the card
+  custom:openthermostat-e32-week stays a card anyone can add by hand.)
 * Boiler, in this order: Now (one card, custom:openthermostat-boiler-now: what
   the boiler does in a band of its colour with its display code in words, the
   connection with the boiler and whether it serves hot water; the water to the
@@ -50,6 +53,12 @@ planner and, per room, the room status card (frontend/room-status-card.js):
   settings.py): every section with what is set now, and the editor of each section; each room status card's
   "Settings" button opens its room there;
 * Comparison (subview, trial run with a thermostat on the bus only).
+
+On top of every view (1.4.1, CONTRACT-1.4.1 §9): the house banner (custom:openthermostat-house-banner,
+frontend/openthermostat-house-banner.js), shown only while the house mode is summer: the summer sentence and "Switch
+summer mode off". In a sections view it is the view's header card, in a panel view the first card of a vertical stack
+with the view's card; Home Assistant hides it (a visibility condition on the house mode select) otherwise, and the
+element itself draws nothing then.
 
 Layout: every view is sections; a section hides as a whole while nothing in it
 has a value, so a heading never stands over nothing; a card is as wide as its
@@ -87,7 +96,6 @@ from .e32_flow import CURVE_CARD_TYPE, KNOWLEDGE_CARD_TYPE
 from .product import is_product
 from .week_planner import ROOM_CARD_TYPE
 
-E32_WEEK_CARD_TYPE = "custom:openthermostat-e32-week"
 # Per room (1.1): temperature against target and why it heats or not, from the room's Reason sensor.
 ROOM_STATUS_CARD_TYPE = "custom:openthermostat-room-status"
 
@@ -199,7 +207,7 @@ ICON_COLOURS = {"heating": "#ff6f22", "insight": "#039be5", "free_heat": "#ffc10
 TEXT = {
     "en": {
         "heating": "Heating", "boiler_view": "Boiler", "diagnostics": "Diagnostics", "settings_view": "Settings",
-        "room_settings": "Room settings", "now": "Now", "rooms": "Rooms", "set_up_rooms": "Set up rooms", "week_program": "Week program",
+        "room_settings": "Room settings", "now": "Now", "rooms": "Rooms", "set_up_rooms": "Set up rooms",
         "settings": "{room} settings",
         "boiler_request": "Boiler request", "flow": "Water to heating", "return": "Water back",
         "modulation": "Burner power", "pressure": "Pressure", "dhw": "Hot water", "code": "Display code",
@@ -312,6 +320,9 @@ TEXT = {
         "learned_changes": "What it changed by itself",
         "learned_note": "The E32 adjusts these settings itself; to change one: Configure → Heating and boiler → Comfort and boiler care "
                         "(or the E32 page, Home).",
+        # 1.4.1: on the E32 room plan Configure is two rows; the note names the Settings tab's own screen.
+        "learned_note_settings": "The E32 adjusts these settings itself; to change one: Settings → Heating and boiler → Comfort "
+                                 "and boiler care (or the E32 page, Home).",
         "confidence_low": "low", "confidence_medium": "medium", "confidence_high": "high",
         "gas_heating": "Heating", "gas_hot_water": "Hot water", "gas_keep_warm": "Of which keeping hot water warm",
         "gas_tapping": "Tapping", "gas_keeping_warm": "Keeping warm",
@@ -475,6 +486,7 @@ TEXT = {
         "today_holiday": "{room} is on holiday until {date}; it is warm again when you are back.",
         "today_return": "{room} is warming up for your return.",
         "today_window": "{room} is paused: a window or door is open.",
+        "today_summer": "{room}: summer mode, the heating stays off.",
         "today_window_window": "{room} is paused: a window is open.",
         "today_window_door": "{room} is paused: a door is open.",
         "day_yesterday": "Yesterday",
@@ -489,7 +501,7 @@ TEXT = {
     },
     "nl": {
         "heating": "Verwarming", "boiler_view": "Ketel", "diagnostics": "Diagnose", "settings_view": "Instellen",
-        "room_settings": "Ruimte-instellingen", "now": "Nu", "rooms": "Ruimtes", "set_up_rooms": "Ruimtes instellen", "week_program": "Weekprogramma",
+        "room_settings": "Ruimte-instellingen", "now": "Nu", "rooms": "Ruimtes", "set_up_rooms": "Ruimtes instellen",
         "settings": "Instellingen {room}",
         "boiler_request": "Ketelvraag", "flow": "Water naar verwarming", "return": "Water terug",
         "modulation": "Brandervermogen", "pressure": "Waterdruk", "dhw": "Warm water", "code": "Displaycode",
@@ -602,6 +614,8 @@ TEXT = {
         "learned_changes": "Wat hij zelf heeft aangepast",
         "learned_note": "De E32 past deze instellingen zelf aan; wijzigen kan onder Configureren → Verwarming en ketel → Comfort en "
                         "zorg voor de ketel (of op de E32-pagina, Huis).",
+        "learned_note_settings": "De E32 past deze instellingen zelf aan; wijzigen kan onder Instellen → Verwarming en ketel → "
+                                 "Comfort en zorg voor de ketel (of op de E32-pagina, Huis).",
         "confidence_low": "laag", "confidence_medium": "middel", "confidence_high": "hoog",
         "gas_heating": "Verwarming", "gas_hot_water": "Warm water", "gas_keep_warm": "Waarvan warm water warmhouden",
         "gas_tapping": "Tappen", "gas_keeping_warm": "Warmhouden",
@@ -758,6 +772,7 @@ TEXT = {
         "today_holiday": "{room} is met vakantie tot {date}; bij thuiskomst is het weer warm.",
         "today_return": "{room} warmt op voor je thuiskomst.",
         "today_window": "{room} is gepauzeerd: er staat een raam of deur open.",
+        "today_summer": "{room}: zomerstand, de verwarming blijft uit.",
         "today_window_window": "{room} is gepauzeerd: er staat een raam open.",
         "today_window_door": "{room} is gepauzeerd: er staat een deur open.",
         "day_yesterday": "Gisteren",
@@ -774,7 +789,7 @@ TEXT = {
     "pl": {
         "heating": "Ogrzewanie", "boiler_view": "Kocioł", "diagnostics": "Diagnostyka", "settings_view": "Ustawienia",
         "room_settings": "Ustawienia pomieszczeń", "now": "Teraz", "rooms": "Pomieszczenia",
-        "set_up_rooms": "Skonfiguruj pomieszczenia", "week_program": "Program tygodniowy",
+        "set_up_rooms": "Skonfiguruj pomieszczenia",
         "settings": "Ustawienia: {room}",
         "boiler_request": "Żądanie do kotła", "flow": "Woda do ogrzewania", "return": "Woda powrotna",
         "modulation": "Moc palnika", "pressure": "Ciśnienie", "dhw": "Ciepła woda", "code": "Kod wyświetlacza",
@@ -886,6 +901,8 @@ TEXT = {
         "learned_changes": "Co zmienił sam",
         "learned_note": "E32 sam dostosowuje te ustawienia; aby zmienić jedno z nich: Konfiguruj → Ogrzewanie i kocioł → Komfort i "
                         "dbałość o kocioł (lub strona E32, Dom).",
+        "learned_note_settings": "E32 sam dostosowuje te ustawienia; aby zmienić jedno z nich: Ustawienia → Ogrzewanie i kocioł → "
+                                 "Komfort i dbałość o kocioł (lub strona E32, Dom).",
         "confidence_low": "niska", "confidence_medium": "średnia", "confidence_high": "wysoka",
         "gas_heating": "Ogrzewanie", "gas_hot_water": "Ciepła woda", "gas_keep_warm": "W tym podtrzymanie ciepłej wody",
         "gas_tapping": "Pobór", "gas_keeping_warm": "Podtrzymanie",
@@ -1047,6 +1064,7 @@ TEXT = {
         "today_holiday": "{room}: urlop do {date}; po powrocie będzie ciepło.",
         "today_return": "{room}: nagrzewanie na Twój powrót.",
         "today_window": "{room}: wstrzymane, otwarte okno lub drzwi.",
+        "today_summer": "{room}: tryb letni, ogrzewanie pozostaje wyłączone.",
         "today_window_window": "{room}: wstrzymane, otwarte okno.",
         "today_window_door": "{room}: wstrzymane, otwarte drzwi.",
         "day_yesterday": "Wczoraj",
@@ -1074,6 +1092,27 @@ def view_cards(view):
     for section in view.get("sections", []):
         cards.extend(section.get("cards", []))
     return cards
+
+
+def _with_banner(select, views):
+    """1.4.1 (CONTRACT-1.4.1 §9): the house banner on top of every view, shown only while the house mode ``select`` is
+    summer (Home Assistant's visibility condition; the element itself also draws nothing otherwise). A sections view
+    gets it as its header card (no section shifts, nothing between the sections), a panel view as the first card of a
+    vertical stack with its own card (a panel shows one card). Without the select (no E32, older firmware): unchanged."""
+    if not select:
+        return views
+    from .room_overview import HOUSE_BANNER_TYPE
+    def banner():
+        return {"type": HOUSE_BANNER_TYPE, "entity": select,
+                "visibility": [{"condition": "state", "entity": select, "state": "summer"}]}
+    out = []
+    for view in views:
+        if view.get("type") == "sections":
+            view = {**view, "header": {"layout": "start", "card": banner()}}
+        elif view.get("panel") and view.get("cards"):
+            view = {**view, "cards": [{"type": "vertical-stack", "cards": [banner(), *view["cards"]]}]}
+        out.append(view)
+    return out
 
 
 def _section(*cards):
@@ -1272,13 +1311,14 @@ def _advice_section(t, advice):
 LEARNED_PATH = "learned"
 
 
-def _learned_sections(t, learned, how=None):
+def _learned_sections(t, learned, how=None, settings=False):
     """What the thermostat learned (learned_overview.py), in the learning view: how far each room is, the house
     and boiler, and what it changed by itself. What it learned per room sits in that room's section.
 
     Three sections, so a wide screen shows them side by side; a phone reads them one after another. ``how``: the
     note on how it learns (a card with its own visibility), the last card of the first section; without the
-    learned overview (an older integration) it stands alone under that section's heading.
+    learned overview (an older integration) it stands alone under that section's heading. ``settings``: the E32 room plan,
+    where the note under "What it changed by itself" names the Settings tab (1.4.1; Configure is two rows there).
     """
     if not learned:
         if not how:
@@ -1315,7 +1355,7 @@ def _learned_sections(t, learned, how=None):
     sections = []
     for heading, icon, content, note in ((t["learned"], ICONS["learning"], summary, how),
                                          (t["learned_house"], "mdi:home-thermometer-outline", house, None),
-                                         (t["learned_changes"], "mdi:history", changes, _note(t, t["learned_note"], shown))):
+                                         (t["learned_changes"], "mdi:history", changes, _note(t, t["learned_note_settings" if settings else "learned_note"], shown))):
         section = _section(_heading(heading, icon, style="title", visibility=shown),
                            {"type": "markdown", "content": content, "visibility": shown}, note)
         section["visibility"] = shown
@@ -1512,10 +1552,11 @@ def _free_heat_section(t, learned):
     return section
 
 
-def _settings_section(t, flow, rooms=None, week=None):
+def _settings_section(t, flow, rooms=None):
     """Smart warm-up and weather compensation: the two switches and the water temperature in hard frost as rows
-    (stored on the E32, e32_flow.py; always there to change), and the links to the rooms editor (``rooms``) and the
-    week program (``week``); None without any of them. What sets the water temperature now (the sensor "Water
+    (stored on the E32, e32_flow.py; always there to change), and the link to the rooms (``rooms``: the Settings tab's
+    Rooms, where each room's screen holds its week program since 1.4.1; the Week program link and tab are gone); None
+    without any of them. What sets the water temperature now (the sensor "Water
     temperature set by") is not a setting and stays on the E32 device: as a row its long state cut its name short on
     a phone, and the sketch has the three rows only."""
     rows = [{"entity": flow[key], "name": t[name], "icon": icon} for key, name, icon in (
@@ -1524,8 +1565,7 @@ def _settings_section(t, flow, rooms=None, week=None):
         ("curve_design_flow_c", "design_flow", "mdi:thermometer-lines")) if flow.get(key)]
     return _filled(_section(
         _heading(t["smart_heating"], ICONS["settings"]), {"type": "entities", "entities": rows} if rows else None,
-        _link(t["set_up_rooms"], "mdi:home-edit-outline", rooms) if rooms else None,
-        _link(t["week_program"], "mdi:calendar-week", week) if week else None))
+        _link(t["set_up_rooms"], "mdi:home-edit-outline", rooms) if rooms else None))
 
 
 def _at_macro(t):
@@ -2005,9 +2045,9 @@ def _duration(t, minutes):
 
 # The room's Reason (room_overview.REASONS) while the E32 holds its week program (away, nobody home or an open window:
 # RoomOverrides::holdsProgram, no early start) or heats for the end of a holiday: Today says that instead of a warm-up
-# the E32 does not do. The E32's own telemetry plan still says "planned" then.
+# the E32 does not do. The E32's own telemetry plan still says "planned" then. 1.4.1: in summer no room warms up.
 HELD_REASONS = {"away": "today_away", "room_away": "today_nobody", "house_away": "today_nobody",
-                "away_return": "today_return", "window_open": "today_window"}
+                "away_return": "today_return", "window_open": "today_window", "summer": "today_summer"}
 # The room's comfort mode behind a Reason that ranks above it (no measurement, hot water, a boiler pause): the E32
 # holds the program all the same. Away is a holiday when it has an end.
 HELD_COMFORT = {"away": "holiday", "presence_away": "house_away", "window_open": "window_open"}
@@ -2212,16 +2252,18 @@ def _today_section(t, rooms, curve=None, smart=None, request=None):
     return section
 
 
-def _house_rows(t, select, outdoor, planner):
-    """House (rc.5, the owner's sketch) in rows: "Home or away" with the house mode (a tap opens it, to switch), "Holiday"
-    with "Plan", which leads to the holiday planner (``planner``: the Settings tab's House mode and holiday, 1.4; else
-    Configure, the integration's page), and "Outside" with the outdoor temperature (a sensor, or a weather entity's
-    own row). Each row shows while its entity has a value, the card while one of them does; None without both."""
+def _house_rows(t, select, outdoor, planner, mode=True):
+    """House (rc.5, the owner's sketch) in rows: "Home or away" with the house mode (a tap opens it, to switch; only with
+    ``mode``: 1.4.1 leaves it out where the house card shows the mode large with its meaning), "Holiday" with "Plan",
+    which leads to the holiday planner (``planner``: the Settings tab's House mode and holiday, 1.4; else Configure,
+    the integration's page), and "Outside" with the outdoor temperature (a sensor, or a weather entity's own row).
+    Each row shows while its entity has a value, the card while one of them does; None without both."""
     rows = []
     if select:
+        if mode:
+            rows.append({"type": "conditional", "conditions": _known(select), "row": {
+                "type": "simple-entity", "entity": select, "name": t["home_or_away"], "icon": ICONS["house_mode"]}})
         rows += [{"type": "conditional", "conditions": _known(select), "row": {
-                     "type": "simple-entity", "entity": select, "name": t["home_or_away"], "icon": ICONS["house_mode"]}},
-                 {"type": "conditional", "conditions": _known(select), "row": {
                      "type": "button", "name": t["holiday"], "icon": ICONS["holiday"], "action_name": t["plan"],
                      "tap_action": {"action": "navigate", "navigation_path": planner}}}]
     if outdoor:
@@ -2710,8 +2752,10 @@ class RoomDashboard:
         back = "/" + self.path + "/heating"
         comparison = parts["comparison"]
         from .settings import CARD_TYPE as SETTINGS_CARD_TYPE, VIEW_PATH as SETTINGS_PATH
+        # 1.4.1: the house banner on top of every view (summer mode), _with_banner.
+        house_mode = registry.async_get_entity_id("select", DOMAIN, f"{self.prefix}_house_mode")
         return {
-            "views": [
+            "views": _with_banner(house_mode, [
                 # 1. Overview (rc.5, the owner's sketch): the house card across the whole width, under it Rooms,
                 # Today and House side by side in three columns on a wide screen, under each other on a phone.
                 *([view(t["overview"], "heating", parts["overview"], columns=3)] if parts["overview"] else []),
@@ -2730,9 +2774,8 @@ class RoomDashboard:
                    "cards": [{"type": ROOM_CARD_TYPE, "entry_id": self.entry_id,
                               "room_id": sub.data["room_id"]}]}
                   for sub in legacy],
-                # 3. The E32 rooms' visual week planner (e32_week.py), one card for all rooms.
-                *([{"title": t["week_program"], "path": "week-program", "panel": True,
-                    "cards": [{"type": E32_WEEK_CARD_TYPE, "entry_id": self.entry_id}]}] if e32_rooms else []),
+                # (1.4.1: no Week program tab any more: each room's week program is on its screen in Settings,
+                # #room/<id>; plan HA-INSTELPANEEL-FASE2 3.8.)
                 # 4. Boiler: everything about the boiler in one place.
                 view(t["boiler_view"], "boiler", boiler),
                 # 5. What it learned, Smart warm-up, weather compensation, short cycling and the takeover check.
@@ -2747,7 +2790,7 @@ class RoomDashboard:
                 # "Ready to take over?" tile in the learning view.
                 *([view(t["comparison_view"], COMPARISON_PATH, comparison, subview=True,
                         back_path=back)] if comparison else []),
-            ]
+            ])
         }
 
     def _trial_run(self):
@@ -2855,9 +2898,12 @@ class RoomDashboard:
             if room.get("reason"):
                 # rc.5 (P18): its chips "Smart warm-up on" (the switch) and at home, away or on holiday (the house mode).
                 # 1.4: the card's "Settings" button opens this room in the settings view.
+                # 1.4.1: its heating type (radiator or floor heating, the room's settings) as the card's icon.
+                emitter = (self._plan_room(heating_hub, room_id) or {}).get("emitter")
                 room_cards.append({"type": ROOM_STATUS_CARD_TYPE, "entity": room["reason"], "name": names[room_id],
                                    **{key: value for key, value in (("smart", flow.get("apply_learned")),
                                                                     ("mode", house_mode)) if value},
+                                   **({"emitter": emitter} if emitter in ("radiator", "floor") else {}),
                                    "room_id": room_id, "settings_path": self.settings_path})
             else:  # a registry without the Reason sensor (older integration): the temperature at least
                 room_cards.append(_wide(_tile(room.get("temperature") or room.get("setpoint"), names[room_id],
@@ -2870,6 +2916,9 @@ class RoomDashboard:
         # House: home or away, the holiday planner and the outdoor temperature: the one the E32 uses (its learner's
         # input, as Today and the curve: rc7), else the one set under Energy and outdoor temperature, else the
         # boiler's own; with the next holiday under it while one is planned (rc.4) and where to plan one.
+        # 1.4.1 (DASHBOARD-FINISH): the house card above shows the house mode large with its meaning and the next
+        # holiday (or "Until ..." while one runs); with that card the House section repeats neither (no "Home or
+        # away" row, no next-holiday line) and keeps what the card does not show: Holiday with Plan, Outside, the hint.
         from .energy_input import CONF_OUTDOOR, energy_options
         outdoor = energy_options(entry).get(CONF_OUTDOOR) if entry is not None else None
         boiler_outdoor = fields.get("outdoor_temperature") or hub.get("outdoor_temperature")
@@ -2878,9 +2927,11 @@ class RoomDashboard:
         if (type(outdoor) is not str or outdoor.split(".")[0] not in ("sensor", "weather")
                 or (used == "boiler" and boiler_outdoor)):
             outdoor = boiler_outdoor
+        on_card = house_card is not None and bool(house_mode)  # the house card shows the mode and the next holiday
         house = _section(_heading(t["house"], ICONS["house"]),  # one icon per concept (dashboard-spec §1)
-                         _house_rows(t, house_mode, outdoor, self._settings_link(e32_rooms, "house/mode")),
-                         _holiday_card(t, house_mode),
+                         _house_rows(t, house_mode, outdoor, self._settings_link(e32_rooms, "house/mode"),
+                                     mode=not on_card),
+                         None if on_card else _holiday_card(t, house_mode),
                          # 1.4: on the E32 room plan Configure is short; the hint names the Settings tab, as the
                          # Plan link does (_settings_link).
                          _note(t, t["holiday_hint_settings" if e32_rooms else "holiday_hint"], _known(house_mode))
@@ -2946,8 +2997,7 @@ class RoomDashboard:
             learning.append(yesterday)
         learning += [section for section in (
             _noticed_section(t, learned_overview), _free_heat_section(t, learned_overview),
-            _settings_section(t, flow, self._settings_link(e32_rooms, "rooms") if e32_rooms else None,
-                              "/" + self.path + "/week-program" if e32_rooms else None)) if section]
+            _settings_section(t, flow, self._settings_link(e32_rooms, "rooms") if e32_rooms else None)) if section]
         # The sketch's two columns on a wide screen, within the sections view's own placement (in this order, dense,
         # a row as tall as its tallest section): yesterday spans two rows, so the curve and what stood out under it
         # fill the column beside it, your boiler above it and the settings under it. A phone stacks them in order.
@@ -2961,7 +3011,7 @@ class RoomDashboard:
             how = {"type": "markdown", "visibility": _known(learning_entity), "content": (
                 t["learning_note"] + "{% if not state_attr(" + quoted + ", 'applied') %}"
                 + _details(t, t["advice_only"]) + "{% endif %}")}
-        learning += _learned_sections(t, learned_overview, how)
+        learning += _learned_sections(t, learned_overview, how, settings=e32_rooms)
         # The comparison entities exist only once the E32 saw a thermostat to compare with; outside
         # the trial run a record left behind leads nowhere.
         agreement = hub.get("shadow_agreement_today") if trial else None

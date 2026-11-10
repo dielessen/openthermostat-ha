@@ -23,6 +23,11 @@ E32 1.3: a room on "Heat along only" (state ``follow``) says "Heats along" (reas
 ``follow``); in Smart warm-up's lead the E32 gives the room the coming target
 (``setpoint_source`` "warmup", ``warmup_for`` the time on its clock) and the room
 says "Warming up for 17:30" (reason ``warm_up``, sentence ``warm_up_for``).
+
+E32 1.4.1: in the house mode Summer a room that is on says "Summer" (reason
+``summer``, the room's ``setpoint_source`` "summer" or the house ``mode``
+"summer"): the heating stays off, frost protection stays. A room that is off
+still says so first.
 """
 from __future__ import annotations
 
@@ -36,22 +41,22 @@ from homeassistant.core import callback
 from .heating_link import RoomEntity, number
 
 # The room status card's module (served and loaded with the week planner's, week_planner.card_modules).
-CARD_URL = "/open_thermostat/room-status-card-1.4.0.js"
+CARD_URL = "/open_thermostat/room-status-card-1.4.1.js"
 # The Overview's house card (E32 rc.5, frontend/house-card.js): what the boiler does now, today in figures, the day
 # so far and, in a house with one room switched on, that room. The seventh card module, versioned like the others.
-HOUSE_CARD_URL = "/open_thermostat/house-card-1.4.0.js"
+HOUSE_CARD_URL = "/open_thermostat/house-card-1.4.1.js"
 HOUSE_CARD_TYPE = "custom:openthermostat-house"
 # Yesterday's headline figures on the Learning view, large as on the house card (the same module, house-card.js).
 YESTERDAY_CARD_TYPE = "custom:openthermostat-yesterday"
 # The reasons, in the order they win: a room that is off or paused says so before
 # anything else; a room that wants heat but waits for the boiler says why it waits;
 # then the mode that sets its target (away, boost); then what it does.
-REASONS = ["off", "window_open", "window_pending", "no_measurement", "hot_water", "boiler_pause",
+REASONS = ["off", "summer", "window_open", "window_pending", "no_measurement", "hot_water", "boiler_pause",
            "warm_up", "away_return", "holiday", "away", "room_away", "house_away", "boost", "temporary",
            "follow", "heating", "wants_heat", "warm_enough"]
 # The sentence of each variant (strings.json state_attributes.line) and the values it uses.
 LINES = {
-    "off": (), "window_open": (), "window_open_contact": ("contact", "since"),
+    "off": (), "summer": (), "window_open": (), "window_open_contact": ("contact", "since"),
     "window_pending": (), "window_pending_contact": ("contact",), "no_measurement": (),
     # E32 1.0.1 names the kind that pauses the room (comfort.opening) when no open contact can be named.
     "window_open_window": (), "window_open_door": (), "window_pending_window": (), "window_pending_door": (),
@@ -69,8 +74,12 @@ PRESENCE = ["room_home", "room_away", "house_home", "house_away"]
 # The Boiler view's "Now" card (E32 rc.5, frontend/boiler-now-card.js): what the boiler does now in a band of its
 # colour with its display code in words, the water to the heating and back, the burner power and its starts as large
 # figures. The eighth card module, versioned like the others.
-BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.4.0.js"
+BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.4.1.js"
 BOILER_NOW_CARD_TYPE = "custom:openthermostat-boiler-now"
+# 1.4.1 (CONTRACT-1.4.1 §9): the house banner at the top of every dashboard view (frontend/openthermostat-house-banner.js):
+# empty unless the house is in summer mode, then the summer sentence and "Switch summer mode off". The ninth card module.
+HOUSE_BANNER_URL = "/open_thermostat/openthermostat-house-banner-1.4.1.js"
+HOUSE_BANNER_TYPE = "custom:openthermostat-house-banner"
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +157,8 @@ def room_reason(room, status=None, contact=None, warmup=None, rise=None):
 
     if room.get("state") == "inactive":
         return reason("off")  # the E32's frost protection still covers it
+    if room.get("setpoint_source") == "summer" or _dict(status.get("away")).get("mode") == "summer":
+        return reason("summer")  # E32 1.4.1: summer wins over programs, changes, away and open windows
     window, kind = comfort.get("window"), opening(room)
     if window == "open" or mode == "window_open":
         if contact is not None:

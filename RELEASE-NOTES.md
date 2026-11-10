@@ -1,3 +1,92 @@
+# HA 1.4.1 — a calmer Settings tab with everything in it, summer mode and cards in the same look
+<!-- user-release-notes:v2:en -->
+
+Companion of E32 1.4.1; also runs with E32 1.4.0 and older, but summer mode
+needs 1.4.1. Needs Home Assistant 2026.10.0 or newer.
+
+## New
+
+### The settings panel
+
+- **A calmer, clearer Settings tab.** Seven parts with icons; on a wide screen
+  the right side shows your house at a glance. Every screen has the same look:
+  one column of cards, the value large, one line of help (more behind "More"),
+  and times in Home Assistant's own language and clock. It fits a phone better.
+- **A room has one screen with everything.** General, Temperature, Week
+  program, Windows and doors (with their waiting times), Radiator valves (with
+  their models), Persons, Notifications for this room and Temperature limits,
+  each a section that says in its header what is set. The House keeps only what
+  belongs to the house and shows "Stop holiday" while a holiday runs.
+- **The week planner is on the room's screen.** Add, drag and change a room's
+  reset times right on the day bars (or in the list under them), choose the
+  room's Smart warm-up there, and save it all with the program in one go. The
+  dashboard's separate Week program tab is gone; every link to it opens the
+  room's screen.
+- **Boiler settings in the panel.** Settings → Heating and boiler → Boiler
+  settings (preview): allow, change, watch your boiler, keep or put back, the
+  installer settings and stop, with the same questions and safety as before.
+- **Devices does what the E32's page did.** Pair a new Bluetooth sensor (the
+  E32 searches, you pick yours, name it and, if needed, give its key), give
+  The Pill's probes their pipes, look for the valves paired at your BLU Gateway
+  and add one with a tap, and forget a sensor or remove a device after a clear
+  question.
+- **Notifications as two simple questions.** Who gets messages (each person's
+  phone, the app on their own phone already suggested) and which messages (the
+  house, with what causes each message, and every room with a short summary).
+  One line at the top says where messages go now.
+- **Installation holds the upkeep.** Name and dashboard, the E32's log, time
+  zone and tester program, and under Maintenance: put a settings backup back
+  (one Home Assistant keeps, or a file, also onto a replacement E32), tidy
+  entity IDs with undo, remove old Home Assistant rooms. Energy shows one line
+  of help per field and each sensor's value now.
+- **Configure has two items** while the dashboard is shown: Open the settings
+  page and E32 connection.
+
+### Summer mode and the cards
+
+- **Summer mode.** A fifth house mode that keeps the heating off until you
+  switch it off; hot water and frost protection stay. The thermostats say why,
+  and after five warm days Home Assistant asks once whether to switch it on
+  (in summer, after three cold days, whether to switch it off). It never
+  switches by itself.
+- **The dashboard cards look like the Settings tab.** Each room shows its state
+  as a coloured label and one line for what it does now; the house card shows
+  the house mode large; in summer mode every tab starts with a banner and a
+  button to switch summer mode off.
+
+## Fixed
+
+- **Nothing stays "Unavailable".** Yesterday's figures, the Bluetooth readings,
+  the smart warm-up start and last night's heating gas keep their sensor after
+  a restart; on a day without a figure it says Unknown.
+- **The Nefit TopLine is recognised as a known boiler** (product 115, version
+  3.6) from the reading a tester shared (issue #13). Controlling it is not
+  verified yet.
+- **The E32's Rooms page** says "Temperature without a week program", the same
+  words as in Home Assistant, and Polish uses one word for "Automatic".
+
+## Updating
+
+Update under Settings → Updates (Marketplace) and restart Home Assistant. Then
+install E32 1.4.1 from its Firmware entity and confirm the takeover again.
+
+- Entities, IDs and history stay. If your house messages were on, the new
+  "Season" question is ticked for you once.
+- Going back to 1.4.0: switch summer mode off first. The Settings tab returns
+  to its earlier look, and Configure has three items again.
+
+## Limitations
+
+- Summer mode and its labels need E32 1.4.1; on older firmware Home Assistant
+  does not offer it.
+- The Settings tab and the shorter Configure exist only while the
+  OpenThermostat dashboard is shown.
+- A figure the E32 did not measure shows as Unknown on the E32's device page;
+  the dashboard hides it.
+- Boiler settings stay a preview until a real boiler has confirmed them.
+- An E32 restart in the first hour after midnight in summer may leave that
+  day uncounted as a summer day by the self-tuning.
+
 # HA 1.4.0 — a Settings tab on the dashboard, reset times, Heat along only as a preset and fewer Repairs
 <!-- user-release-notes:v2:en -->
 

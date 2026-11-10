@@ -979,7 +979,8 @@
         "auto": "Automatisch",
         "home": "Thuis",
         "away": "Afwezig",
-        "holiday": "Vakantie"
+        "holiday": "Vakantie",
+        "summer": "Zomer"
       }
     },
     "flow_design_choice": {
@@ -1183,7 +1184,8 @@
         "maintenance": "Ketel vraagt om onderhoud (H-code)",
         "update": "Nieuwe versie van de E32-firmware of van deze integratie",
         "backup": "Dagelijkse back-up van de E32-instellingen mislukt steeds",
-        "plan_ready": "E32 klaar om de verwarming te plannen (vraagt één keer je bevestiging)"
+        "plan_ready": "E32 klaar om de verwarming te plannen (vraagt één keer je bevestiging)",
+        "season": "Seizoen: zomerstand aan- of uitzetten?"
       }
     },
     "notification_text": {
@@ -1218,9 +1220,8 @@
     "configure_text": {
       "options": {
         "menu": "Kies wat je wilt instellen. De E32 bewaart deze instellingen en regelt de verwarming, ook zonder Home Assistant.",
-        "settings_page": "De meeste instellingen staan op het tabblad Instellen van het OpenThermostat-dashboard. Hier verbind je de E32, en onder Geavanceerd en diagnose staat wat je zelden nodig hebt.",
-        "advanced_menu": "De tijdzone en het systeemlogboek van de E32, een back-up terugzetten, entiteits-ID's opruimen en controles. Dagelijkse instellingen, ook Dashboard en naam, staan in het hoofdmenu.",
-        "advanced_settings_page": "Wat het tabblad Instellen nog niet heeft: de radiatorkranen, personen en temperatuurgrenzen van een ruimte, de ketelinstellingen (voorproefje), een back-up terugzetten, entiteits-ID's opruimen en de oude Home Assistant-ruimtes. Het systeemlog van de E32, zijn tijdzone en het testerprogramma staan op het tabblad Instellen onder Geavanceerd."
+        "settings_page": "Alle instellingen staan op het tabblad Instellen van het OpenThermostat-dashboard. Hier verbind je de E32.",
+        "advanced_menu": "De tijdzone en het systeemlogboek van de E32, een back-up terugzetten, entiteits-ID's opruimen en controles. Dagelijkse instellingen, ook Dashboard en naam, staan in het hoofdmenu."
       }
     }
   },
@@ -1667,7 +1668,6 @@
         "title": "Geavanceerd en diagnose",
         "description": "{saved}{intro}",
         "menu_options": {
-          "e32_rooms": "Radiatorkranen, personen en temperatuurgrenzen",
           "boiler_settings": "Ketelinstellingen (voorproefje)",
           "configuration_status": "Oude ruimtes controleren",
           "graph_status": "Status van de oude ruimtes op de E32",
@@ -2305,7 +2305,7 @@
           "holiday_until": "Vakantie eindigt"
         },
         "data_description": {
-          "house_mode": "Automatisch: de mensen die je bij Aanwezigheid instelt, bepalen het. Thuis: altijd de weekprogramma's. Afwezig: elke ruimte hoogstens de afwezigheidstemperatuur. Vakantie: afwezig tot de datum hieronder.",
+          "house_mode": "Automatisch: de mensen die je bij Aanwezigheid instelt, bepalen het. Thuis: altijd de weekprogramma's. Afwezig: elke ruimte hoogstens de afwezigheidstemperatuur. Vakantie: afwezig tot de datum hieronder. Zomerstand: de verwarming staat uit tot je dit uitzet; warm water en vorstbeveiliging blijven.",
           "holiday_until": "Alleen voor Vakantie: dag en tijd waarop je terug bent. Hoogstens een jaar vooruit."
         }
       },
@@ -2362,7 +2362,7 @@
           "holiday_until": "Vakantie eindigt"
         },
         "data_description": {
-          "house_mode": "Automatisch: de mensen die je bij Aanwezigheid instelt, bepalen het. Thuis: altijd de weekprogramma's. Afwezig: elke ruimte hoogstens de afwezigheidstemperatuur. Vakantie: vanaf nu tot de datum hieronder.",
+          "house_mode": "Automatisch: de mensen die je bij Aanwezigheid instelt, bepalen het. Thuis: altijd de weekprogramma's. Afwezig: elke ruimte hoogstens de afwezigheidstemperatuur. Vakantie: vanaf nu tot de datum hieronder. Zomerstand: de verwarming staat uit tot je dit uitzet; warm water en vorstbeveiliging blijven.",
           "holiday_until": "Alleen voor Vakantie: dag en tijd waarop je terug bent. Hoogstens een jaar vooruit."
         }
       },
@@ -2575,7 +2575,7 @@
         "data_description": {
           "on": "Uit: geen berichten over het huis.",
           "kinds": "Kies over welke problemen je een bericht wilt.",
-          "maintenance": "De ketel die om onderhoud vraagt, een nieuwe versie van de E32-firmware of van deze integratie, en de dagelijkse back-up van de E32-instellingen die steeds mislukt."
+          "maintenance": "De ketel die om onderhoud vraagt, een nieuwe versie van de E32-firmware of van deze integratie, de dagelijkse back-up van de E32-instellingen die steeds mislukt, de E32 die klaar is om de verwarming te plannen, en de vraag of de zomerstand aan of uit moet."
         }
       },
       "notify_rooms": {
@@ -3034,6 +3034,12 @@
               "follow": "Alleen meeverwarmen",
               "inactive": "Uit"
             }
+          },
+          "reason": {
+            "name": "Reden",
+            "state": {
+              "summer": "Zomer"
+            }
           }
         }
       }
@@ -3120,6 +3126,7 @@
         "name": "Reden",
         "state": {
           "off": "Alleen vorstbeveiliging (ruimte uit)",
+          "summer": "Zomer",
           "window_open": "Gepauzeerd: raam of deur open",
           "window_pending": "Raam of deur open, pauzeert zo",
           "no_measurement": "Geen meting",
@@ -3143,6 +3150,7 @@
             "name": "Zin",
             "state": {
               "off": "Alleen vorstbeveiliging (ruimte uit)",
+              "summer": "Zomerstand: de verwarming staat uit tot je dit uitzet; warm water en vorstbeveiliging blijven.",
               "window_open": "Gepauzeerd: er staat een raam of deur open",
               "window_open_contact": "Gepauzeerd: {contact} open sinds {since}",
               "window_open_window": "Gepauzeerd: er staat een raam open",
@@ -3202,6 +3210,7 @@
             "name": "Statuswoord",
             "state": {
               "off": "Uit",
+              "summer": "Zomer",
               "window_open": "Gepauzeerd",
               "window_pending": "Pauzeert zo",
               "no_measurement": "Geen meting",
@@ -4693,7 +4702,8 @@
           "auto": "Automatisch",
           "home": "Thuis",
           "away": "Afwezig",
-          "holiday": "Vakantie"
+          "holiday": "Vakantie",
+          "summer": "Zomer"
         }
       },
       "boiler_setting": {
@@ -5348,6 +5358,9 @@
     },
     "house_mode_invalid": {
       "message": "Kies Automatisch, Thuis, Afwezig of Vakantie."
+    },
+    "summer_mode_on": {
+      "message": "Zomerstand staat aan: zet die eerst uit."
     },
     "house_holiday_date_needed": {
       "message": "Zet voor een vakantie \"Vakantie tot\" op de dag dat je terug bent; de huismodus wordt dan vanzelf Vakantie."

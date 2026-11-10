@@ -1,12 +1,12 @@
-"""The settings panel's section Advanced (1.4; settings.py registers it, the screens are
-frontend/openthermostat-settings-advanced.js).
+"""The screens of 1.4's section Advanced, since 1.4.1 part of Settings → Installation: settings_installation.py serves
+them as ``#installation/<item>`` and its list reuses ``_read_list`` (the section "advanced" itself is retired; the
+screens are frontend/openthermostat-settings-installation.js).
 
-Items (the part after ``#advanced/``), each a model with its ``screen``:
+Items, each a model with its ``screen``:
 
 - ``None``, the list (memory only, never an E32 read): whether the E32 is connected (``e32``), the tester program
   on or off, the E32's time zone as Home Assistant last saw it (the daily settings backup, e32_system.check_time_zone),
-  whether a room setup status is there to show (``status``), and ``configure``: the rows Configure → Advanced and
-  diagnostics shows (product_flow's _advanced_options), for the row "More in Configure".
+  and whether a room setup status is there to show (``status``).
 - ``logging``: the E32 system log (``GET/POST /config/logging``, every field in one POST, the answer is the read-back),
   with Configure's own check (e32_system.logging_document) and the same refusals.
 - ``time-zone``: the zone the E32 runs its week programs in (``/config/device``), from the E32 Settings page's list;
@@ -29,7 +29,7 @@ import logging
 from pathlib import Path
 import re
 
-from .settings import LIVE, SettingsError, register_section
+from .settings import LIVE, SettingsError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ async def _read_list(hass, entry):
     posix = (hass.data.get(DOMAIN, {}).get(entry.entry_id) or {}).get(TIME_ZONE_STATE)
     zone = (zone_of(posix, ha_zone(hass)) or posix) if type(posix) is str else None
     return {"screen": "list", "e32": link_for(hass, entry) is not None, "tester": tester_on(entry), "time_zone": zone,
-            "status": _status_available(hass, entry, flow), "configure": await flow._advanced_options()}
+            "status": _status_available(hass, entry, flow)}
 
 
 # -- the system log ------------------------------------------------------------------------------------------------
@@ -282,6 +282,3 @@ async def save_advanced(hass, entry, item, values):
     if item == "tester":
         return await _save_tester(hass, entry, values)
     raise SettingsError("unknown_section")  # the list and the status are read only
-
-
-register_section("advanced", read_advanced, save_advanced)

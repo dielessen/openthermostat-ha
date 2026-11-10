@@ -889,8 +889,8 @@ def free_heat_lines(rooms, lang, smart=None):
 
 
 # The comfort modes that hold the week program on the E32: no early warm-up towards its next rise
-# (RoomOverrides::holdsProgram, HeatingController::applyFlowPolicy).
-HELD_MODES = ("away", "presence_away", "window_open")
+# (RoomOverrides::holdsProgram, HeatingController::applyFlowPolicy). 1.4.1: also summer mode.
+HELD_MODES = ("away", "presence_away", "window_open", "summer")
 CURRENCY_SIGNS = {"EUR": "€", "GBP": "£", "USD": "$", "PLN": "zł"}
 NIGHT_HOURS = range(3, 12)  # a step up between 03:00 and 12:00 ends a night setback
 

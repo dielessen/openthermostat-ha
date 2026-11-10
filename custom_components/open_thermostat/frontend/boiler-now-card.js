@@ -48,8 +48,30 @@ const STATS_MS = 5 * 60000, TICK_MS = 60000, PENDING_MS = 2 * 60000;
 // the numbers stand on one line also when a label takes two lines on a narrow phone. The burner power's arc and its
 // number fit side by side at every width ("100 %" on a 320 px phone, four figures on a 720 px tablet): a smaller arc
 // where a figure is narrow, and the number under the arc rather than cut off if a font is wider still.
-const STYLE = `:host{display:block}
-ha-card{display:block;overflow:hidden;color:var(--primary-text-color);
+// Material Design Icons (v7.4.47, Apache 2.0), inline: the test environment has no ha-icon and neither needs one.
+const ICON_PATHS = {
+ 'fire': 'M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2M14.5 17.5C14.22 17.74 13.76 18 13.4 18.1C12.28 18.5 11.16 17.94 10.5 17.28C11.69 17 12.4 16.12 12.61 15.23C12.78 14.43 12.46 13.77 12.33 13C12.21 12.26 12.23 11.63 12.5 10.94C12.69 11.32 12.89 11.7 13.13 12C13.9 13 15.11 13.44 15.37 14.8C15.41 14.94 15.43 15.08 15.43 15.23C15.46 16.05 15.1 16.95 14.5 17.5H14.5Z',
+ 'faucet': 'M19 14V16H16V14.28L19 14M19 13C19 11.9 18 11 16.8 11H10V10H5V21H10V13.91L19 13M5 9H10V7L15.36 5.21C15.74 5.09 16 4.73 16 4.33C16 3.68 15.36 3.23 14.75 3.45L5 7V9Z',
+ 'water-thermometer': 'M19 5C17.89 5 17 5.89 17 7V13.76C16.36 14.33 16 15.15 16 16C16 17.66 17.34 19 19 19S22 17.66 22 16C22 15.15 21.64 14.33 21 13.77V7C21 5.89 20.11 5 19 5M19 6C19.55 6 20 6.45 20 7V8H18V7C18 6.45 18.45 6 19 6M8 20C4.69 20 2 17.31 2 14C2 10 8 3.25 8 3.25S14 10 14 14C14 17.31 11.31 20 8 20Z',
+ 'water-boiler': 'M8 2C6.89 2 6 2.89 6 4V16C6 17.11 6.89 18 8 18H9V20H6V22H9C10.11 22 11 21.11 11 20V18H13V20C13 21.11 13.89 22 15 22H18V20H15V18H16C17.11 18 18 17.11 18 16V4C18 2.89 17.11 2 16 2H8M12 4.97A2 2 0 0 1 14 6.97A2 2 0 0 1 12 8.97A2 2 0 0 1 10 6.97A2 2 0 0 1 12 4.97M10 14.5H14V16H10V14.5Z',
+ 'alert-circle-outline': 'M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z',
+ 'water-boiler-off': 'M10 6.82L6.25 3.05C6.59 2.42 7.24 2 8 2H16C17.11 2 18 2.89 18 4V14.8L12.16 8.96C13.19 8.87 14 8 14 6.97C14 5.87 13.11 4.97 12 4.97C10.95 4.97 10.1 5.78 10 6.82M15 18V20H18V22H15C13.89 22 13 21.11 13 20V18H11V20C11 21.11 10.11 22 9 22H6V20H9V18H8C6.89 18 6 17.11 6 16V7.89L1.11 3L2.39 1.73L22.11 21.46L20.84 22.73L16.1 18C16.06 18 16.03 18 16 18H15M14 16V15.89L12.61 14.5H10V16H14Z'};
+// 1.4.1: the design tokens of CONTRACT-1.4.1 §8 on the host (the kit, the cards and the planner share names and values).
+const STYLE = `:host{display:block;
+--ot-space:8px;--ot-radius:12px;--ot-radius-s:8px;--ot-touch:44px;--ot-motion:150ms ease;
+--ot-text-xl:22px;--ot-line-xl:28px;--ot-text-l:17px;--ot-line-l:24px;--ot-text-m:15px;--ot-line-m:22px;--ot-text-s:13px;--ot-line-s:18px;
+--ot-bg:var(--card-background-color);--ot-fg:var(--primary-text-color);--ot-fg-2:var(--secondary-text-color);
+--ot-line:var(--divider-color);--ot-accent:var(--primary-color);--ot-on-accent:var(--text-primary-color, #fff);
+--ot-heat-ink:#a1500f;--ot-heat-fill:#fbe9db;--ot-along-ink:#886100;--ot-along-fill:#f8efcf;--ot-water-ink:#1f5fa8;--ot-water-fill:#dde9f8;
+--ot-rest-ink:#5f6368;--ot-rest-fill:#ebedf0;--ot-attention-ink:#b3261e;--ot-attention-fill:#f9dedc;
+/* CONTRACT-1.4.1 §8 (amended): filled buttons and text buttons, readable on HA's default accent */
+--ot-fill:color-mix(in srgb,var(--ot-accent) 72%,#000);--ot-link:color-mix(in srgb,var(--ot-accent) 60%,var(--ot-fg));
+color:var(--ot-fg)}
+:host([data-theme="dark"]){--ot-heat-ink:#f0a060;--ot-heat-fill:rgba(240,160,96,.18);--ot-along-ink:#e6c35c;--ot-along-fill:rgba(230,195,92,.18);
+--ot-water-ink:#7fb3f0;--ot-water-fill:rgba(127,179,240,.18);--ot-rest-ink:#b0b4ba;--ot-rest-fill:rgba(176,180,186,.18);
+--ot-attention-ink:#f2857c;--ot-attention-fill:rgba(242,133,124,.18)}
+.ic{display:flex;flex:none;width:var(--ic,24px);height:var(--ic,24px)}.ic svg{display:block;width:100%;height:100%}
+ha-card{display:block;overflow:hidden;border-radius:var(--ot-radius);color:var(--ot-fg);
 --oth-surface:var(--ha-card-background,var(--card-background-color,#fff));--oth-muted:var(--secondary-text-color,#6b6b6b);
 --oth-line:var(--divider-color,rgba(127,127,127,.22));
 --heat:var(--deep-orange-color,#ff6f22);--water:var(--blue-color,#2196f3);--grey:var(--grey-color,#9e9e9e);--error:var(--error-color,#db4437);
@@ -63,7 +85,7 @@ p{margin:0}
 .tone-error{--band:var(--band-error)}
 .status{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 16px;background:var(--band);color:#fff}
 .main{display:flex;align-items:center;gap:10px;flex:1 1 0;min-width:min(100%,200px)}
-.main>ha-icon{--mdc-icon-size:22px;color:#fff;display:flex;flex:none}.words{flex:1 1 auto;min-width:0}
+.main>.ic{--ic:22px;color:#fff}.words{flex:1 1 auto;min-width:0}
 .line{font-size:16px;font-weight:500;line-height:1.3;overflow-wrap:anywhere}
 .sub{margin-top:2px;font-size:13px;line-height:1.35;overflow-wrap:anywhere}
 .advice{margin-top:4px;font-size:13px;line-height:1.4;overflow-wrap:anywhere;text-wrap:pretty}
@@ -83,7 +105,7 @@ box-shadow:1px 0 0 var(--oth-line),0 1px 0 var(--oth-line);cursor:pointer}
 .arc path{fill:none;stroke-width:7;stroke-linecap:round}.arc .track{stroke:var(--oth-track)}.arc .level{stroke:var(--fire)}
 [data-focus]:focus{outline:none}[data-focus]:focus-visible{outline:2px solid var(--primary-color,#03a9f4);outline-offset:-3px}
 @container now (max-width:360px){.status{padding:12px}.figure{padding:12px 12px 10px}.arc{width:44px;height:27px}.dial{column-gap:8px}}
-@container now (min-width:720px){.status{padding:14px 22px}.line{font-size:18px}.main>ha-icon{--mdc-icon-size:24px}
+@container now (min-width:720px){.status{padding:14px 22px}.line{font-size:18px}
 .meta{flex:0 1 auto;margin-left:auto;font-size:13px;text-align:right}
 .figures{grid-template-columns:repeat(var(--n,4),minmax(0,1fr))}.p2{grid-column:auto}
 .figure{padding:18px 22px 16px}.label{font-size:13px}.value .num,.value.unknown{font-size:34px}.note{margin-top:6px;font-size:13px;line-height:18px}
@@ -91,6 +113,12 @@ box-shadow:1px 0 0 var(--oth-line),0 1px 0 var(--oth-line);cursor:pointer}
 @container now (min-width:720px) and (max-width:899px){.figure{padding:16px 16px 14px}.arc{width:48px;height:29px}.dial{column-gap:8px}}`;
 
 const locale = hass => hass?.locale?.language || hass?.language || 'en';
+// Dark: Home Assistant's theme when it says so, else the browser's colour scheme (CONTRACT-1.4.1 §8).
+const darkOf = hass => {
+ if (typeof hass?.themes?.darkMode === 'boolean') return hass.themes.darkMode;
+ try { return window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { return false; }
+};
+const theme = (host, hass) => { if (darkOf(hass)) host.setAttribute('data-theme', 'dark'); else host.removeAttribute('data-theme'); };
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const numeric = value => { const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value; return finite(n) ? n : null; };
 // A figure and its unit stay on one line ("41 °C" is never cut into "41" and "°C" on a phone).
@@ -110,7 +138,13 @@ const make = (tag, attrs = {}, text) => {
  if (text !== undefined) e.textContent = text;
  return e;
 };
-const icon = name => make('ha-icon', {icon: name});
+// An icon as inline SVG in a box that carries its name (data-icon).
+const icon = name => {
+ const box = make('span', {class: 'ic', 'data-icon': name}), svg = make('svg:svg', {viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false'});
+ svg.append(make('svg:path', {d: ICON_PATHS[name.replace('mdi:', '')], fill: 'currentColor'}));
+ box.append(svg);
+ return box;
+};
 // The house's day (Home Assistant's time zone): the calendar day of the statistic, and when it changes.
 const dayOf = (ms, timeZone) => {
  try { return new Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date(ms)); }
@@ -152,7 +186,7 @@ class OpenThermostatBoilerNow extends HTMLElement {
   if (!this._config) return;
   this.refresh();
   // Only a new state of its own entities, the language or the theme redraws; Home Assistant sets hass on every change.
-  const key = [...this.entities().map(id => hass?.states?.[id]), locale(hass), hass?.themes?.darkMode];
+  const key = [...this.entities().map(id => hass?.states?.[id]), locale(hass), darkOf(hass)];
   if (this._key && key.length === this._key.length && key.every((v, i) => v === this._key[i])) return;
   this._key = key; this.render();
  }
@@ -291,7 +325,8 @@ class OpenThermostatBoilerNow extends HTMLElement {
   const hass = this._hass, config = this._config;
   if (!hass || !config) return;
   const root = this.shadowRoot, focused = root.activeElement?.dataset?.focus;
-  const card = make('ha-card', hass.themes?.darkMode ? {class: 'dark'} : {});
+  theme(this, hass);
+  const card = make('ha-card', darkOf(hass) ? {class: 'dark'} : {});
   const wrap = make('div', {class: 'wrap', role: 'group', 'aria-label': this.t('title')});
   card.append(wrap);
   wrap.append(this.band());

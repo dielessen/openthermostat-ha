@@ -70,7 +70,8 @@
           "auto": "mdi:home-automation",
           "home": "mdi:home",
           "away": "mdi:home-export-outline",
-          "holiday": "mdi:airplane"
+          "holiday": "mdi:airplane",
+          "summer": "mdi:weather-sunny"
         }
       }
     },

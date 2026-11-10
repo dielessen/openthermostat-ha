@@ -124,7 +124,9 @@ OVERRIDES = ("boost", "timed", "next")
 AWAY_MODES = ("away", "presence_away", "away_return")
 # The E32's refusals that have their own message; the rest name the E32's code.
 E32_ERRORS = {"no_clock": "comfort_no_clock", "room_inactive": "comfort_room_off",
-              "no_schedule": "comfort_no_schedule"}
+              "no_schedule": "comfort_no_schedule",
+              # E32 1.4.1: a room override in summer (Home Assistant refuses it first; a write that slips through).
+              "summer_mode": "summer_mode_on"}
 # The same no-reload flag as the energy step (__init__._async_options_updated).
 from .energy_input import ENERGY_ONLY_UPDATE  # noqa: E402
 
@@ -970,7 +972,12 @@ def _iso(value):
 
 
 class E32RoomClimate(RoomEntity, ClimateEntity):
-    """One E32 room as a thermostat. Reads the telemetry; writes overrides, away or the plan."""
+    """One E32 room as a thermostat. Reads the telemetry; writes overrides, away or the plan.
+
+    In summer (the house mode Summer, E32 1.4.1) every room is off (hvac_mode off, attribute ``reason`` "summer"): a
+    temperature, a mode, a preset, an override or away is refused with "Summer mode is on: switch it off first." and
+    nothing is sent to the E32.
+    """
 
     _attr_name = None  # the room device's name
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
@@ -1009,6 +1016,21 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
     def available(self):
         return self.hub.fresh and self.room is not None and self.link is not None
 
+    def _summer(self):
+        """Whether the house is in summer: the house mode as the house mode select shows it (the E32's answer to a
+        command, else its status), else the room's own report (setpoint_source "summer")."""
+        from .e32_house import KEY, house_away
+        state = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id) if self.hass is not None else None
+        house = state.get(KEY) if type(state) is dict else None
+        away = house.away if house is not None else house_away(self.hub)
+        if type(away) is dict and type(away.get("mode")) is str:
+            return away["mode"] == "summer"
+        return (self.room or {}).get("setpoint_source") == "summer"
+
+    def _refuse_in_summer(self):
+        if self._summer():
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="summer_mode_on")
+
     @property
     def current_temperature(self):
         return number((self.room or {}).get("temperature"), -40, 85)
@@ -1039,7 +1061,7 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         room = self.room
         if room is None:
             return None
-        if room.get("state") == "inactive":
+        if room.get("state") == "inactive" or self._summer():
             return HVACMode.OFF
         return HVACMode.HEAT if self.comfort.get("override") in OVERRIDES else HVACMode.AUTO
 
@@ -1048,8 +1070,8 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         room = self.room
         if room is None:
             return None
-        if room.get("state") == "inactive":
-            return HVACAction.OFF
+        if room.get("state") == "inactive" or (self._summer() and room.get("demand") is not True):
+            return HVACAction.OFF  # in summer the E32 heats a room only against frost
         return HVACAction.HEATING if room.get("demand") is True else HVACAction.IDLE
 
     @property
@@ -1090,6 +1112,8 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         from .room_away import away_reason, room_away
         own = room_away(self.plan_room)
         return {"room_id": self.room_id, "comfort_mode": comfort.get("mode", "program"),
+                # 1.4.1: why the thermostat is off although the room is on: "summer" (the house mode Summer), else None.
+                "reason": "summer" if self._summer() else None,
                 "window": comfort.get("window"), "override": comfort.get("override"),
                 "until": _iso(comfort.get("until")), "waiting_for_clock": comfort.get("waiting_for_clock") is True,
                 "setpoint_source": room.get("setpoint_source"),
@@ -1233,6 +1257,7 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         return await self._command(override_command(self.room_id, "timed", temperature, minutes))
 
     async def async_set_temperature(self, **kwargs):
+        self._refuse_in_summer()
         temperature = kwargs.get("temperature")
         if temperature is None:
             return
@@ -1244,6 +1269,7 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
 
     async def async_set_hvac_mode(self, hvac_mode):
         from .room_plan import set_state
+        self._refuse_in_summer()
         if hvac_mode == HVACMode.OFF:
             await self._change_plan(set_state("inactive"))
         elif hvac_mode == HVACMode.AUTO:
@@ -1266,6 +1292,7 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         await self.async_set_hvac_mode(HVACMode.OFF)
 
     async def async_set_preset_mode(self, preset_mode):
+        self._refuse_in_summer()
         if preset_mode == PRESET_HEAT_ALONG and preset_mode in self.preset_modes:
             # The same plan write as the room's Heating select (also from Off); its target stays as it is.
             from .room_plan import set_state
@@ -1291,6 +1318,7 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
 
     # -- actions (services.yaml) --------------------------------------------------
     async def async_set_room_override(self, mode, temperature=None, duration_minutes=None):
+        self._refuse_in_summer()
         if mode not in ("boost", "timed", "until_next"):
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="room_state_invalid")
         await self._ensure_active()
@@ -1311,13 +1339,18 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         await self._command(override_command(self.room_id, "none"))
 
     # set_away / clear_away stay for existing automations (beta.23). They set the HOUSE mode, exactly as
-    # the House mode select does: Away (or Holiday with an end date), and Auto again; never one room.
+    # the House mode select does: Away (or Holiday with an end date), and Auto again; never one room. In summer
+    # (1.4.1) set_away is refused and clear_away does nothing (nothing is away): only switching summer off ends it,
+    # and a presence automation logs no error every day.
     async def async_set_away(self, temperature=None, until=None):
         from .e32_house import holiday_until
+        self._refuse_in_summer()
         end = holiday_until(until) if until is not None else None
         await self._command(None, {"mode": "holiday" if end else "away", "until": end, "temperature": temperature})
 
     async def async_clear_away(self):
+        if self._summer():
+            return  # summer: nothing to clear, nothing sent
         await self._command(None, {"mode": "auto"})
 
 

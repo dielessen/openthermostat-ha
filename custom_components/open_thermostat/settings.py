@@ -5,8 +5,9 @@ backend: a small registry of sections and three websocket commands. The design i
 docs/engineering/HA-INSTELPANEEL-ONTWERP.nl.md; chapter 10 ("Bouwen op het fundament") says how a section package
 builds on it.
 
-Sections, in the order of the overview: rooms, house, heating, devices, notifications, energy, general,
-advanced. Each has a summary (the lines under its name on the overview, plain text in the viewer's language,
+Sections, in the order of the overview: rooms, house, heating, devices, notifications, energy, installation
+(1.4.1: "Dashboard and name" and "Advanced" of 1.4 live in Installation, settings_installation.py; their functions
+stay here and in settings_advanced.py). Each has a summary (the lines under its name on the overview, plain text in the viewer's language,
 built from the config entry and what Home Assistant already holds in memory; never a call to the E32) and
 optionally an editor: ``read(hass, entry, item)`` returns the model of one screen, ``save(hass, entry, item,
 values)`` validates and writes it and returns the fresh model. A section without an editor opens in the panel as
@@ -35,7 +36,7 @@ whatever a section returns (a section that needs "a password is stored" names th
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import inspect
 import json
@@ -53,19 +54,24 @@ _LOGGER = logging.getLogger(__name__)
 
 # The panel's module, served and loaded with the dashboard cards (week_planner.card_modules); the release script
 # moves the version in the name (tools/dev/prepare_release.py, "frontend URLs").
-URL = "/open_thermostat/openthermostat-settings-1.4.0.js"
+URL = "/open_thermostat/openthermostat-settings-1.4.1.js"
+# 1.4.1: the component kit (frontend/openthermostat-settings-kit.js) and the section modules are no longer loaded on every
+# Home Assistant page: only the core is (URL above, week_planner.card_modules); the core loads the kit and the sections
+# when the Settings tab opens, from the overview's ``modules`` list (modules()).
+KIT_URL = "/open_thermostat/openthermostat-settings-kit-1.4.1.js"
 CARD_TYPE = "custom:openthermostat-settings"
 # A section package's own module (frontend/openthermostat-settings-<section>.js, it calls the kit's defineSection), served
-# and loaded with the panel: one (URL, file) line per package, the URL versioned as the panel's.
+# with the panel and loaded by it on the first visit of the tab: one (URL, file) line per package, the URL versioned as
+# the panel's.
 SECTION_MODULES: tuple[tuple[str, str], ...] = (
     # ("/open_thermostat/openthermostat-settings-<section>-<HA version>.js", "openthermostat-settings-<section>.js"),
-    ("/open_thermostat/openthermostat-settings-rooms-1.4.0.js", "openthermostat-settings-rooms.js"),
-    ("/open_thermostat/openthermostat-settings-house-1.4.0.js", "openthermostat-settings-house.js"),
-    ("/open_thermostat/openthermostat-settings-heating-1.4.0.js", "openthermostat-settings-heating.js"),
-    ("/open_thermostat/openthermostat-settings-devices-1.4.0.js", "openthermostat-settings-devices.js"),
-    ("/open_thermostat/openthermostat-settings-energy-1.4.0.js", "openthermostat-settings-energy.js"),
-    ("/open_thermostat/openthermostat-settings-notifications-1.4.0.js", "openthermostat-settings-notifications.js"),
-    ("/open_thermostat/openthermostat-settings-advanced-1.4.0.js", "openthermostat-settings-advanced.js"),
+    ("/open_thermostat/openthermostat-settings-rooms-1.4.1.js", "openthermostat-settings-rooms.js"),
+    ("/open_thermostat/openthermostat-settings-house-1.4.1.js", "openthermostat-settings-house.js"),
+    ("/open_thermostat/openthermostat-settings-heating-1.4.1.js", "openthermostat-settings-heating.js"),
+    ("/open_thermostat/openthermostat-settings-devices-1.4.1.js", "openthermostat-settings-devices.js"),
+    ("/open_thermostat/openthermostat-settings-energy-1.4.1.js", "openthermostat-settings-energy.js"),
+    ("/open_thermostat/openthermostat-settings-notifications-1.4.1.js", "openthermostat-settings-notifications.js"),
+    ("/open_thermostat/openthermostat-settings-installation-1.4.1.js", "openthermostat-settings-installation.js"),
 )
 VIEW_PATH = "settings"  # the dashboard view: /<dashboard>/settings#<route>
 CONFIGURE_PATH = "/config/integrations/integration/" + DOMAIN
@@ -112,16 +118,23 @@ class Section:
     available: Callable | None = None
     read: Callable | None = None
     save: Callable | None = None
+    actions: dict[str, Callable] = field(default_factory=dict)
 
 
 SECTIONS: dict[str, Section] = {}
 
 
-def register_section(name, read=None, save=None, *, summary=None, available=None, order=None):
+def register_section(name, read=None, save=None, *, summary=None, available=None, order=None, actions=None):
     """Add a section or complete one: what is given replaces, what is left out stays (a section package registers
-    its editor, ``register_section("rooms", read_rooms, save_rooms)``, and keeps the core's summary and place)."""
+    its editor, ``register_section("rooms", read_rooms, save_rooms)``, and keeps the core's summary and place).
+    ``actions`` adds operations that are not a save of the model (a scan, a probe, a restore step):
+    ``{"scan": fn}`` with ``fn(hass, entry, item, values) -> dict`` (sync or async), reached through the websocket
+    command ``settings/action``; a later call adds more actions, the same name replaces."""
     if type(name) is not str or not name.isidentifier():
         raise ValueError(f"invalid section name {name!r}")
+    if actions is not None and (type(actions) is not dict or not all(
+            type(k) is str and k.isidentifier() and callable(v) for k, v in actions.items())):
+        raise ValueError(f"section {name}: actions must map identifiers to functions")
     section = SECTIONS.get(name)
     if save is not None and read is None and (section is None or section.read is None):
         raise ValueError(f"section {name}: save needs read (the token is made from what read returns)")
@@ -131,6 +144,8 @@ def register_section(name, read=None, save=None, *, summary=None, available=None
             setattr(section, key, value)
     if order is not None:
         section.order = order
+    if actions:
+        section.actions = {**section.actions, **actions}
     SECTIONS[name] = section
     return section
 
@@ -144,7 +159,7 @@ def _load_sections():
     from . import settings_devices  # noqa: F401
     from . import settings_energy  # noqa: F401
     from . import settings_notifications  # noqa: F401  (Notifications: people and phones, the house, the rooms)
-    from . import settings_advanced  # noqa: F401  (Advanced: system log, time zone, tester program, room setup status)
+    from . import settings_installation  # noqa: F401  (Installation: name, dashboard, Advanced's screens, maintenance)
 
 
 # -- the token ------------------------------------------------------------------------------------------------
@@ -246,7 +261,7 @@ def _connected(hass, entry, hub):
 TEXT = {
     "en": {"no_data": "No data from the E32 yet", "no_rooms": "No rooms yet", "more": "and {n} more",
            "follow": "heat along only", "off": "off", "auto": "Automatic", "home": "At home", "away": "Away",
-           "holiday": "Holiday", "away_after": "away after {n} min, then {t}", "away_at": "away: {t}",
+           "holiday": "Holiday", "summer": "Summer", "away_after": "away after {n} min, then {t}", "away_at": "away: {t}",
            "limits_own": "Water temperature: {low}–{high} °C",
            "limits_auto": "Water temperature: at most {high} °C, lowest automatic",
            "limits_auto_now": "Water temperature: at most {high} °C, lowest automatic (now {now} °C)",
@@ -255,11 +270,10 @@ TEXT = {
            "circuit_one": "1 heating circuit", "circuit": "{n} heating circuits",
            "no_devices": "No Bluetooth sensors or Shelly devices", "on": "On", "notifications_off": "Off",
            "gas_meter": "Gas meter", "gas_price": "Gas price", "outdoor": "outdoor: {name}", "boiler_kw": "{kw} kW",
-           "water_meter": "Water meter", "forecast": "Weather forecast", "energy_none": "Nothing set yet",
-           "advanced": "System log, time zone and tester program"},
+           "water_meter": "Water meter", "forecast": "Weather forecast", "energy_none": "Nothing set yet"},
     "nl": {"no_data": "Nog geen gegevens van de E32", "no_rooms": "Nog geen ruimtes", "more": "en nog {n}",
            "follow": "alleen meeverwarmen", "off": "uit", "auto": "Automatisch", "home": "Thuis", "away": "Afwezig",
-           "holiday": "Vakantie", "away_after": "afwezig na {n} min, dan {t}", "away_at": "afwezig: {t}",
+           "holiday": "Vakantie", "summer": "Zomer", "away_after": "afwezig na {n} min, dan {t}", "away_at": "afwezig: {t}",
            "limits_own": "Watertemperatuur: {low}–{high} °C",
            "limits_auto": "Watertemperatuur: hoogstens {high} °C, laagste automatisch",
            "limits_auto_now": "Watertemperatuur: hoogstens {high} °C, laagste automatisch (nu {now} °C)",
@@ -268,11 +282,10 @@ TEXT = {
            "circuit_one": "1 verwarmingscircuit", "circuit": "{n} verwarmingscircuits",
            "no_devices": "Geen Bluetooth-sensoren of Shelly-apparaten", "on": "Aan", "notifications_off": "Uit",
            "gas_meter": "Gasmeter", "gas_price": "Gasprijs", "outdoor": "buiten: {name}", "boiler_kw": "{kw} kW",
-           "water_meter": "Watermeter", "forecast": "Weersverwachting", "energy_none": "Nog niets ingesteld",
-           "advanced": "Systeemlog, tijdzone en testerprogramma"},
+           "water_meter": "Watermeter", "forecast": "Weersverwachting", "energy_none": "Nog niets ingesteld"},
     "pl": {"no_data": "Brak jeszcze danych z E32", "no_rooms": "Brak jeszcze pomieszczeń", "more": "i jeszcze {n}",
-           "follow": "grzeje tylko razem z innymi", "off": "wyłączone", "auto": "Automatyczny", "home": "W domu",
-           "away": "Nieobecność", "holiday": "Urlop", "away_after": "nieobecność po {n} min, potem {t}",
+           "follow": "grzeje tylko razem z innymi", "off": "wyłączone", "auto": "Automatycznie", "home": "W domu",
+           "away": "Nieobecność", "holiday": "Urlop", "summer": "Lato", "away_after": "nieobecność po {n} min, potem {t}",
            "away_at": "nieobecność: {t}",
            "limits_own": "Temperatura wody: {low}–{high} °C",
            "limits_auto": "Temperatura wody: najwyżej {high} °C, najniższa automatycznie",
@@ -283,8 +296,7 @@ TEXT = {
            "no_devices": "Brak czujników Bluetooth i urządzeń Shelly", "on": "Włączone",
            "notifications_off": "Wyłączone", "gas_meter": "Licznik gazu", "gas_price": "Cena gazu",
            "outdoor": "na zewnątrz: {name}", "boiler_kw": "{kw} kW", "water_meter": "Licznik wody",
-           "forecast": "Prognoza pogody", "energy_none": "Jeszcze nic nie ustawiono",
-           "advanced": "Dziennik systemowy, strefa czasowa i program testerów"},
+           "forecast": "Prognoza pogody", "energy_none": "Jeszcze nic nie ustawiono"},
 }
 ROOMS_SHOWN = 6  # the overview names this many rooms, then "and 2 more"
 
@@ -410,15 +422,7 @@ def summary_energy(hass, entry, hub, lang):
     return [" · ".join(parts) if parts else t["energy_none"]]
 
 
-def summary_general(hass, entry, hub, lang):
-    return [entry.title]
-
-
-def summary_advanced(hass, entry, hub, lang):
-    return [TEXT[lang]["advanced"]]
-
-
-# -- the example section: Dashboard and name (the options step "general" uses the same two functions) -------------
+# -- Dashboard and name: the options step "general" and Installation's list (settings_installation.py) share these --
 
 def general_values(values):
     """(name, dashboard) of Dashboard and name, validated as the options step "general" always did: a name of 1 to
@@ -452,21 +456,14 @@ def read_general(hass, entry, item=None):
     return {"name": entry.title, CONF_CREATE_DASHBOARD: entry.options.get(CONF_CREATE_DASHBOARD, False) is True}
 
 
-def save_general(hass, entry, item, values):
-    from .product import configuration_snapshot
-    name, dashboard = general_values(values)
-    if not general_unchanged(entry, name, dashboard):
-        commit_general(hass, entry, configuration_snapshot(entry), name, dashboard)
-    return read_general(hass, entry)
-
-
+# 1.4.1: the sections "general" (Dashboard and name) and "advanced" of 1.4 are retired; Installation (order 8, after
+# energy) holds both (settings_installation.py). Their old routes #general and #advanced/<item> open #installation in
+# the panel (frontend/openthermostat-settings-installation.js).
 for _order, (_name, _summary, _available) in enumerate((
         ("rooms", summary_rooms, _connected), ("house", summary_house, _connected),
         ("heating", summary_heating, _connected), ("devices", summary_devices, _connected),
-        ("notifications", summary_notifications, None), ("energy", summary_energy, None),
-        ("general", summary_general, None), ("advanced", summary_advanced, None))):
+        ("notifications", summary_notifications, None), ("energy", summary_energy, None))):
     register_section(_name, summary=_summary, available=_available, order=_order)
-register_section("general", read_general, save_general)
 _load_sections()
 
 
@@ -493,7 +490,71 @@ def overview(hass, entry, lang, admin):
                          "available": reason is None, "reason": reason,
                          "editable": section.read is not None and section.save is not None})
     return {"admin": admin, "language": lang, "module_url": URL, "configure_path": CONFIGURE_PATH,
-            "sections": sections}
+            "sections": sections, "modules": modules(), "glance": glance(hass, entry, hub)}
+
+
+def modules():
+    """The modules the panel core loads when the Settings tab opens (CONTRACT-1.4.1 §2): the kit first, then every
+    section module, each at its versioned URL: [{"name": "kit" | "<section>", "url"}]."""
+    return [{"name": "kit", "url": KIT_URL}, *({"name": file.removeprefix("openthermostat-settings-").removesuffix(".js"),
+                                                 "url": url} for url, file in SECTION_MODULES)]
+
+
+def _glance_rooms(hass, entry, hub):
+    """The rooms the E32 reports, in its order: id, name, state, heating type and the entity IDs of the room's thermostat,
+    temperature and reason (their values are in hass.states)."""
+    from homeassistant.helpers import entity_registry as er
+    registry, prefix = er.async_get(hass), entry.data.get(CONF_TOPIC_PREFIX)
+    emitters = {room.get("id"): room.get("emitter") for room in (_plan(hub) or {}).get("rooms") or [] if type(room) is dict}
+    rooms = []
+    for room_id, room in (getattr(hub, "rooms", None) or {}).items():
+        found = {key: registry.async_get_entity_id(domain, DOMAIN, f"{prefix}_e32_room_{room_id}_{suffix}") if prefix else None
+                 for key, domain, suffix in (("climate", "climate", "thermostat"), ("temperature", "sensor", "temperature"),
+                                             ("reason", "sensor", "reason"))}
+        rooms.append({"id": room_id, "name": _room_name(hass, entry, {**room, "id": room_id}),
+                      "state": room.get("state") if room.get("state") in ("active", "follow", "inactive") else "active",
+                      "emitter": "floor" if emitters.get(room_id) == "floor" else "radiator",
+                      "entities": {key: value for key, value in found.items() if value}})
+    return rooms
+
+
+def glance(hass, entry, hub):
+    """The installation at a glance, for the overview on a wide screen (1.4.1): from memory only, never an E32 read; the
+    live values come from hass.states in the panel. {rooms, boiler: {name, activity}, smart_warm_up, weather_compensation,
+    holiday: {from, until, running} | None}; None while the installation does not run (logged once on a failure)."""
+    if hub is None:
+        return None
+    try:
+        from homeassistant.helpers import entity_registry as er
+        from homeassistant.util import dt as dt_util
+        from .e32_flow import KEY as FLOW_KEY
+        from .e32_house import holiday_periods, house_away, house_mode
+        prefix = entry.data.get(CONF_TOPIC_PREFIX)
+        activity = er.async_get(hass).async_get_entity_id("sensor", DOMAIN, f"{prefix}_hub_boiler_activity") if prefix else None
+        link = (hass.data.get(DOMAIN, {}).get(entry.entry_id) or {}).get(FLOW_KEY)
+        options = (link.telemetry_options() or link.settings or {}) if link is not None else {}
+        away = house_away(hub)
+        now, holiday = dt_util.utcnow().timestamp(), None
+
+        def iso(epoch):
+            return dt_util.as_local(dt_util.utc_from_timestamp(epoch)).isoformat()
+
+        for start, end in holiday_periods((away or {}).get("holidays")):
+            if end > now:
+                holiday = {"from": iso(start), "until": iso(end), "running": start <= now}
+                break
+        if holiday is None and away is not None and house_mode(away) == "holiday" and type(away.get("until")) is int:
+            holiday = {"from": None, "until": iso(away["until"]), "running": True}
+        return {"rooms": _glance_rooms(hass, entry, hub),
+                "boiler": {"name": _boiler_name(hass, entry, language(hass)), **({"activity": activity} if activity else {})},
+                "smart_warm_up": options.get("apply_learned") if type(options.get("apply_learned")) is bool else None,
+                "weather_compensation": options.get("weather_curve") if type(options.get("weather_curve")) is bool else None,
+                "holiday": holiday}
+    except Exception:  # noqa: BLE001 - the glance never breaks the overview
+        if "glance" not in _FAILED:
+            _FAILED.add("glance")
+            _LOGGER.exception("The settings overview's glance could not be made")
+        return None
 
 
 # -- the websocket commands ----------------------------------------------------------------------------------------
@@ -586,4 +647,38 @@ async def ws_save(hass, connection, msg):
         connection.send_result(msg["id"], {"model": model, "token": token(model)})
 
 
-COMMANDS = (ws_overview, ws_get, ws_save)
+@websocket_api.websocket_command({vol.Required("type"): "open_thermostat/settings/action",
+                                  vol.Required("entry_id"): str, vol.Required("section"): str,
+                                  vol.Optional("item"): vol.Any(None, str),
+                                  vol.Required("action"): str, vol.Optional("values"): dict})
+@websocket_api.async_response
+async def ws_action(hass, connection, msg):
+    """An operation of a section that is not a save of its model: a scan, a probe, a restore step, a progress
+    read. Administrators only. The section registered it with ``register_section(name, actions={...})``; the
+    answer is the function's dict, scrubbed like a model. No token: an action that writes checks its own
+    preconditions on the E32 and the panel asks its question before calling it."""
+    if not getattr(connection.user, "is_admin", False):
+        _send_error(connection, msg["id"], SettingsError("not_admin"))
+        return
+    try:
+        entry = _entry(hass, msg["entry_id"])
+        section = _section(msg["section"])
+        function = section.actions.get(msg["action"])
+        if function is None:
+            raise SettingsError("unknown_action")
+        result = await _call(function, hass, entry, msg.get("item"), msg.get("values") or {})
+        if type(result) is not dict:
+            raise SettingsError("save_uncertain")
+    except HomeAssistantError as err:
+        _send_error(connection, msg["id"], _failure(err))
+    except Exception as err:  # noqa: BLE001 - a refusal has a code; anything else is logged and said plainly
+        if (known := as_settings_error(err)) is not None:
+            _send_error(connection, msg["id"], known)
+            return
+        _LOGGER.exception("The settings action %s of %s failed", msg.get("action"), msg.get("section"))
+        _send_error(connection, msg["id"], SettingsError("save_uncertain"))
+    else:
+        connection.send_result(msg["id"], _scrub(result))
+
+
+COMMANDS = (ws_overview, ws_get, ws_save, ws_action)

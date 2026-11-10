@@ -386,13 +386,19 @@ class E32Backups:
 
     def _request(self, action, record, **extra):
         request = {"action": action, "backup": record["document"], **extra}
-        if record["document"].get("secrets") is not None:
-            request["passphrase"] = ensure_passphrase(self.hass, self.entry)
+        # A stored backup is sealed with this installation's passphrase; an uploaded file (uploaded_record) carries the
+        # one its owner gives, or none: the E32 then skips its passwords and keys and says so in its check.
+        passphrase = record["passphrase"] if "passphrase" in record else ensure_passphrase(self.hass, self.entry)
+        if record["document"].get("secrets") is not None and passphrase:
+            request["passphrase"] = passphrase
         return request
 
-    async def async_check(self, address, password, record_id):
-        """Let the E32 at address check a stored backup; returns a RestoreCheck."""
-        record = self.record(record_id)
+    async def async_check(self, address, password, record_id, *, record=None):
+        """Let the E32 at address check a stored backup (or ``record``, an uploaded file); returns a RestoreCheck."""
+        if record is None:
+            record = self.record(record_id)
+        elif record.get("id") != record_id:
+            record = None
         if record is None:
             raise ControllerLinkError("setup_changed")
         stored = credentials(self.entry)
@@ -409,8 +415,9 @@ class E32Backups:
                 summary = _summary(value)
         return RestoreCheck(record_id, address, password, value["fingerprint"], summary, identity)
 
-    async def async_restore(self, check):
-        """Apply exactly what the E32 checked, after a backup of the E32 as it is now.
+    async def async_restore(self, check, *, record=None):
+        """Apply exactly what the E32 checked, after a backup of the E32 as it is now (``record``: the uploaded
+        file the check was made of, else the stored backup).
 
         Returns {"restart", "restart_scheduled", "online", "reenter"}: online is
         True once the restarted E32 answers again (None without a restart).
@@ -418,7 +425,10 @@ class E32Backups:
         from asyncio import timeout
         if type(check) is not RestoreCheck:
             raise ControllerLinkError("controller_request_invalid")
-        record = self.record(check.record_id)
+        if record is None:
+            record = self.record(check.record_id)
+        elif record.get("id") != check.record_id:
+            record = None
         if record is None:
             raise ControllerLinkError("setup_changed")
         stored = credentials(self.entry)
@@ -540,6 +550,34 @@ class E32Backups:
             _LOGGER.warning("E32 settings restored; the new E32 address could not be saved in Home Assistant")
             return False
         return True
+
+
+# An uploaded backup file (the settings panel, 1.4.1): the E32 page's own export, at most this large on disk.
+UPLOAD_MAX = 65536
+
+
+def document_from_file(data):
+    """The backup document of an uploaded file's bytes, or None when it is not an E32 settings backup (not UTF-8
+    JSON, another format or board, or larger than a backup can be)."""
+    if type(data) is not bytes or len(data) > UPLOAD_MAX:
+        return None
+    try:
+        document = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    return document if valid_document(document) else None
+
+
+def uploaded_record(document, passphrase=None):
+    """A record of an uploaded backup file, for async_check and async_restore (never stored): its own id, so a check
+    of one file is never applied with another, and the passphrase its owner gave (None: its passwords and keys are
+    skipped)."""
+    created = dt_util.parse_datetime(document["created"]) if type(document.get("created")) is str else None
+    return {"id": "upload-" + secrets.token_hex(8), "kind": "upload",
+            # The E32 writes "2026-11-01T03:00:00Z" when it knew the time (else null).
+            "created": dt_util.as_utc(created).isoformat() if created is not None and created.tzinfo else None,
+            "size": _size(document), "firmware": str(document.get("firmware") or "")[:64],
+            "secrets": document.get("secrets") is not None, "document": document, "passphrase": passphrase}
 
 
 def other_e32(entry, check):

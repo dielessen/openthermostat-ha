@@ -31,7 +31,14 @@
    viewer reads them in their own Home Assistant language; English is only the last resort. The band wears Home
    Assistant's theme colours (deep orange, blue, grey, the error colour) darkened until white words on it read at
    4.5:1 at least, in the light and the dark theme; the day strip and the gas line wear the same hues, a little
-   darker on a light card so they stand out from it (3:1). */
+   darker on a light card so they stand out from it (3:1).
+   1.4.1 (CONTRACT-1.4.1 §8, §9; HA-INSTELPANEEL-FASE2.nl.md chapter 4): the design tokens on the host (dark from
+   hass.themes.darkMode, else the browser's colour scheme), the text sizes 22/17/15/13, 12 px corners, focus rings,
+   Material Design Icons inline (no ha-icon); the house mode moves from a chip on the band to the first figure, large,
+   with its one-line meaning (who is home in Automatic, the away temperature, the holiday's end, summer mode's sentence)
+   and the next planned holiday under it, dates and times through Home Assistant's locale; a tap still opens the house
+   mode. Under it the season hint of the select (HA-SUMMER) with one button that answers it. Yesterday's figures: a
+   figure not measured shows "—" with "not measured" as its title. */
 const PREFIX = 'component.open_thermostat.entity.sensor.';
 const CARD = 'heat_request.state_attributes.card.state.';
 const TEXT = {title: 'Your house', heating: 'Heating', status_heating: 'Heating · water {flow} °C', status_heating_plain: 'Heating',
@@ -48,6 +55,32 @@ const TEXT = {title: 'Your house', heating: 'Heating', status_heating: 'Heating 
  no_warmup: 'no warm-up yesterday', late_hours: '{h} h {m} min late', early_hours: '{h} h {m} min early',
  not_warm: 'not warm within 3 h', yesterday_starts: 'Burner starts per heating hour',
  yesterday_heating: 'Gas for heating (estimate)', warm_on_time: '{room}: warm on time', late_h: '{h} h late', early_h: '{h} h early'};
+// The card's own words (1.4.1), EN/NL/PL: the house mode figure (the mode names are the select's translation, these
+// the last resort; Summer and its sentence as the summer mode design §5) and "not measured" for a figure without a value.
+const OWN = {
+ en: {house_mode: 'House mode', auto_who: 'Who is home decides', home_means: 'Always the week programs',
+  away_means: 'Every room at most {t} °C', away_plain: 'Every room at most the away temperature', holiday_until: 'Until {date}',
+  summer_means: 'The heating stays off until you switch this off; hot water and frost protection stay.',
+  next_holiday: 'Next holiday: {from} – {until}', not_measured: 'not measured',
+  summer_on: 'Five days above 17 °C outside on average. Switch summer mode on?', summer_off: 'It is getting colder. Switch summer mode off?',
+  switch_on: 'Switch summer mode on', switch_off: 'Switch summer mode off', mode_failed: 'The house mode could not be set: {reason}',
+  modes: {auto: 'Automatic', home: 'At home', away: 'Away', holiday: 'Holiday', summer: 'Summer'}},
+ nl: {house_mode: 'Huismodus', auto_who: 'Wie er thuis is beslist', home_means: 'Altijd de weekprogramma\u2019s',
+  away_means: 'Elke ruimte hoogstens {t} °C', away_plain: 'Elke ruimte hoogstens de afwezigheidstemperatuur', holiday_until: 'Tot {date}',
+  summer_means: 'De verwarming staat uit tot je dit uitzet; warm water en vorstbeveiliging blijven.',
+  next_holiday: 'Volgende vakantie: {from} – {until}', not_measured: 'niet gemeten',
+  summer_on: 'Al vijf dagen gemiddeld boven 17 °C buiten. Zomerstand aanzetten?', summer_off: 'Het wordt kouder. Zomerstand uitzetten?',
+  switch_on: 'Zomerstand aanzetten', switch_off: 'Zomerstand uitzetten', mode_failed: 'De huismodus kon niet worden ingesteld: {reason}',
+  modes: {auto: 'Automatisch', home: 'Thuis', away: 'Afwezig', holiday: 'Vakantie', summer: 'Zomer'}},
+ pl: {house_mode: 'Tryb domu', auto_who: 'Decyduje to, kto jest w domu', home_means: 'Zawsze programy tygodniowe',
+  away_means: 'Każde pomieszczenie najwyżej {t} °C', away_plain: 'Każde pomieszczenie najwyżej temperatura nieobecności', holiday_until: 'Do {date}',
+  summer_means: 'Ogrzewanie pozostaje wyłączone, dopóki tego nie wyłączysz; ciepła woda i ochrona przed mrozem działają.',
+  next_holiday: 'Następny urlop: {from} – {until}', not_measured: 'nie zmierzono',
+  summer_on: 'Od pięciu dni średnio powyżej 17 °C na zewnątrz. Włączyć tryb letni?', summer_off: 'Robi się chłodniej. Wyłączyć tryb letni?',
+  switch_on: 'Włącz tryb letni', switch_off: 'Wyłącz tryb letni', mode_failed: 'Nie udało się ustawić trybu domu: {reason}',
+  modes: {auto: 'Automatycznie', home: 'W domu', away: 'Nieobecność', holiday: 'Urlop', summer: 'Lato'}}};
+const MODE_ICON = {auto: 'mdi:home-account', home: 'mdi:home-account', away: 'mdi:home-export-outline', holiday: 'mdi:home-export-outline',
+ summer: 'mdi:white-balance-sunny'};
 // The warm-on-time sensor's value for a room that did not get warm within 3 hours (the firmware's ArrivalLearner cap).
 const NOT_WARM_MIN = 180;
 const DASH = '—';  // a figure not known yet: the same in every language
@@ -74,6 +107,22 @@ const OPENING = {window: {icon: 'mdi:window-open-variant', words: {open: 'Window
  door: {icon: 'mdi:door-open', words: {open: 'Door open', pending: 'Door open, pausing soon'}}};
 const PRESENCE = {room_home: 'mdi:account-check', room_away: 'mdi:account-off-outline', house_home: 'mdi:home-account',
  house_away: 'mdi:home-export-outline'};
+// Material Design Icons (v7.4.47, Apache 2.0), inline: the test environment has no ha-icon and neither needs one.
+const ICON_PATHS = {
+ 'fire': 'M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2M14.5 17.5C14.22 17.74 13.76 18 13.4 18.1C12.28 18.5 11.16 17.94 10.5 17.28C11.69 17 12.4 16.12 12.61 15.23C12.78 14.43 12.46 13.77 12.33 13C12.21 12.26 12.23 11.63 12.5 10.94C12.69 11.32 12.89 11.7 13.13 12C13.9 13 15.11 13.44 15.37 14.8C15.41 14.94 15.43 15.08 15.43 15.23C15.46 16.05 15.1 16.95 14.5 17.5H14.5Z',
+ 'faucet': 'M19 14V16H16V14.28L19 14M19 13C19 11.9 18 11 16.8 11H10V10H5V21H10V13.91L19 13M5 9H10V7L15.36 5.21C15.74 5.09 16 4.73 16 4.33C16 3.68 15.36 3.23 14.75 3.45L5 7V9Z',
+ 'water-thermometer': 'M19 5C17.89 5 17 5.89 17 7V13.76C16.36 14.33 16 15.15 16 16C16 17.66 17.34 19 19 19S22 17.66 22 16C22 15.15 21.64 14.33 21 13.77V7C21 5.89 20.11 5 19 5M19 6C19.55 6 20 6.45 20 7V8H18V7C18 6.45 18.45 6 19 6M8 20C4.69 20 2 17.31 2 14C2 10 8 3.25 8 3.25S14 10 14 14C14 17.31 11.31 20 8 20Z',
+ 'water-boiler': 'M8 2C6.89 2 6 2.89 6 4V16C6 17.11 6.89 18 8 18H9V20H6V22H9C10.11 22 11 21.11 11 20V18H13V20C13 21.11 13.89 22 15 22H18V20H15V18H16C17.11 18 18 17.11 18 16V4C18 2.89 17.11 2 16 2H8M12 4.97A2 2 0 0 1 14 6.97A2 2 0 0 1 12 8.97A2 2 0 0 1 10 6.97A2 2 0 0 1 12 4.97M10 14.5H14V16H10V14.5Z',
+ 'alert-circle-outline': 'M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z',
+ 'timer-sand': 'M6,2H18V8H18V8L14,12L18,16V16H18V22H6V16H6V16L10,12L6,8V8H6V2M16,16.5L12,12.5L8,16.5V20H16V16.5M12,11.5L16,7.5V4H8V7.5L12,11.5M10,6H14V6.75L12,8.75L10,6.75V6Z',
+ 'chevron-right': 'M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z',
+ 'window-open-variant': 'M21 20V2H3V20H1V23H23V20M19 4V11H17V4M5 4H7V11H5M5 20V13H7V20M9 20V4H15V20M17 20V13H19V20Z',
+ 'door-open': 'M12,3C10.89,3 10,3.89 10,5H3V19H2V21H22V19H21V5C21,3.89 20.11,3 19,3H12M12,5H19V19H12V5M5,11H7V13H5V11Z',
+ 'account-check': 'M21.1,12.5L22.5,13.91L15.97,20.5L12.5,17L13.9,15.59L15.97,17.67L21.1,12.5M10,17L13,20H3V18C3,15.79 6.58,14 11,14L12.89,14.11L10,17M11,4A4,4 0 0,1 15,8A4,4 0 0,1 11,12A4,4 0 0,1 7,8A4,4 0 0,1 11,4Z',
+ 'account-off-outline': 'M2.75,7L4.03,5.75L13.26,15L20,21.72L18.73,23L15.73,20H4V17C4,15.14 6.61,13.92 9.09,13.36L2.75,7M20,17V19.18L18.1,17.28V17C18.1,16.74 17.6,16.35 16.8,16L14,13.18C16.71,13.63 20,14.91 20,17M5.9,17V18.1H13.83L10.72,15C8.19,15.3 5.9,16.45 5.9,17M12,4A4,4 0 0,1 16,8C16,9.95 14.6,11.58 12.75,11.93L8.07,7.25C8.42,5.4 10.05,4 12,4M12,6A2,2 0 0,0 10,8A2,2 0 0,0 12,10A2,2 0 0,0 14,8A2,2 0 0,0 12,6Z',
+ 'home-account': 'M12,3L2,12H5V20H19V12H22L12,3M12,8.75A2.25,2.25 0 0,1 14.25,11A2.25,2.25 0 0,1 12,13.25A2.25,2.25 0 0,1 9.75,11A2.25,2.25 0 0,1 12,8.75M12,15C13.5,15 16.5,15.75 16.5,17.25V18H7.5V17.25C7.5,15.75 10.5,15 12,15Z',
+ 'home-export-outline': 'M24 13L20 17V14H11V12H20V9L24 13M4 20V12H1L11 3L18 9.3V10H15.79L11 5.69L6 10.19V18H16V16H18V20H4Z',
+ 'white-balance-sunny': 'M3.55 19.09L4.96 20.5L6.76 18.71L5.34 17.29M12 6C8.69 6 6 8.69 6 12S8.69 18 12 18 18 15.31 18 12C18 8.68 15.31 6 12 6M20 13H23V11H20M17.24 18.71L19.04 20.5L20.45 19.09L18.66 17.29M20.45 5L19.04 3.6L17.24 5.39L18.66 6.81M13 1H11V4H13M6.76 5.39L4.96 3.6L3.55 5L5.34 6.81L6.76 5.39M1 13H4V11H1M13 20H11V23H13'};
 const HISTORY_MS = 5 * 60000, STATS_MS = 10 * 60000, TICK_MS = 60000, DAY_MS = 86400000, PENDING_MS = 2 * 60000;
 
 // The house card, as the sketch: on a phone 12 px labels, 30 px bold numbers with 18 px muted units, 12 px muted lines
@@ -81,8 +130,20 @@ const HISTORY_MS = 5 * 60000, STATS_MS = 10 * 60000, TICK_MS = 60000, DAY_MS = 8
 // grid's edge cuts off, so they never double at the card's border. Colours: the theme's (deep orange, blue, grey, the
 // error colour); the band darker until white reads at 4.5:1, the strip and the gas line a little darker on a light
 // card (3:1 against it), the theme's own on a dark one.
-const STYLE = `:host{display:block}
-ha-card{display:block;overflow:hidden;color:var(--primary-text-color);
+const STYLE = `:host{display:block;
+--ot-space:8px;--ot-radius:12px;--ot-radius-s:8px;--ot-touch:44px;--ot-motion:150ms ease;
+--ot-text-xl:22px;--ot-line-xl:28px;--ot-text-l:17px;--ot-line-l:24px;--ot-text-m:15px;--ot-line-m:22px;--ot-text-s:13px;--ot-line-s:18px;
+--ot-bg:var(--card-background-color);--ot-fg:var(--primary-text-color);--ot-fg-2:var(--secondary-text-color);
+--ot-line:var(--divider-color);--ot-accent:var(--primary-color);--ot-on-accent:var(--text-primary-color, #fff);
+--ot-heat-ink:#a1500f;--ot-heat-fill:#fbe9db;--ot-along-ink:#886100;--ot-along-fill:#f8efcf;--ot-water-ink:#1f5fa8;--ot-water-fill:#dde9f8;
+--ot-rest-ink:#5f6368;--ot-rest-fill:#ebedf0;--ot-attention-ink:#b3261e;--ot-attention-fill:#f9dedc;
+/* CONTRACT-1.4.1 §8 (amended): filled buttons and text buttons, readable on HA's default accent */
+--ot-fill:color-mix(in srgb,var(--ot-accent) 72%,#000);--ot-link:color-mix(in srgb,var(--ot-accent) 60%,var(--ot-fg));
+color:var(--ot-fg)}
+:host([data-theme="dark"]){--ot-heat-ink:#f0a060;--ot-heat-fill:rgba(240,160,96,.18);--ot-along-ink:#e6c35c;--ot-along-fill:rgba(230,195,92,.18);
+--ot-water-ink:#7fb3f0;--ot-water-fill:rgba(127,179,240,.18);--ot-rest-ink:#b0b4ba;--ot-rest-fill:rgba(176,180,186,.18);
+--ot-attention-ink:#f2857c;--ot-attention-fill:rgba(242,133,124,.18)}
+ha-card{display:block;overflow:hidden;border-radius:var(--ot-radius);color:var(--ot-fg);
 --oth-surface:var(--ha-card-background,var(--card-background-color,#fff));--oth-muted:var(--secondary-text-color,#6b6b6b);
 --oth-line:var(--divider-color,rgba(127,127,127,.22));--oth-track:color-mix(in srgb,var(--primary-text-color,#212121) 8%,var(--oth-surface));
 --heat:var(--deep-orange-color,#ff6f22);--water:var(--blue-color,#2196f3);--grey:var(--grey-color,#9e9e9e);
@@ -95,36 +156,44 @@ ha-card{display:block;overflow:hidden;color:var(--primary-text-color);
 ha-card.dark{--mark-heat:var(--heat);--mark-water:var(--water);--mark-keep:color-mix(in srgb,var(--water) 45%,#fff)}
 .wrap{container:house/inline-size}
 p{margin:0}
+.ic{display:flex;flex:none;width:var(--ic,24px);height:var(--ic,24px)}.ic svg{display:block;width:100%;height:100%}
 .tone-heat{--tone:var(--heat);--band:var(--band-heat)}.tone-water,.tone-keep{--tone:var(--water);--band:var(--band-water)}
 .tone-rest,.tone-wait{--tone:var(--grey);--band:var(--band-rest)}.tone-error{--tone:var(--error);--band:var(--band-error)}
-[data-focus]:focus{outline:none}[data-focus]:focus-visible{outline:2px solid var(--primary-color,#03a9f4);outline-offset:-3px}
+[data-focus]:focus{outline:none}[data-focus]:focus-visible{outline:2px solid var(--ot-accent);outline-offset:-3px}
 .status{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:12px 16px;background:var(--band);color:#fff}
 .main{display:flex;align-items:center;gap:10px;flex:1 1 0;min-width:min(100%,200px);border-radius:6px}
-.main>ha-icon{--mdc-icon-size:22px;color:#fff;display:flex;flex:none}.words{flex:1 1 auto;min-width:0}
-.line{font-size:16px;font-weight:500;line-height:1.3;overflow-wrap:anywhere}
-.sub{margin-top:1px;font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+.main>.ic{color:#fff}.words{flex:1 1 auto;min-width:0}
+.line{font-size:var(--ot-text-l);font-weight:500;line-height:var(--ot-line-l);overflow-wrap:anywhere}
+.sub{margin-top:1px;font-size:var(--ot-text-s);line-height:var(--ot-line-s);overflow-wrap:anywhere}
 .main[role=link]{cursor:pointer}.main[role=link]:hover .line{text-decoration:underline}
-.go{--mdc-icon-size:20px;display:flex;flex:none;color:#fff}
-.chip{display:inline-flex;align-items:center;gap:6px;min-height:28px;margin-left:auto;padding:0 10px;border-radius:16px;box-sizing:border-box;
-border:1px solid rgba(255,255,255,.6);background:rgba(0,0,0,.2);color:#fff;font:inherit;font-size:12px;font-weight:500;cursor:pointer;
-white-space:nowrap;--mdc-icon-size:16px}
-.chip ha-icon{color:#fff;display:flex}
-.boiler{order:1;flex:1 1 100%;margin:-4px 0 0 32px;font-size:12px;line-height:1.35;color:#fff;overflow-wrap:anywhere}
+.go{--ic:20px;color:#fff}
+.boiler{order:1;flex:1 1 100%;margin:-4px 0 0 34px;font-size:var(--ot-text-s);line-height:var(--ot-line-s);color:#fff;overflow-wrap:anywhere}
 .status [data-focus]:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .reasons{padding:8px 16px 10px;border-bottom:1px solid var(--oth-line)}
-.reasons summary{cursor:pointer;font-size:14px;font-weight:500;padding:4px 0;min-height:24px}
-.reasons ul{margin:4px 0 0;padding-left:20px}.reasons li{margin:0 0 4px;font-size:14px;line-height:1.45;overflow-wrap:anywhere}
+.reasons summary{cursor:pointer;font-size:var(--ot-text-m);font-weight:500;padding:4px 0;min-height:24px}
+.reasons ul{margin:4px 0 0;padding-left:20px}.reasons li{margin:0 0 4px;font-size:var(--ot-text-m);line-height:var(--ot-line-m);overflow-wrap:anywhere}
 .reasons [data-focus]:focus-visible{outline-offset:2px}
 .figures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:hidden}
 .figure{display:flex;flex-direction:column;min-width:0;padding:14px 16px 12px;box-shadow:1px 0 0 var(--oth-line),0 1px 0 var(--oth-line)}
 .figure.top{padding-top:16px}.p2{grid-column:span 2}
-.label{display:flex;align-items:center;gap:6px;font-size:12px;line-height:1.3;color:var(--oth-muted);overflow-wrap:anywhere}
+.label{display:flex;align-items:center;gap:6px;font-size:var(--ot-text-s);line-height:var(--ot-line-s);color:var(--oth-muted);overflow-wrap:anywhere}
 .value{font-size:18px;line-height:1.05;overflow-wrap:anywhere}
 .value .num{font-size:30px;font-weight:700}.value .unit{font-weight:400;color:var(--oth-muted)}
 .value.words{margin-top:4px;font-weight:600;line-height:1.3;text-wrap:balance}
 .value.unknown{font-size:30px;color:var(--oth-muted)}
-.note{margin-top:4px;font-size:12px;line-height:1.35;color:var(--oth-muted);overflow-wrap:anywhere;text-wrap:pretty}
-.room{cursor:pointer}.room .label ha-icon{--mdc-icon-size:16px;display:flex}.room .label .on{color:var(--ok)}.room .label .warn{color:var(--warn)}
+.value.mode{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:var(--ot-text-xl);line-height:var(--ot-line-xl);font-weight:500}.value.mode .ic{color:var(--ot-rest-ink)}.value.mode [data-name]{min-width:0;overflow-wrap:anywhere}
+.note{margin-top:4px;font-size:var(--ot-text-s);line-height:var(--ot-line-s);color:var(--oth-muted);overflow-wrap:anywhere;text-wrap:pretty}
+.house{display:flex;flex-wrap:wrap;align-items:flex-end;gap:4px 24px;padding:12px 16px;border-bottom:1px solid var(--oth-line);cursor:pointer}
+.house-mode{flex:0 1 auto;min-width:0}.house-notes{flex:1 1 260px;min-width:0;padding-bottom:3px}.house-notes .note:first-child{margin-top:0}
+.hint{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:8px 16px;border-bottom:1px solid var(--oth-line);
+background:var(--ot-rest-fill)}.hint>.ic{color:var(--ot-rest-ink)}
+.hint-words{flex:1 1 200px;min-width:0;font-size:var(--ot-text-m);line-height:var(--ot-line-m);overflow-wrap:anywhere}
+.hint-act{margin-left:auto;min-height:var(--ot-touch);padding:0 12px;border:0;border-radius:var(--ot-radius);background:none;font:inherit;
+font-size:var(--ot-text-m);font-weight:500;cursor:pointer;color:var(--ot-link);transition:background-color var(--ot-motion)}
+.hint-act:hover:not(:disabled){background:color-mix(in srgb,var(--ot-accent) 10%,transparent)}.hint-act:disabled{cursor:default;opacity:.6}
+.hint-act:focus-visible{outline:2px solid var(--ot-accent);outline-offset:-2px}
+.hint-error{flex:1 1 100%;font-size:var(--ot-text-s);line-height:var(--ot-line-s);color:var(--ot-attention-ink)}
+.room,.house{cursor:pointer}.room .label .ic{--ic:16px}.room .label .on{color:var(--ok)}.room .label .warn{color:var(--warn)}
 .running{display:flex;align-items:center;gap:6px}.running::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--mark-water);flex:none}
 .trend{display:flex;flex-wrap:wrap;align-items:flex-end;gap:4px 10px}.trend .value{flex:none}
 .spark{display:block;flex:1 1 56px;min-width:56px;max-width:84px;height:auto;overflow:visible;margin-bottom:2px}
@@ -132,8 +201,8 @@ white-space:nowrap;--mdc-icon-size:16px}
 .spark path.partial{stroke-opacity:.45}.spark circle{fill:var(--mark-heat)}
 .today{display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"title" "strip" "ticks" "legend";padding:10px 16px 14px;
 border-top:1px solid var(--oth-line)}
-.today-title{grid-area:title;margin-bottom:6px;font-size:12px;color:var(--oth-muted)}
-.legend{grid-area:legend;display:flex;flex-wrap:wrap;gap:2px 12px;margin:6px 0 0;padding:0;list-style:none;font-size:12px;color:var(--oth-muted)}
+.today-title{grid-area:title;margin-bottom:6px;font-size:var(--ot-text-s);line-height:var(--ot-line-s);color:var(--oth-muted)}
+.legend{grid-area:legend;display:flex;flex-wrap:wrap;gap:2px 12px;margin:6px 0 0;padding:0;list-style:none;font-size:var(--ot-text-s);color:var(--oth-muted)}
 .legend li{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.legend i{width:8px;height:8px;border-radius:50%;flex:none}
 .legend .heat{background:var(--mark-heat)}.legend .water{background:var(--mark-water)}.legend .keep{background:var(--mark-keep)}
 .strip{grid-area:strip;position:relative;height:10px;margin:4px 0}
@@ -143,35 +212,53 @@ border-top:1px solid var(--oth-line)}
 .seg.heat,.seg.water,.seg.keep{z-index:1;min-width:6px}
 .seg.heat::after,.seg.water::after,.seg.keep::after{content:"";position:absolute;inset:0;border-radius:5px;background:var(--fill)}
 .seg.heat{--fill:var(--mark-heat)}.seg.water{--fill:var(--mark-water)}.seg.keep{--fill:var(--mark-keep)}.seg.gap::after{left:2px}
-.ticks{grid-area:ticks;position:relative;height:16px;margin-top:2px;font-size:12px;line-height:16px;color:var(--oth-muted);font-variant-numeric:tabular-nums}
+.ticks{grid-area:ticks;position:relative;height:18px;margin-top:2px;font-size:var(--ot-text-s);line-height:var(--ot-line-s);color:var(--oth-muted);font-variant-numeric:tabular-nums}
 .ticks span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}.ticks span:first-child,.ticks .now.start{transform:none}
 .ticks .now.end{transform:translateX(-100%)}
-@container house (max-width:340px){.main{flex-basis:100%}.chip{margin-left:32px}.status{padding:12px}.figure,.figure.top{padding-left:12px;padding-right:12px}.today{padding:10px 12px 12px}
-.reasons{padding:8px 12px 10px}}
-@container house (min-width:720px){.status{gap:8px 12px;padding:14px 22px}.main{gap:12px}.main>ha-icon{--mdc-icon-size:24px}
-.line{font-size:18px}.sub,.chip,.boiler{font-size:13px}
-.boiler{order:0;flex:0 1 auto;margin:0 0 0 auto;text-align:right}.boiler+.chip{margin-left:0}
+@container house (max-width:340px){.main{flex-basis:100%}.status{padding:12px}.figure,.figure.top{padding-left:12px;padding-right:12px}.today{padding:10px 12px 12px}
+.reasons{padding:8px 12px 10px}.house{padding:12px}}
+@container house (min-width:720px){.status{gap:8px 12px;padding:14px 22px}.main{gap:12px}
+.boiler{order:0;flex:0 1 auto;margin:0 0 0 auto;text-align:right}
 .figures{grid-template-columns:repeat(var(--n,4),minmax(0,1fr))}.p2{grid-column:auto}.figure,.figure.top{padding:20px 22px}
-.label,.note,.today-title,.legend,.ticks{font-size:13px}.note{margin-top:6px}.value .num,.value.unknown{font-size:34px}
+.note{margin-top:6px}.house{padding:14px 22px}.value .num,.value.unknown{font-size:34px}
 .trend{gap:4px 12px}.spark{flex:1 1 64px;min-width:64px;max-width:110px}.reasons{padding:8px 22px 10px}
 .today{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title legend" "strip strip" "ticks ticks";padding:10px 22px 16px}
 .legend{margin:0 0 6px;justify-content:flex-end}}`;
 
 // Yesterday in figures, as the sketch (Leren): two by two, a 12 px muted label over a 22 px bold value, the values of a
 // row on one line (a label of two lines stands higher); 13 px and more room from 420 px of card.
-const YESTERDAY_STYLE = `:host{display:block}
-ha-card{display:block;color:var(--primary-text-color);--oth-muted:var(--secondary-text-color,#6b6b6b)}
+const YESTERDAY_STYLE = `:host{display:block;
+--ot-space:8px;--ot-radius:12px;--ot-radius-s:8px;--ot-touch:44px;--ot-motion:150ms ease;
+--ot-text-xl:22px;--ot-line-xl:28px;--ot-text-l:17px;--ot-line-l:24px;--ot-text-m:15px;--ot-line-m:22px;--ot-text-s:13px;--ot-line-s:18px;
+--ot-bg:var(--card-background-color);--ot-fg:var(--primary-text-color);--ot-fg-2:var(--secondary-text-color);
+--ot-line:var(--divider-color);--ot-accent:var(--primary-color);--ot-on-accent:var(--text-primary-color, #fff);
+--ot-heat-ink:#a1500f;--ot-heat-fill:#fbe9db;--ot-along-ink:#886100;--ot-along-fill:#f8efcf;--ot-water-ink:#1f5fa8;--ot-water-fill:#dde9f8;
+--ot-rest-ink:#5f6368;--ot-rest-fill:#ebedf0;--ot-attention-ink:#b3261e;--ot-attention-fill:#f9dedc;
+/* CONTRACT-1.4.1 §8 (amended): filled buttons and text buttons, readable on HA's default accent */
+--ot-fill:color-mix(in srgb,var(--ot-accent) 72%,#000);--ot-link:color-mix(in srgb,var(--ot-accent) 60%,var(--ot-fg));
+color:var(--ot-fg)}
+:host([data-theme="dark"]){--ot-heat-ink:#f0a060;--ot-heat-fill:rgba(240,160,96,.18);--ot-along-ink:#e6c35c;--ot-along-fill:rgba(230,195,92,.18);
+--ot-water-ink:#7fb3f0;--ot-water-fill:rgba(127,179,240,.18);--ot-rest-ink:#b0b4ba;--ot-rest-fill:rgba(176,180,186,.18);
+--ot-attention-ink:#f2857c;--ot-attention-fill:rgba(242,133,124,.18)}
+ha-card{display:block;border-radius:var(--ot-radius);color:var(--ot-fg);--oth-muted:var(--ot-fg-2)}
 .wrap{container:yesterday/inline-size}
 p{margin:0}
 .figures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:14px 16px}
 .figure{display:flex;flex-direction:column;justify-content:flex-end;min-width:0;border-radius:6px}.p2{grid-column:span 2}
-.label{font-size:12px;line-height:1.3;color:var(--oth-muted);overflow-wrap:anywhere}
-.value{font-size:22px;font-weight:700;line-height:1.15;overflow-wrap:anywhere}.value.unknown{font-weight:400;color:var(--oth-muted)}
+.label{font-size:var(--ot-text-s);line-height:var(--ot-line-s);color:var(--oth-muted);overflow-wrap:anywhere}
+.value{font-size:var(--ot-text-xl);font-weight:700;line-height:var(--ot-line-xl);overflow-wrap:anywhere}.value.unknown{font-weight:400;color:var(--oth-muted)}
 [role=button]{cursor:pointer}[data-focus]:focus{outline:none}
-[data-focus]:focus-visible{outline:2px solid var(--primary-color,#03a9f4);outline-offset:2px}
-@container yesterday (min-width:420px){.figures{gap:14px 20px;padding:16px 18px}.label{font-size:13px}}`;
+[data-focus]:focus-visible{outline:2px solid var(--ot-accent);outline-offset:2px}
+@container yesterday (min-width:420px){.figures{gap:16px 24px;padding:16px}}`;
 
 const locale = hass => hass?.locale?.language || hass?.language || 'en';
+const lang = hass => /^(nl|pl)\b/.exec(locale(hass))?.[1] || 'en';
+// Dark: Home Assistant's theme when it says so, else the browser's colour scheme (CONTRACT-1.4.1 §8).
+const darkOf = hass => {
+ if (typeof hass?.themes?.darkMode === 'boolean') return hass.themes.darkMode;
+ try { return window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { return false; }
+};
+const theme = (host, hass) => { if (darkOf(hass)) host.setAttribute('data-theme', 'dark'); else host.removeAttribute('data-theme'); };
 // The viewer's 12/24-hour choice in Home Assistant (profile → time format); else the language's.
 const hour12 = hass => {
  const chosen = ({'12': true, '24': false})[hass?.locale?.time_format];
@@ -240,7 +327,14 @@ const make = (tag, attrs = {}, text) => {
  if (text !== undefined) e.textContent = text;
  return e;
 };
-const icon = (name, attrs = {}) => make('ha-icon', {icon: name, ...attrs});
+// An icon as inline SVG in a box that carries its name (data-icon) and, where it means something, its words.
+const icon = (name, attrs = {}) => {
+ const box = make('span', {...attrs, class: 'ic' + (attrs.class ? ' ' + attrs.class : ''), 'data-icon': name});
+ const svg = make('svg:svg', {viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false'});
+ svg.append(make('svg:path', {d: ICON_PATHS[name.replace('mdi:', '')], fill: 'currentColor'}));
+ box.append(svg);
+ return box;
+};
 // A figure's value: its number large, the words and the unit around it small and muted ("3 taps today", "Pobory dziś: 3",
 // "2.0 m³"); words without the number ("off", "no taps yet today") a size smaller; "—" while it is not known.
 const valueOf = (text, num) => {
@@ -333,6 +427,9 @@ class OpenThermostatCard extends HTMLElement {
   try { text = this._hass?.localize?.(PREFIX + CARD + key, values) || ''; } catch (e) { text = ''; }
   return together(typeof text === 'string' && text ? text : TEXT[key].replace(/\{(\w+)\}/g, (all, k) => k in values ? values[k] : all));
  }
+ own(key, values = {}) {
+  return together((OWN[lang(this._hass)][key] ?? OWN.en[key]).replace(/\{(\w+)\}/g, (all, k) => k in values ? values[k] : all));
+ }
  word(key, values) {
   try { const text = this._hass?.localize?.(PREFIX + key, values); return typeof text === 'string' ? text : ''; } catch (e) { return ''; }
  }
@@ -382,7 +479,7 @@ class OpenThermostatHouse extends OpenThermostatCard {
   if (!this._config) return;
   this.track(); this.refresh();
   // Only a new state of its own entities, language, theme or clock choice redraws; Home Assistant sets hass on every change.
-  const key = [...this.entities().map(id => hass?.states?.[id]), locale(hass), hass?.themes?.darkMode, hass?.locale?.time_format,
+  const key = [...this.entities().map(id => hass?.states?.[id]), locale(hass), darkOf(hass), hass?.locale?.time_format,
    hass?.config?.time_zone];
   if (this._key && key.length === this._key.length && key.every((v, i) => v === this._key[i])) return;
   this._key = key; this.render();
@@ -592,7 +689,8 @@ class OpenThermostatHouse extends OpenThermostatCard {
   const hass = this._hass, config = this._config;
   if (!hass || !config) return;
   const root = this.shadowRoot, focused = root.activeElement?.dataset?.focus;
-  const card = make('ha-card', hass.themes?.darkMode ? {class: 'dark'} : {}), wrap = make('div', {class: 'wrap', role: 'group', 'aria-label': this.t('title')});
+  theme(this, hass);
+  const card = make('ha-card', darkOf(hass) ? {class: 'dark'} : {}), wrap = make('div', {class: 'wrap', role: 'group', 'aria-label': this.t('title')});
   card.append(wrap);
   const room = config.rooms[0] && this.st(config.rooms[0].entity) ? config.rooms[0] : null;
   const roomState = room ? this.st(room.entity) : null, status = this.status();
@@ -608,6 +706,10 @@ class OpenThermostatHouse extends OpenThermostatCard {
    details.addEventListener('toggle', () => { if (details.isConnected) this._open = details.open; });
    wrap.append(details);
   }
+  const house = this.houseFigure();
+  if (house) wrap.append(house);
+  const hint = this.seasonHint();
+  if (hint) wrap.append(hint);
   const figures = this.figures(room, roomState, status);
   if (figures) wrap.append(figures);
   const strip = this.dayStrip();
@@ -629,7 +731,7 @@ class OpenThermostatHouse extends OpenThermostatCard {
   if (boiler) box.append(boiler);
   if (status.problem) {
    // A tap leads to the fix: Repairs (Home Assistant's own navigation: the new path and location-changed). The link
-   // is the icon and the words, with a chevron that says so; the house mode chip beside it is a control of its own.
+   // is the icon and the words, with a chevron that says so (1.4.1: the house mode is a figure of its own).
    Object.assign(main.dataset, {focus: 'problem'});
    main.setAttribute('role', 'link'); main.setAttribute('tabindex', '0');
    main.append(icon('mdi:chevron-right', {class: 'go'}));
@@ -639,15 +741,6 @@ class OpenThermostatHouse extends OpenThermostatCard {
    };
    main.addEventListener('click', go);
    main.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
-  }
-  const mode = this.st(config.mode);
-  if (mode) {
-   const label = this.stateText(mode);
-   const chip = make('button', {class: 'chip', type: 'button', 'data-focus': 'mode', 'aria-label': this.t('mode', {mode: label}),
-    title: this.t('mode', {mode: label})});
-   chip.append(icon('mdi:home-account'), make('span', {}, label));
-   chip.addEventListener('click', () => this.moreInfo(config.mode));
-   box.append(chip);
   }
   return box;
  }
@@ -691,6 +784,75 @@ class OpenThermostatHouse extends OpenThermostatCard {
   for (const f of list.slice(0, 2)) f.classList.add('top');
   grid.append(...list);
   return grid;
+ }
+ // 1.4.1: a row under the band: the house mode large, beside it (under it on a phone) its meaning in one line and the
+ // next planned holiday; a tap opens the house mode (as the band's chip did). Null without the house mode select.
+ houseFigure() {
+  const config = this._config, st = this.st(config.mode);
+  if (!st) return null;
+  const hass = this._hass, a = st.attributes || {}, mode = known(st) ? st.state : null;
+  const box = make('div', {class: 'house', 'data-figure': 'house', 'data-mode': mode, role: 'button', tabindex: '0', 'data-focus': 'mode'});
+  const head = make('div', {class: 'house-mode'}), notes = make('div', {class: 'house-notes'});
+  box.append(head, notes);
+  head.append(make('p', {class: 'label'}, this.own('house_mode')));
+  if (mode === null) head.append(valueOf(null));
+  else {
+   const text = this.stateText(st), name = text && text !== mode ? text : OWN[lang(hass)].modes[mode] || OWN.en.modes[mode] || mode;
+   const value = make('p', {class: 'value mode', 'data-value': ''});
+   value.append(icon(MODE_ICON[mode] || 'mdi:home-account'), make('span', {'data-name': ''}, name));
+   head.append(value);
+  }
+  const deg = value => finite(value) ? value.toLocaleString(locale(hass), {maximumFractionDigits: 1}) : null;
+  const presence = {home: 'house_home', away: 'house_away'}[a.presence];
+  const until = clockMoment(hass, a.until);
+  const means = {auto: () => (presence && this.word('room_reason.state_attributes.presence.state.' + presence)) || this.own('auto_who'),
+   home: () => this.own('home_means'),
+   away: () => deg(a.away_temperature) !== null ? this.own('away_means', {t: deg(a.away_temperature)}) : this.own('away_plain'),
+   holiday: () => until ? this.own('holiday_until', {date: until.replace(/\s/g, NBSP)}) : '',
+   summer: () => this.own('summer_means')}[mode];
+  const line = means ? means() : '';
+  if (line) notes.append(make('p', {class: 'note', 'data-means': ''}, line));
+  // The next planned holiday (E32 rc.4, the select's holidays), by its dates in the house's zone and the viewer's language.
+  const next = (Array.isArray(a.holidays) ? a.holidays : []).find(h => h && Date.parse(h.from) > Date.now() && Number.isFinite(Date.parse(h.until)));
+  if (next && mode !== 'holiday') {
+   const day = iso => { try { return new Date(iso).toLocaleDateString(locale(hass), {day: 'numeric', month: 'short', timeZone: houseZone(hass)}); }
+    catch (e) { return String(iso).slice(0, 10); } };
+   notes.append(make('p', {class: 'note', 'data-holiday': ''},
+    this.own('next_holiday', {from: day(next.from).replace(/\s/g, NBSP), until: day(next.until).replace(/\s/g, NBSP)})));
+  }
+  box.addEventListener('click', () => this.moreInfo(config.mode));
+  box.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.moreInfo(config.mode); } });
+  return box;
+ }
+ // 1.4.1 (HA-SUMMER): the season hint of the house mode select (its season_hint {kind, since_day} while Home Assistant
+ // shows it): the question in one line and ONE text button that answers it, summer mode on, or off to the mode before
+ // it (previous_mode when the select offers it, else Automatic). Switching the mode dismisses the hint in the
+ // integration; there is no "not now" here (the hint goes after a week, or from the phone's notification). Null without.
+ seasonHint() {
+  const config = this._config, st = this.st(config.mode), h = st?.attributes?.season_hint;
+  const kind = h && typeof h === 'object' ? h.kind : null;
+  if (!known(st) || (kind !== 'summer_on' && kind !== 'summer_off')) return null;
+  const a = st.attributes, options = Array.isArray(a.options) ? a.options : null, before = a.previous_mode;
+  const option = kind === 'summer_on' ? 'summer'
+   : typeof before === 'string' && before !== 'summer' && (!options || options.includes(before)) ? before : 'auto';
+  const key = kind + '/' + h.since_day;
+  if (this._hint?.key !== key) this._hint = {key, busy: false, error: ''};
+  const box = make('div', {class: 'hint', role: 'status', 'data-hint': kind});
+  box.append(icon('mdi:white-balance-sunny'), make('p', {class: 'hint-words'}, this.own(kind)));
+  const button = make('button', {type: 'button', class: 'hint-act', 'data-focus': 'hint', 'data-option': option},
+   this.own(kind === 'summer_on' ? 'switch_on' : 'switch_off'));
+  if (this._hint.busy) button.disabled = true;
+  button.addEventListener('click', async () => {
+   const hint = this._hint;
+   if (hint.busy || typeof this._hass?.callService !== 'function') return;
+   hint.busy = true; hint.error = ''; this.render();
+   try { await this._hass.callService('select', 'select_option', {entity_id: config.mode, option}); }
+   catch (e) { hint.error = this.own('mode_failed', {reason: e?.message || String(e)}); }
+   hint.busy = false; this.render();
+  });
+  box.append(button);
+  if (this._hint.error) box.append(make('p', {class: 'hint-error', role: 'alert', 'data-error': ''}, this._hint.error));
+  return box;
  }
  roomFigure(room, st) {
   const hass = this._hass, a = st.attributes || {}, tone = ROOM_TONE[st.state];
@@ -858,7 +1020,7 @@ class OpenThermostatYesterday extends OpenThermostatCard {
   this._hass = hass;
   if (!this._config) return;
   const c = this._config, key = [c.room?.entity, c.starts, c.gas, c.degree_days].map(id => id && hass?.states?.[id])
-   .concat([locale(hass), hass?.themes?.darkMode]);
+   .concat([locale(hass), darkOf(hass)]);
   if (this._key && key.every((v, i) => v === this._key[i])) return;
   this._key = key; this.render();
  }
@@ -872,7 +1034,9 @@ class OpenThermostatYesterday extends OpenThermostatCard {
   // As the sketch: the label small and muted, the value (its unit and words too) 22 px bold; "—" while not known.
   const add = (key, entity, label, text, muted) => {
    const box = make('div', {class: 'figure', 'data-figure': key, 'data-focus': key, role: 'button', tabindex: '0'});
-   box.append(make('p', {class: 'label'}, label), make('p', {class: 'value' + (text === null || muted ? ' unknown' : '')}, text === null ? DASH : text));
+   // A figure not measured: "—", with the words for it as its title and for a screen reader (1.4.1).
+   box.append(make('p', {class: 'label'}, label), make('p', {class: 'value' + (text === null || muted ? ' unknown' : ''),
+    ...(text === null ? {title: this.own('not_measured'), 'aria-label': this.own('not_measured'), 'data-missing': ''} : {})}, text === null ? DASH : text));
    box.addEventListener('click', () => this.moreInfo(entity));
    box.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.moreInfo(entity); } });
    list.push(box);
@@ -907,7 +1071,8 @@ class OpenThermostatYesterday extends OpenThermostatCard {
    plain('gas', c.gas, this.t('yesterday_heating'), value(gas), typeof unit === 'string' ? unit : '');
   }
   if (degrees) plain('degree_days', c.degree_days, this.t('degree_days'), numeric(degrees.attributes?.degree_days));
-  const card = make('ha-card', hass.themes?.darkMode ? {class: 'dark'} : {}), wrap = make('div', {class: 'wrap'});
+  theme(this, hass);
+  const card = make('ha-card', darkOf(hass) ? {class: 'dark'} : {}), wrap = make('div', {class: 'wrap'});
   if (list.length) {
    // Two by two (a pair of pairs), as the sketch; an odd last one across both columns.
    const grid = make('div', {class: 'figures'});

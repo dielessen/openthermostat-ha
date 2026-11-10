@@ -15,6 +15,15 @@ day. Today's figure so far is an attribute (not recorded: it changes all day). A
 only once the E32 reported a value for yesterday (1.0.0rc7; before: yesterday or today, which left
 it "unknown" all through the first day), so firmware or a house without a figure never gets an
 "unknown" entity. All are diagnostic: the Learning view shows them, the device page keeps them aside.
+
+Once it existed it stays (1.4.1): at every later setup it is created again while its registry record
+is there (heating_link.entity_was_there), also on a day without that figure (a room not measured, a
+mild day without gas per degree-day, an E32 that lost the day in a restart, firmware that stopped
+sending the scoreboard). Before 1.4.1 such a day left the record without an entity: "Unavailable",
+"no longer provided" on the room's device. Without a figure the state is unknown, ``day`` the day the
+E32 scored (None without one) and ``reason`` "not_measured"; the last figure is not kept, so no day
+shows another day's figure and the history and statistics have no value for that day (the dashboard
+and the Yesterday card leave an unknown figure out, a room's unknown warm on time reads "no warm-up").
 """
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfTemperature, UnitOfTime
@@ -32,6 +41,8 @@ HOUSE_FIGURES = {"burner_starts_per_heating_hour": ("heating_starts_per_h", 0, 6
 MIN_DEGREE_DAYS = 1.0
 # Heating energy per degree-day (rc.4-rc.6 said kWh; the statistics follow, native_entity_cleanup).
 PER_DEGREE_DAY_UNIT = "kWh/°C·d"
+# The attribute ``reason`` while yesterday has no figure (state unknown, 1.4.1).
+NOT_MEASURED = "not_measured"
 
 
 def scoreboard(summary):
@@ -72,7 +83,7 @@ def house_figure(day, key):
 
 
 class _Scoreboard:
-    """Mixin: the hub's scoreboard while the E32 reports."""
+    """Mixin: the hub's scoreboard while the E32 reports; available while the E32 is online, with or without a figure."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -100,7 +111,7 @@ class ScoreboardRoomSensor(_Scoreboard, RoomEntity, SensorEntity):
 
     @property
     def available(self):
-        return self.hub.fresh and self.room is not None and self.board is not None
+        return self.hub.fresh and self.room is not None
 
     @property
     def native_value(self):
@@ -108,11 +119,12 @@ class ScoreboardRoomSensor(_Scoreboard, RoomEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        board = self.board
-        if board is None:
+        if not self.available:
             return None
-        return {"room_id": self.room_id, "day": day_name(scoreboard_day(board, "yesterday")),
-                "today": room_figure(scoreboard_day(board, "today"), self.room_id, self.key)}
+        board = self.board
+        result = {"room_id": self.room_id, "day": day_name(scoreboard_day(board, "yesterday")),
+                  "today": room_figure(scoreboard_day(board, "today"), self.room_id, self.key)}
+        return _with_reason(result, self.native_value)
 
 
 class ScoreboardHouseSensor(_Scoreboard, HubEntity, SensorEntity):
@@ -146,7 +158,7 @@ class ScoreboardHouseSensor(_Scoreboard, HubEntity, SensorEntity):
 
     @property
     def available(self):
-        return self.board is not None
+        return self.hub.fresh
 
     @property
     def native_value(self):
@@ -154,9 +166,9 @@ class ScoreboardHouseSensor(_Scoreboard, HubEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        board = self.board
-        if board is None:
+        if not self.available:
             return None
+        board = self.board
         yesterday = scoreboard_day(board, "yesterday")
         result = {"day": day_name(yesterday), "today": house_figure(scoreboard_day(board, "today"), self.key)}
         if self.key == "burner_starts_per_heating_hour":
@@ -164,22 +176,28 @@ class ScoreboardHouseSensor(_Scoreboard, HubEntity, SensorEntity):
         elif self.key == "gas_per_degree_day":
             result["heating_kwh"] = house_figure(yesterday, "heating_gas_yesterday")
             result["degree_days"] = number((yesterday or {}).get("degree_days"), 0, 100)
-        return result
+        return _with_reason(result, self.native_value)
+
+
+def _with_reason(attributes, value):
+    """The attributes, with ``reason`` "not_measured" while yesterday has no figure (the state unknown)."""
+    return attributes if value is not None else {**attributes, "reason": NOT_MEASURED}
 
 
 def wanted_scoreboard(hub):
-    """(key, factory) of every scoreboard figure the E32 reported a value for yesterday (the state).
+    """(key, factory) of every scoreboard figure the E32 reported a value for yesterday (the state), and of every
+    one that existed before (its registry record is there, heating_link.entity_was_there), with or without a value.
 
-    Today's figure alone never creates one: it would read "unknown" until midnight (today is an attribute).
+    Today's figure alone never creates one: it would read "unknown" until midnight (today is an attribute). A
+    house figure that existed is created at once at setup (unavailable until the E32 reports), a room's once the
+    E32 reports the room.
     """
-    board = scoreboard(hub.summary) if hub.fresh else None
-    if board is None:
-        return
-    yesterday = scoreboard_day(board, "yesterday")
+    from .heating_link import entity_was_there
+    yesterday = scoreboard_day(scoreboard(hub.summary) if hub.fresh else None, "yesterday")
     for key in HOUSE_FIGURES:
-        if house_figure(yesterday, key) is not None:
+        if house_figure(yesterday, key) is not None or entity_was_there(hub, f"hub_{key}"):
             yield ("scoreboard", key), lambda key=key: ScoreboardHouseSensor(hub, key)
     for room_id, room in hub.rooms.items():
         for key in ROOM_FIGURES:
-            if room_figure(yesterday, room_id, key) is not None:
+            if room_figure(yesterday, room_id, key) is not None or entity_was_there(hub, f"e32_room_{room_id}_{key}"):
                 yield ("room", room_id, key), lambda room=room, key=key: ScoreboardRoomSensor(hub, room, key)

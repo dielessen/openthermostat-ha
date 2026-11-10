@@ -97,7 +97,7 @@ SOURCES = ["rule", "curve", "learned", "optimum_start", "plan"]  # "plan": the E
 GAS_STATUSES = ["no_meter", "collecting", "calibrated", "meter_stale"]
 # The Learning view's cards (E32 rc.5), the sixth card module (week_planner.card_modules), versioned with the
 # manifest like the other card URLs: "Water temperature by outdoor temperature" and what the E32 knows (a ring).
-CURVE_CARD_URL = "/open_thermostat/heating-curve-card-1.4.0.js"
+CURVE_CARD_URL = "/open_thermostat/heating-curve-card-1.4.1.js"
 CURVE_CARD_TYPE = "custom:openthermostat-heating-curve"
 KNOWLEDGE_CARD_TYPE = "custom:openthermostat-knowledge"
 # WeatherCurve (src/control/WeatherCurve.h): the standard slope follows the water temperature in hard frost
@@ -895,7 +895,10 @@ def wanted_sensors(hub):
         yield ("gas", "calibration"), lambda: GasCalibrationSensor(hub)
         yield ("gas", "full_power"), lambda: BoilerFullPowerSensor(hub)
     last = (summary_part(hub, "night_gas") or {}).get("last")
-    if type(last) is dict and last.get("status") == "measured":  # only with a gas meter
+    # Only with a gas meter, from the first measured night; then it stays (unknown after a night without a
+    # measurement, 1.4.1: never a record without its entity, heating_link.entity_was_there).
+    from .heating_link import entity_was_there
+    if (type(last) is dict and last.get("status") == "measured") or entity_was_there(hub, "night_heating_gas"):
         yield ("night_gas",), lambda: NightGasSensor(hub)
 
 

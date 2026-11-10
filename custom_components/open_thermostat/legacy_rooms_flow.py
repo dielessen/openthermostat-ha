@@ -19,6 +19,43 @@ from .e32_link import legacy_rooms_pending, legacy_zones, issue_id
 PROGRESS = "legacy_rooms_remove"
 
 
+async def async_read_migration(hass, entry, zones):
+    """What removing the older rooms does to the E32 rooms (legacy_room_migration), read from the E32 plan now; None
+    when the plan cannot be read. Nothing is written: the user confirms its signature first."""
+    from .legacy_room_migration import async_read_plan, plan_migration
+    plan = await async_read_plan(hass, entry)
+    if plan is None:
+        return None
+    _, migration = plan_migration(hass, entry, plan, zones)
+    return migration
+
+
+def start_removal(hass, entry, shown):
+    """Remove the older rooms and link the E32 again, refused when the outcome differs from ``shown`` (the confirmed
+    Migration.signature(), None without older rooms): the task of Configure's and Repairs' step and of the panel."""
+    from .controller_setup_flow import CONTROLLER_ADDRESS, CONTROLLER_PASSWORD, async_link_room_plan
+    return hass.async_create_task(async_link_room_plan(
+        hass, entry, entry.data[CONTROLLER_ADDRESS], entry.data[CONTROLLER_PASSWORD],
+        remove_legacy_rooms=True, confirmed_migration=shown), "OpenThermostat remove old rooms")
+
+
+def removal_failure(err):
+    """A failed removal's code (before a flow maps it to its own error key)."""
+    if isinstance(err, ControllerProvisioningError):
+        return ("controller_partial_connection" if err.device_may_have_changed and str(err) in (
+            "controller_unreachable", "controller_connection_failed") else str(err))
+    if isinstance(err, ControllerLinkError):
+        return str(err)
+    return "controller_connection_failed"
+
+
+def removal_done(hass, entry):
+    """After a removal: the Repairs item about the older rooms goes."""
+    from homeassistant.helpers import issue_registry as ir
+    from .const import DOMAIN
+    ir.async_delete_issue(hass, DOMAIN, issue_id(entry))
+
+
 class LegacyRoomsSteps:
     """legacy_rooms -> legacy_rooms_removing (progress) -> legacy_rooms_done."""
 
@@ -30,7 +67,6 @@ class LegacyRoomsSteps:
         return code
 
     async def async_step_legacy_rooms(self, user_input=None):
-        from .controller_setup_flow import CONTROLLER_ADDRESS, CONTROLLER_PASSWORD
         entry = self._legacy_entry()
         if entry is None:
             return self.async_abort(reason="legacy_rooms_none")
@@ -54,20 +90,15 @@ class LegacyRoomsSteps:
                 errors["base"] = self._legacy_error(problem)
         shown = getattr(self, "_legacy_shown", None)
         if user_input is not None and (shown is not None or not zones):
-            from .controller_setup_flow import async_link_room_plan
-            self._legacy_task = self.hass.async_create_task(async_link_room_plan(
-                self.hass, entry, entry.data[CONTROLLER_ADDRESS], entry.data[CONTROLLER_PASSWORD],
-                remove_legacy_rooms=True, confirmed_migration=shown), "OpenThermostat remove old rooms")
+            self._legacy_task = start_removal(self.hass, entry, shown)
             self._legacy_shown = None  # a new form after a failure reads the plan again
             self._legacy_retry = False
             return await self.async_step_legacy_rooms_removing()
         # What happens to the E32 rooms: read the plan now, write it only after the user confirmed.
         migration = self._legacy_shown = None
         if zones:
-            from .legacy_room_migration import async_read_plan, plan_migration
-            plan = await async_read_plan(self.hass, entry)
-            if plan is not None:
-                _, migration = plan_migration(self.hass, entry, plan, zones)
+            migration = await async_read_migration(self.hass, entry, zones)
+            if migration is not None:
                 self._legacy_shown = migration.signature()
             elif user_input is not None:
                 errors["base"] = self._legacy_error("legacy_rooms_plan_unreadable")
@@ -95,20 +126,10 @@ class LegacyRoomsSteps:
             self._legacy_result = task.result()
         except asyncio.CancelledError:
             return self.async_abort(reason="legacy_rooms_cancelled")
-        except ControllerProvisioningError as err:
-            self._legacy_failure = self._legacy_error(
-                "controller_partial_connection" if err.device_may_have_changed and str(err) in (
-                    "controller_unreachable", "controller_connection_failed") else str(err))
+        except Exception as err:  # noqa: BLE001 - every failure becomes a named form error (removal_failure)
+            self._legacy_failure = self._legacy_error(removal_failure(err))
             return self.async_show_progress_done(next_step_id="legacy_rooms")
-        except ControllerLinkError as err:
-            self._legacy_failure = self._legacy_error(str(err))
-            return self.async_show_progress_done(next_step_id="legacy_rooms")
-        except Exception:
-            self._legacy_failure = self._legacy_error("controller_connection_failed")
-            return self.async_show_progress_done(next_step_id="legacy_rooms")
-        from homeassistant.helpers import issue_registry as ir
-        from .const import DOMAIN
-        ir.async_delete_issue(self.hass, DOMAIN, issue_id(self._legacy_entry()))
+        removal_done(self.hass, self._legacy_entry())
         return self.async_show_progress_done(next_step_id="legacy_rooms_done")
 
     async def async_step_legacy_rooms_done(self, user_input=None):

@@ -43,7 +43,13 @@ and the maintenance:
   raised); once per episode, over when a backup succeeds again;
 * ``plan_ready`` (1.1.1 stage B): the E32 is ready to plan the heating and waits for the owner's one
   confirmation (heating_plan.py, its Repairs item); once per readiness: after a demotion the E32 checks again,
-  and it is a new message when it is ready again.
+  and it is a new message when it is ready again;
+* ``season`` (1.4.1): the E32's season hint (season_hint.py): "Five days above 17 °C outside on average. Switch
+  summer mode on?" or "It is getting colder. Switch summer mode off?"; once per hint (its ``since_day``), never
+  again for the same one, gone once answered or after seven days. On a Home Assistant app with the answers as
+  actions (Switch summer mode on / off, Not now); elsewhere the sentence alone. Never a Repairs item. In the
+  Maintenance group; an installation whose house messages were on before 1.4.1 gets it ticked once
+  (settings_notifications.add_season).
 
 The heating problem sensor's tracker (heating_problem.ProblemTracker) decides the E32 silence, the waiting
 confirmation, the low pressure and the silent sensor, with its own hold times, so a hiccup never notifies;
@@ -71,10 +77,12 @@ from .heating_problem import ACTIVE_WARNING_SECONDS
 _LOGGER = logging.getLogger(__name__)
 
 CONF_NOTIFICATIONS = "notifications"
+# Entry options: the house message "season" (1.4.1) was offered or added once (settings_notifications.add_season).
+SEASON_ADDED = "notifications_season_added"
 EVENT = "open_thermostat_notification"
 ROOM_KINDS = ("window", "cold", "sensor", "battery")
 HOUSE_PROBLEMS = ("boiler_fault", "e32_offline", "awaiting_confirmation", "frost", "pressure_low")
-HOUSE_MAINTENANCE = ("maintenance", "update", "backup", "plan_ready")
+HOUSE_MAINTENANCE = ("maintenance", "update", "backup", "plan_ready", "season")
 HOUSE_KINDS = HOUSE_PROBLEMS + HOUSE_MAINTENANCE
 # Message kinds that follow the tick of another kind (its key's first part -> the tick).
 FOLLOWS = {"e32_back": "e32_offline", "update_ha": "update"}
@@ -116,6 +124,7 @@ TITLE = {
         "update_ha": "New OpenThermostat version {version}",
         "backup": "No recent backup of the E32 settings",
         "plan_ready": "The E32 is ready to plan",
+        "season": "Summer mode",
     },
     "nl": {
         "window": "Raam open in {room}",
@@ -131,6 +140,7 @@ TITLE = {
         "update_ha": "Nieuwe versie van OpenThermostat {version}",
         "backup": "Geen recente back-up van de E32-instellingen",
         "plan_ready": "De E32 is klaar om te plannen",
+        "season": "Zomerstand",
     },
     "pl": {
         "window": "{room}: otwarte okno",
@@ -146,6 +156,7 @@ TITLE = {
         "update_ha": "Nowa wersja OpenThermostat {version}",
         "backup": "Brak aktualnej kopii ustawień E32",
         "plan_ready": "E32 jest gotowy do planowania",
+        "season": "Tryb letni",
     },
 }
 TEXT = {
@@ -174,6 +185,8 @@ TEXT = {
                   "still right; then press Back up E32 settings now on the E32 device.",
         "plan_ready": "The E32's predictions for {room} have been good for a week. Open Settings > Repairs to let it "
                       "plan the heating, or leave it as it is.",
+        "season_on": "Five days above 17 °C outside on average. Switch summer mode on?",
+        "season_off": "It is getting colder. Switch summer mode off?",
     },
     "nl": {
         "window": "In {room} staat een raam open, dus de verwarming daar is gepauzeerd. Die gaat weer aan zodra "
@@ -200,6 +213,8 @@ TEXT = {
                   "in Home Assistant nog klopt; druk daarna op Nu een back-up van de E32 maken op het E32-apparaat.",
         "plan_ready": "De voorspellingen van de E32 voor {room} zijn al een week goed. Open Instellingen > Reparaties "
                       "om hem de verwarming te laten plannen, of laat het zoals het is.",
+        "season_on": "Al vijf dagen gemiddeld boven 17 °C buiten. Zomerstand aanzetten?",
+        "season_off": "Het wordt kouder. Zomerstand uitzetten?",
     },
     "pl": {
         "window": "{room}: otwarte jest okno, więc ogrzewanie w tym pomieszczeniu jest wstrzymane. Włączy się "
@@ -226,6 +241,8 @@ TEXT = {
                   "jest nadal poprawne; potem naciśnij Utwórz teraz kopię ustawień E32 na urządzeniu E32.",
         "plan_ready": "Prognozy E32 dla pomieszczenia {room} są dobre od tygodnia. Otwórz Ustawienia > Naprawy, aby "
                       "pozwolić mu planować ogrzewanie, albo zostaw to tak, jak jest.",
+        "season_on": "Od pięciu dni średnio powyżej 17 °C na zewnątrz. Włączyć tryb letni?",
+        "season_off": "Robi się chłodniej. Wyłączyć tryb letni?",
     },
 }
 # The title of a persistent notification (no phone chosen): the product name first, as the insight notes do.
@@ -306,11 +323,12 @@ def with_phone(settings, person, service):
 
 @callback
 def save_notifications(hass, entry, settings):
-    """Store the settings without a reload; the notifier reads them on its next check."""
+    """Store the settings without a reload; the notifier reads them on its next check. A list chosen from 1.4.1 on
+    offers the message ``season``, so it carries the marker SEASON_ADDED: the one-time migration never touches it."""
     from .energy_input import ENERGY_ONLY_UPDATE
-    options = {**entry.options, CONF_NOTIFICATIONS: settings}
-    if options == dict(entry.options):
+    if (entry.options or {}).get(CONF_NOTIFICATIONS) == settings:
         return False
+    options = {**entry.options, CONF_NOTIFICATIONS: settings, SEASON_ADDED: True}
     state = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if state is not None:
         state[ENERGY_ONLY_UPDATE] = dict(options)  # the same no-reload marker as the comfort settings
@@ -498,6 +516,12 @@ class NotificationRules:
                 found[key] = {"version": version, "episode": version}
         if type(house.get("backup")) is dict:
             found["backup:"] = dict(house["backup"])
+        hint = house.get("season")
+        if type(hint) is dict:
+            # Once per hint (its since_day): open while it holds, never again once its message went out and ended.
+            episode = f"{hint['kind']}:{hint['since_day']}"
+            if "season:" in self.open or self.announced.get("season:") != episode:
+                found["season:"] = {"hint": hint["kind"], "since_day": hint["since_day"], "episode": episode}
         return found
 
     def _held(self, key, on, now, seconds):
@@ -590,7 +614,7 @@ class NotificationRules:
         episode = (values or {}).get("episode")
         if episode is not None:
             self.episodes[key] = episode
-            if key.split(":", 1)[0] in ("update", "update_ha"):
+            if key.split(":", 1)[0] in ("update", "update_ha", "season"):
                 self.announced[key] = episode
 
     def reset(self):
@@ -632,6 +656,8 @@ def message(key, values, lang, names):
               "code": values.get("code", ""), "meaning": (values.get("meaning") or "").strip(),
               "version": values.get("version", ""), "last": values.get("last") or "?"}
     text = "battery_valve" if kind == "battery" and values.get("device") == "valve" else kind
+    if kind == "season":
+        text = "season_off" if values.get("hint") == "summer_off" else "season_on"
     body = TEXT[lang][text].format(**fields)
     if kind == "boiler_fault":
         body = body if body.endswith((".", "!", "?")) else body.rstrip(":").rstrip() + "."
@@ -687,7 +713,15 @@ class Notifier:
 
     def _house(self):
         """What Home Assistant knows of the house's maintenance (NotificationRules.found ``house``)."""
-        return {"maintenance": self._maintenance(), "updates": self._updates(), "backup": self._backup()}
+        return {"maintenance": self._maintenance(), "updates": self._updates(), "backup": self._backup(),
+                "season": self._season()}
+
+    def _season(self):
+        """The E32's season hint while Home Assistant shows it (season_hint.shown_hint), or None."""
+        from .e32_house import house_away
+        from .season_hint import shown_hint
+        away = house_away(self.hub)
+        return shown_hint(self.entry, away, self.local().date()) if away is not None else None
 
     def _maintenance(self):
         from homeassistant.helpers import entity_registry as er
@@ -751,11 +785,15 @@ class Notifier:
             people, services, persistent = chosen
             title, text = message(key, values, lang, names)
             self.rules.done(key, wall, values)
-            self._send(key, names.get(room_id) or room_id, title, text, people, services, persistent)
+            data = None
+            if kind == "season":  # the answers as actions on a Home Assistant app (season_hint.listen)
+                from .season_hint import notification_data
+                data = notification_data(self.entry.entry_id, values, lang)
+            self._send(key, names.get(room_id) or room_id, title, text, people, services, persistent, data)
         self._save()
 
     @callback
-    def _send(self, key, room, title, text, people, services, persistent):
+    def _send(self, key, room, title, text, people, services, persistent, data=None):
         kind, room_id = key.split(":", 1)
         self.hass.bus.async_fire(EVENT, {
             "entry_id": self.entry.entry_id, "kind": kind, "room_id": room_id or None, "room": room or None,
@@ -764,14 +802,16 @@ class Notifier:
             from homeassistant.components import persistent_notification
             persistent_notification.async_dismiss(self.hass, notification_id(self.entry.entry_id, "e32_offline:"))
             persistent = False
-        self.hass.async_create_task(self._deliver(key, title, text, services, persistent),
+        self.hass.async_create_task(self._deliver(key, title, text, services, persistent, data),
                                     f"{DOMAIN} notification {kind}")
 
-    async def _deliver(self, key, title, text, services, persistent):
+    async def _deliver(self, key, title, text, services, persistent, data=None):
         for service in services:
+            payload = {"title": title, "message": text}
+            if data and service.startswith("mobile_app_"):  # only the Home Assistant app shows actions
+                payload["data"] = data
             try:
-                await self.hass.services.async_call("notify", service, {"title": title, "message": text},
-                                                    blocking=True)
+                await self.hass.services.async_call("notify", service, payload, blocking=True)
             except Exception as err:  # noqa: BLE001 - a phone that is gone never stops the others
                 _LOGGER.warning("OpenThermostat: the notification to notify.%s failed: %s", service, err)
                 persistent = True
@@ -796,11 +836,15 @@ def _store(hass, entry_id):
 async def async_setup_notifications(hass, entry, hub):
     """Product entries: the notifier, which reads its settings (Configure → Notifications) on every check."""
     from homeassistant.helpers.event import async_track_time_interval
+    from .settings_notifications import add_season
+    add_season(hass, entry)  # 1.4.1, once: house messages that are on also get the summer-mode question
     store = _store(hass, entry.entry_id)
     notifier = Notifier(hass, entry, hub, store, await store.async_load())
     hass.data[DOMAIN][entry.entry_id]["notifier"] = notifier
     entry.async_on_unload(hub.add_listener(notifier.evaluate))
     entry.async_on_unload(async_track_time_interval(hass, notifier.evaluate, CHECK_INTERVAL))
+    from .season_hint import listen
+    entry.async_on_unload(listen(hass, entry))  # the answers to the season hint from a phone
     notifier.evaluate()
     return notifier
 

@@ -67,6 +67,163 @@ def refusal(error):
     return REFUSALS.get(error, "boiler_setting_refused")
 
 
+# -- one back end for Configure and the settings panel (1.4.1, settings_heating item "boiler") --------------------
+#
+# The steps below and the panel's actions call these functions, so the same input sends the same E32 requests and
+# stores the same thing. They raise ControllerLinkError (BoilerSettingsRejected for a named refusal of the E32).
+
+# The state of boiler settings in one word (the menu's "Changing boiler settings: ..." line, texts "state_<key>").
+STATES = ("unavailable", "blocked", "busy", "off", "not_now", "on")
+
+
+async def async_read_document(link):
+    """The settings document, read on one short sign-in."""
+    from .controller_link import ControllerLinkError
+    from .e32_system import async_e32_call
+    doc = decode_document(await async_e32_call(link, lambda c: c.async_boiler_settings(), write=False))
+    if doc is None:
+        raise ControllerLinkError("controller_response_invalid")
+    return doc
+
+
+def state_of(doc):
+    """unavailable (not on this E32), blocked (a put-back to check), busy (a change runs), off, not_now or on."""
+    if not doc["compiled"]:
+        return "unavailable"
+    if doc["unresolved"]:
+        return "blocked"
+    if doc["transaction"] is not None:
+        return "busy"
+    if not doc["persistent"]:
+        return "off"
+    if doc["reason"] not in ("ready", ""):
+        return "not_now"
+    return "on"
+
+
+def candidates(doc, advanced):
+    """The settings that can be chosen: not unsupported by this boiler, the installer ones only under Advanced."""
+    settings = (doc or {}).get("settings", {})
+    return [s for s, row in ROWS.items() if s in settings and settings[s]["verification"] != "unsupported"
+            and (advanced or row.level == "user")]
+
+
+def value_range(item, advanced):
+    """(lowest, highest) a value may be: the everyday range, or under Advanced the boiler's whole range."""
+    return (item["minimum"], item["maximum"]) if advanced else (item["user_minimum"], item["user_maximum"])
+
+
+def value_outcome(setting, item, advanced, raw):
+    """(value, what next) of a new value: out_of_range, unchanged, switch_off (ask first) or write."""
+    low, high = value_range(item, advanced)
+    value = _whole(raw)
+    if value is None or not low <= value <= high:
+        return value, "out_of_range"
+    if value == item["value"]:
+        return value, "unchanged"
+    if setting in SWITCHES_OFF_WARNED and value == 0:
+        return value, "switch_off"
+    return value, "write"
+
+
+async def async_switch(link, enabled):
+    """The owner's switch: allowed (with the risk accepted) or stopped."""
+    from .controller_link import BOILER_SETTINGS_PERSISTENT
+    from .e32_system import async_e32_call
+    body = {"enabled": True, "risk_accepted": True} if enabled else {"enabled": False}
+    await async_e32_call(link, lambda c: c.async_boiler_settings_post(BOILER_SETTINGS_PERSISTENT, body), write=True)
+
+
+async def async_write(link, setting, value, advanced):
+    """Write one value: (the E32's document after it, the watcher's token or None); (None, None) when the E32 asked
+    for a watch without giving the token (another change runs)."""
+    from .controller_link import BOILER_SETTINGS_WRITE
+    from .e32_system import async_e32_call
+    body = {"id": setting, "value": value, **({"advanced": True} if advanced else {})}
+
+    async def write(client):
+        call = SettingsCall(client)
+        _, answer, _ = await call.async_post(BOILER_SETTINGS_WRITE, body)
+        if answer != "attendance_required":
+            return await call.async_until(settled_for(setting)), None
+        if not call.token:
+            return None, None
+        # The E32 wants the same request with its token within 60 s, on the same sign-in: this form watches.
+        await call.async_post(BOILER_SETTINGS_WRITE, {**body, "attended_token": call.token})
+        return await call.async_until(watching_for(setting)), call.token
+
+    return await async_e32_call(link, write, write=True)  # signs out after the readback
+
+
+def after_write(hass, entry, doc, token, setting):
+    """(busy | watch | pending | done, the E32's result when done) after async_write; keeps the watch's token."""
+    if doc is None:
+        return "busy", None
+    if not settled_for(setting)(doc):
+        # Watched, or still busy: the E32 goes on by itself; Home Assistant keeps only the token.
+        remember_watch(hass, entry, doc, token)
+        if doc["phase"] == "watching" and token:
+            return "watch", None
+        return "pending", None
+    return "done", result_of(doc, setting)
+
+
+async def async_confirm(link, watch, keep):
+    """Keep or put back the watched change: one new sign-in with the token; the E32's document after it."""
+    from .controller_link import BOILER_SETTINGS_CONFIRM, BoilerSettingsRejected
+    from .e32_system import async_e32_call
+    setting = watch.setting
+
+    async def confirm(client):
+        call = SettingsCall(client)
+        try:
+            await call.async_post(BOILER_SETTINGS_CONFIRM, {"attended_token": watch.token, "keep": keep})
+        except BoilerSettingsRejected:
+            await call.async_read()  # it ended meanwhile (the window, a switch-off): say how
+        return await call.async_until(settled_for(setting))
+
+    return await async_e32_call(link, confirm, write=True)
+
+
+def after_confirm(hass, entry, doc, setting):
+    """The E32's result after async_confirm, or None while it still works on it; a finished watch is forgotten."""
+    if not settled_for(setting)(doc):
+        return None
+    watch_of(hass, entry, doc)  # the watch is over: forget its token
+    return result_of(doc, setting) or doc.get("last")
+
+
+def result_reason(hass, entry, last):
+    """The reason key of the E32's result (RESULTS; none yet: boiler_setting_pending); a failed put-back raises the
+    Repair at once (the telemetry follows)."""
+    reason = RESULTS.get((last or {}).get("result"), "boiler_setting_pending")
+    if reason == "boiler_setting_failed":
+        state = boiler_settings_state(hass, entry)
+        if state is not None:
+            state.sync_failure(True, last)
+    return reason
+
+
+def result_values(last, setting, value):
+    """(setting, value, before) a result speaks of: the E32's own when it names one, else what was asked."""
+    if last is not None and last.get("id") in ROWS:
+        setting = last["id"]
+    return setting, (last or {}).get("requested", value), (last or {}).get("before")
+
+
+async def async_acknowledge(link):
+    """The owner checked the boiler after a put-back that failed: the E32 may write again. Already cleared (a
+    restart put it back) counts as done."""
+    from .controller_link import BOILER_SETTINGS_CONFIRM, BoilerSettingsRejected
+    from .e32_system import async_e32_call
+    try:
+        await async_e32_call(link, lambda c: c.async_boiler_settings_post(
+            BOILER_SETTINGS_CONFIRM, {"acknowledge_failure": True}), write=True)
+    except BoilerSettingsRejected as err:
+        if err.error != "nothing_to_acknowledge":
+            raise
+
+
 class BoilerSettingsSteps:
     """Mixin for the product options flow: Heating and boiler → Boiler settings."""
 
@@ -98,12 +255,7 @@ class BoilerSettingsSteps:
 
     async def _bs_read(self):
         """The settings document, read on one short sign-in."""
-        from .controller_link import ControllerLinkError
-        from .e32_system import async_e32_call
-        doc = decode_document(await async_e32_call(self._bs_link(), lambda c: c.async_boiler_settings(), write=False))
-        if doc is None:
-            raise ControllerLinkError("controller_response_invalid")
-        return doc
+        return await async_read_document(self._bs_link())
 
     # -- the menu --------------------------------------------------------------------------------------------
 
@@ -127,18 +279,12 @@ class BoilerSettingsSteps:
 
     @staticmethod
     def _bs_state(texts, doc):
-        transaction = doc["transaction"]
-        if not doc["compiled"]:
-            return texts["state_unavailable"]
-        if doc["unresolved"]:
-            return texts["state_blocked"]
-        if transaction is not None:
-            return texts["state_busy"].format(setting=setting_name(texts, transaction["id"]))
-        if not doc["persistent"]:
-            return texts["state_off"]
-        if doc["reason"] not in ("ready", ""):
-            return texts["state_not_now"]
-        return texts["state_on"].format(used=doc["writes_today"], cap=doc["daily_cap"])
+        state = state_of(doc)
+        if state == "busy":
+            return texts["state_busy"].format(setting=setting_name(texts, doc["transaction"]["id"]))
+        if state == "on":
+            return texts["state_on"].format(used=doc["writes_today"], cap=doc["daily_cap"])
+        return texts["state_" + state]
 
     @staticmethod
     def _bs_list(texts, doc):
@@ -181,15 +327,12 @@ class BoilerSettingsSteps:
                                     description_placeholders=placeholders, data_schema=vol.Schema({}))
 
     async def _bs_switch(self, enabled, errors, placeholders):
-        from .controller_link import BOILER_SETTINGS_PERSISTENT, BoilerSettingsRejected, ControllerLinkError
-        from .e32_system import async_e32_call
+        from .controller_link import BoilerSettingsRejected, ControllerLinkError
         link = self._bs_link()
         if link is None:
             return self.async_abort(reason="e32_rooms_unavailable")
-        body = {"enabled": True, "risk_accepted": True} if enabled else {"enabled": False}
         try:
-            await async_e32_call(link, lambda c: c.async_boiler_settings_post(BOILER_SETTINGS_PERSISTENT, body),
-                                 write=True)
+            await async_switch(link, enabled)
         except BoilerSettingsRejected as err:
             errors["base"], placeholders["error"] = refusal(err.error), err.error
             return None
@@ -203,9 +346,7 @@ class BoilerSettingsSteps:
     # -- choosing a setting and its value --------------------------------------------------------------------
 
     def _bs_candidates(self, advanced):
-        settings = (self._bs_doc or {}).get("settings", {})
-        return [s for s, row in ROWS.items() if s in settings and settings[s]["verification"] != "unsupported"
-                and (advanced or row.level == "user")]
+        return candidates(self._bs_doc, advanced)
 
     def _bs_options(self, texts, advanced):
         settings = self._bs_doc["settings"]
@@ -250,8 +391,7 @@ class BoilerSettingsSteps:
             return await self.async_step_boiler_settings()
         texts = await self._bs_texts()
         item, row = self._bs_doc["settings"][setting], ROWS[setting]
-        low, high = ((item["minimum"], item["maximum"]) if self._bs_advanced
-                     else (item["user_minimum"], item["user_maximum"]))
+        low, high = value_range(item, self._bs_advanced)
         current = item["value"]
         verified = item["verification"] == "verified"
         placeholders = {"setting": setting_name(texts, setting), "current": value_text(texts, setting, current),
@@ -259,15 +399,15 @@ class BoilerSettingsSteps:
                         "verification": texts["how_verified" if verified else "how_watched"], "error": ""}
         errors = {}
         if user_input is not None:
-            value = _whole(user_input.get("value"))
-            if value is None or not low <= value <= high:
+            value, outcome = value_outcome(setting, item, self._bs_advanced, user_input.get("value"))
+            if outcome == "out_of_range":
                 errors["value"] = "boiler_setting_out_of_range"
-            elif value == current:
+            elif outcome == "unchanged":
                 return self.async_abort(reason="boiler_setting_unchanged", description_placeholders={
                     "setting": placeholders["setting"], "value": value_text(texts, setting, value)})
             else:
                 self._bs_value = value
-                if setting in SWITCHES_OFF_WARNED and value == 0:
+                if outcome == "switch_off":
                     return await self.async_step_boiler_settings_off()
                 result = await self._bs_start(errors, placeholders)
                 if result is not None:
@@ -305,43 +445,26 @@ class BoilerSettingsSteps:
 
     async def _bs_start(self, errors, placeholders):
         """Write the chosen value; the watch, the result or (None) a form error."""
-        from .controller_link import BOILER_SETTINGS_WRITE, BoilerSettingsRejected, ControllerLinkError
-        from .e32_system import async_e32_call
+        from .controller_link import BoilerSettingsRejected, ControllerLinkError
         link = self._bs_link()
         if link is None:
             return self.async_abort(reason="e32_rooms_unavailable")
         setting = self._bs_setting
-        body = {"id": setting, "value": self._bs_value, **({"advanced": True} if self._bs_advanced else {})}
-
-        async def write(client):
-            call = SettingsCall(client)
-            _, answer, _ = await call.async_post(BOILER_SETTINGS_WRITE, body)
-            if answer != "attendance_required":
-                return await call.async_until(settled_for(setting)), None
-            if not call.token:
-                return None, None
-            # The E32 wants the same request with its token within 60 s, on the same sign-in: this form watches.
-            await call.async_post(BOILER_SETTINGS_WRITE, {**body, "attended_token": call.token})
-            return await call.async_until(watching_for(setting)), call.token
-
         try:
-            doc, token = await async_e32_call(link, write, write=True)  # signs out after the readback
+            doc, token = await async_write(link, setting, self._bs_value, self._bs_advanced)
         except BoilerSettingsRejected as err:
             errors["base"], placeholders["error"] = refusal(err.error), err.error
             return None
         except ControllerLinkError as err:
             return self._bs_failure(err, errors, placeholders)
-        if doc is None:
+        outcome, last = after_write(self.hass, self.config_entry, doc, token, setting)
+        if outcome == "busy":
             errors["base"] = "boiler_setting_busy"
             return None
         self._bs_doc = doc
-        if not settled_for(setting)(doc):
-            # Watched, or still busy: the E32 goes on by itself; Home Assistant keeps only the token.
-            remember_watch(self.hass, self.config_entry, doc, token)
-            if doc["phase"] == "watching" and token:
-                return await self.async_step_boiler_settings_watch()
-            return await self._bs_result(None, setting)
-        return await self._bs_result(result_of(doc, setting), setting)
+        if outcome == "watch":
+            return await self.async_step_boiler_settings_watch()
+        return await self._bs_result(last, setting)
 
     async def async_step_boiler_settings_watch(self, user_input=None):
         watch = watch_of(self.hass, self.config_entry, self._bs_doc)
@@ -367,43 +490,24 @@ class BoilerSettingsSteps:
 
     async def _bs_confirm(self, keep):
         """Keep or put back the watched change: one new sign-in with the token, then the E32's result."""
-        from .controller_link import BOILER_SETTINGS_CONFIRM, BoilerSettingsRejected, ControllerLinkError
-        from .e32_system import async_e32_call
+        from .controller_link import ControllerLinkError
         watch = watch_of(self.hass, self.config_entry)
         if watch is None:
             return await self.async_step_boiler_settings()
         setting = watch.setting
-
-        async def confirm(client):
-            call = SettingsCall(client)
-            try:
-                await call.async_post(BOILER_SETTINGS_CONFIRM, {"attended_token": watch.token, "keep": keep})
-            except BoilerSettingsRejected:
-                await call.async_read()  # it ended meanwhile (the window, a switch-off): say how
-            return await call.async_until(settled_for(setting))
-
         try:
-            doc = await async_e32_call(self._bs_link(), confirm, write=True)
+            doc = await async_confirm(self._bs_link(), watch, keep)
         except ControllerLinkError as err:
             return self._bs_failure(err)
         self._bs_doc = doc
-        if not settled_for(setting)(doc):
-            return await self._bs_result(None, setting)
-        watch_of(self.hass, self.config_entry, doc)  # the watch is over: forget its token
-        return await self._bs_result(result_of(doc, setting) or doc.get("last"), setting)
+        return await self._bs_result(after_confirm(self.hass, self.config_entry, doc, setting), setting)
 
     async def _bs_result(self, last, setting):
         texts = await self._bs_texts()
-        reason = RESULTS.get((last or {}).get("result"), "boiler_setting_pending")
-        if last is not None and last.get("id") in ROWS:
-            setting = last["id"]
-        placeholders = {"setting": setting_name(texts, setting),
-                        "value": value_text(texts, setting, (last or {}).get("requested", self._bs_value)),
-                        "before": value_text(texts, setting, (last or {}).get("before"))}
-        if reason == "boiler_setting_failed":
-            state = boiler_settings_state(self.hass, self.config_entry)
-            if state is not None:
-                state.sync_failure(True, last)  # the Repair at once (the telemetry follows)
+        reason = result_reason(self.hass, self.config_entry, last)  # failed: the Repair at once
+        setting, value, before = result_values(last, setting, self._bs_value)
+        placeholders = {"setting": setting_name(texts, setting), "value": value_text(texts, setting, value),
+                        "before": value_text(texts, setting, before)}
         return self.async_abort(reason=reason, description_placeholders=placeholders)
 
 
@@ -427,8 +531,8 @@ class BoilerSettingFailedRepairFlow(RepairsFlow):
         return await self.async_step_boiler_setting_checked()
 
     async def async_step_boiler_setting_checked(self, user_input=None):
-        from .controller_link import BOILER_SETTINGS_CONFIRM, BoilerSettingsRejected, ControllerLinkError
-        from .e32_system import async_e32_call, failure, link_for
+        from .controller_link import BoilerSettingsRejected, ControllerLinkError
+        from .e32_system import failure, link_for
         entry = self.hass.config_entries.async_get_entry(self._data.get("entry_id"))
         link = link_for(self.hass, entry) if entry is not None else None
         if link is None:
@@ -439,11 +543,9 @@ class BoilerSettingFailedRepairFlow(RepairsFlow):
         errors = {}
         if user_input is not None:
             try:
-                await async_e32_call(link, lambda c: c.async_boiler_settings_post(
-                    BOILER_SETTINGS_CONFIRM, {"acknowledge_failure": True}), write=True)
+                await async_acknowledge(link)  # already cleared (a restart put it back): done
             except BoilerSettingsRejected as err:
-                if err.error != "nothing_to_acknowledge":  # already cleared (a restart put it back): done
-                    errors["base"], placeholders["error"] = refusal(err.error), err.error
+                errors["base"], placeholders["error"] = refusal(err.error), err.error
             except ControllerLinkError as err:
                 key, values = failure(err)
                 errors["base"] = key

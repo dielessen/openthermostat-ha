@@ -43,6 +43,10 @@ temperatuur kunt instellen", and yes: push the program target to the knob.
   is unavailable nothing is written (Home Assistant would skip it anyway).
 - A device that keeps changing its own target at the same times on several
   days runs its own schedule: a Repairs issue asks to switch it to manual.
+- Summer mode (E32 1.4.1): the device shows the room's frost limit (the E32's
+  ``setpoint`` with ``setpoint_source`` "summer"), and a knob turn is no
+  override (the E32 refuses one in summer): the frost limit is written back
+  within a minute (the design's "local control is put back").
 
 Nothing here writes to the boiler; the frost floor, flow limits and the guard
 are the E32's and unchanged.
@@ -298,12 +302,13 @@ class SettingDevicePusher:
 
         E32 1.3: also a room on Heat along only ("follow": it keeps its target) and Smart warm-up's lead
         (setpoint source "warmup": the program's coming target, already the room's). E32 1.4: also a reset time's
-        temperature as the room's base (setpoint source "reset"; it needs the clock, like the program).
+        temperature as the room's base (setpoint source "reset"; it needs the clock, like the program). E32 1.4.1:
+        summer mode's frost limit (setpoint source "summer", 8 °C for a room that is on).
         """
         if not status_room or status_room.get("state") not in ("active", "follow"):
             return None
         comfort = status_room.get("comfort") if type(status_room.get("comfort")) is dict else {}
-        if comfort.get("mode") == "window_open" or status_room.get("setpoint_source") not in ("schedule", "warmup", "reset"):
+        if comfort.get("mode") == "window_open" or status_room.get("setpoint_source") not in ("schedule", "warmup", "reset", "summer"):
             return None
         return number(status_room.get("setpoint"), 5, 35)
 
@@ -464,6 +469,9 @@ class SettingDevicePusher:
                 return  # our own write
             current = number(status.get("setpoint"), 5, 35)
             if current is not None and abs(current - value) <= tolerance:
+                return
+            if status.get("setpoint_source") == "summer":
+                self.evaluate()  # summer mode: no override; the frost limit goes back on the device within a minute
                 return
             self.pending[room_id] = (value, self.clock() + PENDING_SECONDS)
             link = self._link(room_id, entity_id)

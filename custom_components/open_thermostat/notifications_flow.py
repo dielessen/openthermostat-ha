@@ -13,7 +13,8 @@
 Nothing is on by default. Saving stores the settings without a reload (notifications.save_notifications).
 
 The checks and changes of the three forms are module functions (changed_person, changed_house, changed_room,
-phone_choices, notify_rooms), shared with the settings panel's section Notifications (settings_notifications.py, 1.4).
+phone_choices, notify_rooms), shared with the settings panel's section Notifications (settings_notifications.py, 1.4);
+room_change and room_recipients also with the panel's room screen (settings_rooms.py, 1.4.1).
 """
 from __future__ import annotations
 
@@ -102,6 +103,19 @@ def changed_room(settings, room_id, on, kinds):
     if on and not kinds:
         raise FlowError("notification_kinds_needed", "kinds")
     return with_room(settings, room_id, on, kinds)
+
+
+def room_change(settings, room_id, on, kinds):
+    """The settings after one room's switch and messages, or None when the room stays as shown (the forms' and the
+    settings panel's "unchanged": nothing is stored). Raises FlowError as changed_room."""
+    changed = changed_room(settings, room_id, on, kinds)
+    return None if changed["rooms"][room_id] == shown_room(settings, room_id) else changed
+
+
+def room_recipients(hass, entry, room_id):
+    """The names of the people who get this room's messages: the room's own persons (Configure → Rooms → the room →
+    Persons); empty: everyone with a phone (the screens say so in their own words)."""
+    return [person_name(hass, p) for p in room_people(entry, room_id)]
 
 
 class NotificationOptionsSteps:
@@ -238,17 +252,16 @@ class NotificationOptionsSteps:
         room = shown_room(settings, room_id)
         errors = {}
         if user_input is not None:
-            try:
-                changed = changed_room(settings, room_id, user_input.get("on"), user_input.get("kinds") or [])
+            try:  # shared with the settings panel's room screen (settings_rooms.py)
+                changed = room_change(settings, room_id, user_input.get("on"), user_input.get("kinds") or [])
             except FlowError as err:
                 errors[err.field] = err.key
             else:
-                if changed["rooms"][room_id] == room:
+                if changed is None:
                     return self.async_abort(reason="notifications_unchanged")
                 save_notifications(self.hass, self.config_entry, changed)
                 return self.async_abort(reason="notifications_saved")
-        people = room_people(self.config_entry, room_id)
-        who = (", ".join(self._person_name(p) for p in people) if people else texts["everyone"])
+        who = ", ".join(room_recipients(self.hass, self.config_entry, room_id)) or texts["everyone"]
         schema = vol.Schema({vol.Required("on", default=room["on"]): selector.BooleanSelector(),
                              vol.Required("kinds", default=room["kinds"]): _kinds_selector("notification_room_kind")})
         if user_input is not None:

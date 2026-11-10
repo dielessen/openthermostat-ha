@@ -597,27 +597,20 @@ class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingS
         from .options_navigation import async_flow_texts
         texts = await async_flow_texts(self.hass, "configure_text")
         return self.async_show_menu(step_id="advanced_settings", menu_options=await self._advanced_options(),
-                                    description_placeholders={
-                                        "intro": texts["advanced_settings_page" if settings_page(self.config_entry)
-                                                       else "advanced_menu"]})
+                                    description_placeholders={"intro": texts["advanced_menu"]})
 
     async def _advanced_options(self):
-        """The rows of Configure → Advanced and diagnostics (also named by the settings panel's Advanced, "More in
-        Configure"). With the settings page (1.4, settings_page) the E32's system log, its time zone and the tester
-        program are on the dashboard's Settings tab → Advanced; here stay what the panel does not hold: the rooms'
-        radiator valves, persons and temperature limits, the boiler settings (preview), restoring a backup, tidying
-        entity IDs and the older Home Assistant rooms and their checks."""
+        """The rows of Configure → Advanced and diagnostics: on the menu of an installation without the settings page
+        (without the OpenThermostat dashboard, before Connect E32, on the old room route). With the settings page
+        (1.4.1) Configure has no Advanced row: everything is on the dashboard's Settings tab (the rooms' radiator
+        valves, persons and limits on the room screen, the boiler settings under Heating and boiler, the E32 system
+        log, its time zone, the tester program, restoring a backup, tidying entity IDs and the old rooms under
+        Installation)."""
         from .e32_link import legacy_rooms_pending, legacy_zones
         entry = self.config_entry
         e32 = not old_room_route(entry)
         panel = settings_page(entry)
         options = []
-        if panel:
-            # Not in the panel yet (Settings → Rooms says "You change these in Configure"): the room form keeps them.
-            options.append("e32_rooms")
-            from .e32_boiler_settings import offered as boiler_settings_offered
-            if boiler_settings_offered(self.hass, entry):
-                options.append("boiler_settings")  # a preview with its own risk: Configure only (design chapter 5)
         # Dashboard and name are on the main menu unless the old room route is (1.1.1, Q6). "Check the old rooms"
         # counts and checks the old Home Assistant rooms only: it is shown while such rooms are left (1.3, Q7).
         if not e32:
@@ -664,12 +657,10 @@ class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingS
             if not user_input.get("confirm"):
                 errors["base"] = "entity_ids_confirm"
             else:
-                chosen = plan.unused if scope == "unused" else plan.renames
-                done = await tidy.async_apply(self.hass, self.config_entry, chosen)
-                todo = [f"- {r.old} → {r.new}: {', '.join(r.used_in)}" for r in chosen if r.used_in and r.new in done]
+                done, todo = await tidy.async_apply_plan(self.hass, self.config_entry, plan, scope == "unused")
                 self._entity_id_plan = None
                 return self.async_abort(reason="entity_ids_done", description_placeholders={
-                    "count": str(len(done)), "todo": "\n".join(todo) or "-"})
+                    "count": str(len(done)), "todo": todo})
         schema = vol.Schema({
             vol.Required("scope", default=scope): selector.SelectSelector(selector.SelectSelectorConfig(
                 options=["unused", "all"], translation_key="entity_ids_scope",
@@ -707,9 +698,9 @@ class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingS
 def main_menu(entry):
     """Configure's top level, in the order a user needs it, without duplicates.
 
-    E32 room plan with the settings page (1.4, settings_page): Open the settings page, E32 connection, Advanced and
-    diagnostics. The everyday settings live on the dashboard's Settings tab (settings.py); every step stays in the
-    flow, and what the panel does not hold yet is under Advanced and diagnostics (_advanced_options).
+    E32 room plan with the settings page (1.4, settings_page): Open the settings page and E32 connection (1.4.1: two
+    rows, HA-INSTELPANEEL-FASE2.nl.md 3.8). Every setting lives on the dashboard's Settings tab (settings.py); the
+    steps stay in the flow for the menu without the dashboard and for the Repairs dialogs, which use them.
     E32 room plan without the OpenThermostat dashboard (so without its Settings tab): Rooms, House, Heating and boiler,
     Energy and outdoor temperature, Notifications, E32 connection, E32 devices, Dashboard and name, Advanced and
     diagnostics (1.1.1, the owner's Q6: Dashboard and name on the main menu, its last row before Advanced; 1.3: E32
@@ -720,7 +711,7 @@ def main_menu(entry):
     from .room_plan import has_room_plan
     if has_room_plan(entry):
         if settings_page(entry):
-            return ["open_settings", "controller_connection", "advanced_settings"]
+            return ["open_settings", "controller_connection"]
         return ["e32_rooms", "house", "heating_boiler", "energy", "notifications", "controller_connection",
                 "e32_devices", "general", "advanced_settings"]
     if not old_room_route(entry):

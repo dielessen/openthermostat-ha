@@ -5,7 +5,8 @@ The screens (the panel's item; ``#heating/<item>``):
 
 - ``None``: the list, what is set now from what Home Assistant already holds (the room plan it last read, the
   flow options the E32 last reported, the boiler model of its last profile, the circuits of its telemetry); no E32
-  read. Read-only: each row opens its screen, "Boiler settings (preview)" opens Configure.
+  read. Read-only: each row opens its screen. ``live.boiler_settings`` (1.4.1) is the Boiler settings row's line from
+  the telemetry Home Assistant holds (off, on, busy or blocked, the changes of today), no E32 read.
 - ``flow``: Smart warm-up, Weather compensation, the comfort style (firmware that has it) and the water temperature
   in hard frost (−10 °C): ``e32_flow.option_changes`` and ``async_save_options``, as Configure's step heating_flow.
 - ``limits``: the water temperature limits with the tick "Lowest water temperature: automatic": ``e32_flow.limit_edits``,
@@ -19,6 +20,13 @@ The screens (the panel's item; ``#heating/<item>``):
   Read from the E32 on every opening (its self-tuning moves the values), as Configure does.
 - ``model``: the boiler model (``e32_boiler_model.async_read_model``, ``async_save_model``), with what the E32
   recognised on the bus (boiler_capabilities) beside it.
+- ``boiler`` (1.4.1): Boiler settings, the boiler's own settings changed by the E32 on the owner's word, as
+  Configure → Heating and boiler → Boiler settings shows them (one read of the E32, the words of Configure in Home
+  Assistant's language beside the raw values). Nothing is saved through ``settings/save``: every change is an action
+  of ``settings/action`` (``ACTIONS``: boiler_allow, boiler_stop, boiler_advanced, boiler_write, boiler_watch,
+  boiler_checked, boiler_put_back), each one the Configure step's own function from e32_boiler_settings_flow, so
+  the same input sends the same E32 requests and gets the same refusal keys. The E32's boiler settings routes have
+  no If-Match: the E32 guards them itself (one change at a time, the watcher's token, the daily cap).
 
 Every model is plain JSON in the user's unit; what only informs (the lowest water temperature now, the boiler's own
 maximum, the recognised boiler) is under ``live``, which the token leaves out (settings.LIVE), so a new reading never
@@ -32,7 +40,7 @@ from homeassistant.exceptions import HomeAssistantError
 from .const import DOMAIN
 from .settings import SettingsError, register_section
 
-ITEMS = (None, "flow", "limits", "circuits", "care", "model")
+ITEMS = (None, "flow", "limits", "circuits", "care", "model", "boiler")
 
 
 # -- what Home Assistant holds -------------------------------------------------------------------------------------
@@ -130,7 +138,20 @@ def _list(hass, entry):
             "circuits": circuits,
             "boiler_model": model_name(model_id, "en") if type(model_id) is str and model_id != "none" else None,
             "boiler_settings": boiler_settings_offered(hass, entry),
-            "live": {"minimum_now": _minimum_now(hub, unit) if limits and limits["automatic"] else None}}
+            "live": {"minimum_now": _minimum_now(hub, unit) if limits and limits["automatic"] else None,
+                     "boiler_settings": _boiler_now(hass, entry)}}
+
+
+def _boiler_now(hass, entry):
+    """The Boiler settings row of the list (1.4.1): {state: off | on | busy | blocked, writes_today, preview} from the
+    telemetry the E32 last sent (e32_boiler_settings), None while Configure offers no boiler settings. No E32 read."""
+    from .e32_boiler_settings import boiler_settings_state, offered
+    telemetry = getattr(boiler_settings_state(hass, entry), "telemetry", None)
+    if telemetry is None or not offered(hass, entry):
+        return None
+    state = ("blocked" if telemetry["unresolved"] else "busy" if telemetry["transaction"] is not None or telemetry["phase"] != "idle"
+             else "on" if telemetry["persistent"] else "off")
+    return {"state": state, "writes_today": telemetry["writes_today"], "preview": PREVIEW}
 
 
 # -- Smart warm-up and weather compensation ---------------------------------------------------------------------------
@@ -405,9 +426,345 @@ async def _save_model(hass, entry, values):
     return None
 
 
+# -- Boiler settings (1.4.1): the model and the actions, on Configure's own functions (e32_boiler_settings_flow) --------
+
+# The word "preview" stays in the heading until a real boiler confirmed the boiler settings (plan 3.3).
+PREVIEW = True
+# Advanced (installer settings) stays open this long after its second confirmation (boiler_advanced), and closes
+# when changing boiler settings is stopped or Home Assistant restarts. In memory only, per installation.
+ADVANCED_KEY = "e32_boiler_settings_advanced"
+ADVANCED_OPEN_S = 1800
+# What a setting's value is shown in (the E32 table's units; a switch or a choice has none).
+_UNITS = {"degC": "°C", "K": "K", "%": "%", "min": "min"}
+
+
+def _when(moment):
+    """A moment as ISO 8601 in UTC (the panel shows it in Home Assistant's locale and time format)."""
+    from homeassistant.util import dt as dt_util
+    return dt_util.as_utc(moment).replace(microsecond=0).isoformat() if moment is not None else None
+
+
+def _boiler_link(hass, entry):
+    """The E32 link for boiler settings; connect_e32 without a stored connection."""
+    from .e32_system import link_for
+    link = link_for(hass, entry)
+    if link is None:
+        raise SettingsError("connect_e32")
+    return link
+
+
+def _boiler_feature(hass, entry):
+    """The link, on an E32 that sends boiler settings (Configure offers them only then); else the reason code."""
+    from .e32_boiler_settings import offered
+    link = _boiler_link(hass, entry)
+    if not offered(hass, entry):
+        raise SettingsError("e32_settings_update_required")
+    return link
+
+
+def _link_failure(err):
+    """A failed or refused E32 request as the flow's error key: a named refusal of the E32 as its form error
+    (with the E32's word in ``error``), any other failure as e32_system.failure says."""
+    from .controller_link import BoilerSettingsRejected
+    from .e32_boiler_settings_flow import refusal
+    from .e32_system import failure
+    if isinstance(err, BoilerSettingsRejected):
+        return SettingsError(refusal(err.error), error=err.error)
+    key, placeholders = failure(err)
+    return SettingsError(key, **placeholders)
+
+
+async def _boiler_document(link):
+    from .controller_link import ControllerLinkError
+    from .e32_boiler_settings_flow import async_read_document
+    try:
+        return await async_read_document(link)
+    except ControllerLinkError as err:
+        raise _link_failure(err) from None
+
+
+async def _boiler_texts(hass):
+    """The words Configure shows (Home Assistant's language): strings.json selector.boiler_settings_text."""
+    from .e32_boiler_settings_flow import TEXTS
+    from .options_navigation import async_flow_texts
+    return await async_flow_texts(hass, TEXTS)
+
+
+def _advanced_unlocked(hass, entry):
+    from homeassistant.util import dt as dt_util
+    until = _state(hass, entry).get(ADVANCED_KEY)
+    return until is not None and dt_util.utcnow() < until
+
+
+def _advanced_until(hass, entry):
+    """When Advanced closes by itself (ISO 8601 UTC), while it is open: the panel says "Advanced open, {n} min left"."""
+    return _when(_state(hass, entry).get(ADVANCED_KEY)) if _advanced_unlocked(hass, entry) else None
+
+
+def _set_advanced(hass, entry, unlocked):
+    from datetime import timedelta
+    from homeassistant.util import dt as dt_util
+    data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if not isinstance(data, dict):
+        return
+    if unlocked:
+        data[ADVANCED_KEY] = dt_util.utcnow() + timedelta(seconds=ADVANCED_OPEN_S)
+    else:
+        data.pop(ADVANCED_KEY, None)
+
+
+def _allowed(row, low, high):
+    """{min, max, step} of a number, or the list of values of a switch or a choice."""
+    return {"min": low, "max": high, "step": 1} if row.kind == "number" else list(range(low, high + 1))
+
+
+def _watch_model(texts, watch, doc):
+    """The change Home Assistant watches (it holds the token): what to look for at the boiler, and until when."""
+    from datetime import timedelta
+    from .e32_boiler_settings import setting_name, value_text
+    window = (doc or {}).get("watch_window_s", 900)
+    setting = watch.setting
+    return {"setting": setting, "name": setting_name(texts, setting), "value": watch.value,
+            "value_text": value_text(texts, setting, watch.value), "before": watch.before,
+            "before_text": value_text(texts, setting, watch.before),
+            "since": _when(watch.until - timedelta(seconds=window)), "until": _when(watch.until),
+            "state": (doc or {}).get("phase", "watching")}
+
+
+def _said(texts, reason, last, setting, value):
+    """The answer's words of a result: the reason key (strings.json options.abort) and its placeholders as
+    Configure fills them, with the raw values beside them."""
+    from .e32_boiler_settings import setting_name, value_text
+    from .e32_boiler_settings_flow import result_values
+    setting, value, before = result_values(last, setting, value)
+    return {"result": reason, "setting": setting, "value": value, "before": before,
+            "placeholders": {"setting": setting_name(texts, setting), "value": value_text(texts, setting, value),
+                             "before": value_text(texts, setting, before)}}
+
+
+def _unsupported(reason):
+    return {"supported": False, "reason": reason, "preview": PREVIEW, "allowed": False, "state": None,
+            "writes_today": 0, "daily_cap": 12, "settings": [], "advanced_unlocked": False, "advanced_until": None,
+            "watch": None}
+
+
+async def _read_boiler(hass, entry):
+    """The boiler settings as Configure's menu shows them (one read of the E32, as the menu does)."""
+    from .controller_link import ControllerLinkError
+    from .e32_boiler_settings import (ROWS, SWITCHES_OFF_WARNED, choices, offered, setting_name, value_text,
+                                      verification_text, watch_of)
+    from .e32_boiler_settings_flow import async_read_document, state_of
+    from .e32_system import failure
+    link = _boiler_link(hass, entry)
+    if not offered(hass, entry):
+        return _unsupported("e32_settings_update_required")  # firmware without boiler settings: Configure has none
+    try:
+        doc = await async_read_document(link)
+    except ControllerLinkError as err:
+        key, placeholders = failure(err)
+        if key == "e32_settings_update_required":
+            return _unsupported(key)  # older firmware with the retained telemetry still on the broker
+        raise SettingsError(key, **placeholders) from None
+    if not doc["compiled"]:
+        return _unsupported("boiler_setting_unavailable")
+    texts = await _boiler_texts(hass)
+    watch = watch_of(hass, entry, doc)
+    transaction = doc["transaction"]
+    settings = []
+    for setting, row in ROWS.items():
+        item = doc["settings"].get(setting)
+        if item is None:
+            continue
+        pending = None
+        if transaction is not None and transaction.get("id") == setting:
+            ours = watch is not None and watch.setting == setting
+            pending = {"value": transaction.get("value"), "before": transaction.get("before"), "phase": doc["phase"],
+                       "since": _watch_model(texts, watch, doc)["since"] if ours else None, "ours": ours}
+        low, high = item["user_minimum"], item["user_maximum"]
+        settings.append({
+            "key": setting, "name": setting_name(texts, setting), "kind": row.kind, "unit": _UNITS.get(row.unit),
+            "current": item["value"], "current_text": value_text(texts, setting, item["value"]),
+            "allowed": _allowed(row, low, high), "allowed_advanced": _allowed(row, item["minimum"], item["maximum"]),
+            "choices": None if row.kind == "number" else [
+                {"value": int(c["value"]), "label": c["label"]}
+                for c in choices(texts, setting, item["minimum"], item["maximum"])],
+            "advanced": row.level == "installer",
+            "verification": item["verification"], "verification_text": verification_text(texts, item["verification"]),
+            "changeable": item["verification"] != "unsupported",
+            "switch_off_question": SWITCHES_OFF_WARNED.get(setting),
+            "last_result": item["last_result"], "changed_by_e32": item["last_result"] in ("written", "kept"),
+            "pending": pending})
+    return {"supported": True, "reason": None, "preview": PREVIEW, "allowed": doc["persistent"],
+            "state": state_of(doc), "writes_today": doc["writes_today"], "daily_cap": doc["daily_cap"],
+            "settings": settings, "advanced_unlocked": _advanced_unlocked(hass, entry),
+            "advanced_until": _advanced_until(hass, entry),
+            "watch": _watch_model(texts, watch, doc) if watch is not None else None}
+
+
+def _flag(values, key):
+    value = values.get(key)
+    if type(value) is not bool:
+        raise SettingsError("boiler_setting_refused", key, error="invalid_request")
+    return value
+
+
+async def _boiler_allow(hass, entry, item, values):
+    """= the steps boiler_settings_allow (the tick ``confirm``) and boiler_settings_stop."""
+    from .controller_link import ControllerLinkError
+    from .e32_boiler_settings_flow import async_switch
+    allow = _flag(values, "allow")
+    link = _boiler_feature(hass, entry)
+    if allow and values.get("confirm") is not True:
+        raise SettingsError("boiler_settings_confirm", "confirm")
+    try:
+        await async_switch(link, allow)
+    except ControllerLinkError as err:
+        raise _link_failure(err) from None
+    if not allow:
+        _set_advanced(hass, entry, False)
+    return {"allowed": allow, "result": "boiler_settings_allowed" if allow else "boiler_settings_stopped"}
+
+
+async def _boiler_stop(hass, entry, item, values):
+    """= the step boiler_settings_stop (boiler_allow with allow false)."""
+    return await _boiler_allow(hass, entry, item, {"allow": False})
+
+
+async def _boiler_advanced(hass, entry, item, values):
+    """The second confirmation of Advanced (installer settings): ``confirm`` true opens it, false closes it; without
+    the answer, the step's refusal (boiler_settings_own_risk)."""
+    confirm = values.get("confirm")
+    _boiler_feature(hass, entry)
+    if type(confirm) is not bool:
+        raise SettingsError("boiler_settings_own_risk", "own_risk")
+    _set_advanced(hass, entry, confirm)
+    return {"advanced_unlocked": confirm}
+
+
+async def _boiler_write(hass, entry, item, values):
+    """= the steps boiler_settings_pick / _advanced, _value and _off: {setting, value, advanced?, confirm?}."""
+    from .controller_link import ControllerLinkError
+    from .e32_boiler_settings import SWITCHES_OFF_WARNED
+    from .e32_boiler_settings_flow import after_write, async_write, candidates, result_reason, value_outcome
+    link = _boiler_feature(hass, entry)
+    setting, advanced = values.get("setting"), values.get("advanced") is True
+    if advanced and not _advanced_unlocked(hass, entry):
+        raise SettingsError("boiler_settings_own_risk", "own_risk")
+    doc = await _boiler_document(link)
+    if setting not in candidates(doc, advanced):
+        raise SettingsError("boiler_setting_unknown", "setting")
+    value, outcome = value_outcome(setting, doc["settings"][setting], advanced, values.get("value"))
+    if outcome == "out_of_range":
+        raise SettingsError("boiler_setting_out_of_range", "value")
+    texts = await _boiler_texts(hass)
+    if outcome == "unchanged":
+        return {"written": False, "watch": None, **_said(texts, "boiler_setting_unchanged", None, setting, value)}
+    if outcome == "switch_off" and values.get("confirm") is not True:
+        # Configure's "Really switch it off?": the panel asks first and sends confirm.
+        raise SettingsError("boiler_setting_switch_off", "value", what=texts[SWITCHES_OFF_WARNED[setting]],
+                            what_key=SWITCHES_OFF_WARNED[setting])
+    try:
+        doc, token = await async_write(link, setting, value, advanced)
+    except ControllerLinkError as err:
+        raise _link_failure(err) from None
+    outcome, last = after_write(hass, entry, doc, token, setting)
+    if outcome == "busy":
+        raise SettingsError("boiler_setting_busy")
+    if outcome == "watch":
+        from .e32_boiler_settings import watch_of
+        return {"written": True, "watch": _watch_model(texts, watch_of(hass, entry), doc), "result": None}
+    reason = result_reason(hass, entry, last)
+    return {"written": reason == "boiler_setting_saved", "watch": None, **_said(texts, reason, last, setting, value)}
+
+
+async def _ended(hass, entry, link, texts, setting):
+    """No watch Home Assistant holds for this setting: read the E32 and say what is going on (nothing is written)."""
+    from .e32_boiler_settings import result_of, watch_of
+    from .e32_boiler_settings_flow import RESULTS
+    doc = await _boiler_document(link)
+    watch = watch_of(hass, entry, doc)
+    if watch is not None and (setting is None or watch.setting == setting):
+        return {"state": "watching" if doc["phase"] == "watching" else "writing", "confirmed": doc["phase"] == "watching",
+                "watch": _watch_model(texts, watch, doc), "result": None}
+    transaction = doc["transaction"]
+    if transaction is not None and (setting is None or transaction.get("id") == setting):
+        return {"state": "elsewhere", "confirmed": False, "watch": None, "result": None,
+                "setting": transaction.get("id")}
+    last = result_of(doc, setting) if setting is not None else doc["last"]
+    reason = RESULTS.get(last["result"]) if last is not None else None
+    said = _said(texts, reason, last, setting, None) if reason is not None else {"result": None}
+    return {"state": "ended", "confirmed": False, "watch": None, **said}
+
+
+async def _boiler_watch(hass, entry, item, values):
+    """= the step boiler_settings_watch: what to look for at the boiler and whether the boiler read it back
+    (``state`` watching), or how the change ended. One read of the E32; call it when the dialog opens, never in a
+    loop (the E32 has four web sessions)."""
+    link = _boiler_feature(hass, entry)
+    return await _ended(hass, entry, link, await _boiler_texts(hass), values.get("setting"))
+
+
+async def _confirm(hass, entry, values, keep):
+    """= the steps boiler_settings_keep / _put_back: one sign-in with the kept token, then the E32's result."""
+    from .controller_link import ControllerLinkError
+    from .e32_boiler_settings import watch_of
+    from .e32_boiler_settings_flow import after_confirm, async_confirm, result_reason
+    link = _boiler_feature(hass, entry)
+    texts, setting = await _boiler_texts(hass), values.get("setting")
+    watch = watch_of(hass, entry)
+    if watch is None or setting is not None and watch.setting != setting:
+        return {"done": False, **await _ended(hass, entry, link, texts, setting)}  # it ended meanwhile: say how
+    try:
+        doc = await async_confirm(link, watch, keep)
+    except ControllerLinkError as err:
+        raise _link_failure(err) from None
+    last = after_confirm(hass, entry, doc, watch.setting)
+    reason = result_reason(hass, entry, last)
+    return {"done": True, "state": "ended" if last is not None else "writing", "watch": None,
+            **_said(texts, reason, last, watch.setting, watch.value)}
+
+
+async def _boiler_put_back(hass, entry, item, values):
+    return await _confirm(hass, entry, values, False)
+
+
+async def _boiler_checked(hass, entry, item, values):
+    """With ``setting``: the watched change; ``ok`` true keeps it (boiler_settings_keep), false is Done for now
+    (boiler_settings_leave: the watch goes on, the E32 puts it back at ``until``). Without ``setting``: the Repair
+    after a put-back that failed (boiler_setting_checked); ``ok`` true says the boiler was checked."""
+    from homeassistant.helpers import issue_registry as ir
+    from .controller_link import ControllerLinkError
+    from .e32_boiler_settings import FAILED_ISSUE, watch_of
+    from .e32_boiler_settings_flow import async_acknowledge
+    ok = _flag(values, "ok")
+    link = _boiler_feature(hass, entry)
+    if values.get("setting") is not None:
+        if ok:
+            return await _confirm(hass, entry, values, True)
+        watch = watch_of(hass, entry)
+        texts = await _boiler_texts(hass)
+        if watch is None or watch.setting != values["setting"]:
+            return {"done": False, **await _ended(hass, entry, link, texts, values["setting"])}
+        return {"done": True, "state": "watching", "watch": _watch_model(texts, watch, None), "result": None}
+    if not ok:
+        return {"acknowledged": False}
+    try:
+        await async_acknowledge(link)
+    except ControllerLinkError as err:
+        raise _link_failure(err) from None
+    ir.async_delete_issue(hass, DOMAIN, f"{FAILED_ISSUE}_{entry.entry_id}")
+    return {"acknowledged": True}
+
+
+ACTIONS = {"boiler_allow": _boiler_allow, "boiler_write": _boiler_write, "boiler_watch": _boiler_watch,
+           "boiler_checked": _boiler_checked, "boiler_put_back": _boiler_put_back, "boiler_stop": _boiler_stop,
+           "boiler_advanced": _boiler_advanced}
+
+
 # -- the section ----------------------------------------------------------------------------------------------------
 
-READ = {"flow": _read_flow, "limits": _read_limits, "circuits": _read_circuits, "care": _read_care, "model": _read_model}
+READ = {"flow": _read_flow, "limits": _read_limits, "circuits": _read_circuits, "care": _read_care, "model": _read_model,
+        "boiler": _read_boiler}
 SAVE = {"flow": _save_flow, "limits": _save_limits, "circuits": _save_circuits, "care": _save_care, "model": _save_model}
 
 
@@ -429,4 +786,4 @@ async def save_heating(hass, entry, item, values):
     return None  # the core reads the screen again: the fresh model
 
 
-register_section("heating", read_heating, save_heating)
+register_section("heating", read_heating, save_heating, actions=ACTIONS)

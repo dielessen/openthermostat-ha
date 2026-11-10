@@ -12,8 +12,10 @@
 - **On the boiler bus**: read-only, a line in the menu's text with the devices the E32 heard (the retained
   ``fw/config/ems_devices``, named as their Home Assistant devices, ems_devices.py).
 
-The rest stays on the E32's page: The Pill's probe roles, the search for valves at the gateway, the pump by hand, a
-device's new name, address or password, and renewing the key for instant updates.
+The settings panel (1.4.1, settings_devices.py) also gives The Pill's probes their roles (the whole record, as the
+E32 page's "Save probe roles") and looks for the valves paired at a BLU Gateway (``POST /config/shelly/scan {"n"}``,
+the result in ``GET /status/shelly`` "scan"), with the helpers below. The rest stays on the E32's page: the pump by
+hand, a device's new name, address or password, and renewing the key for instant updates.
 """
 from __future__ import annotations
 
@@ -28,6 +30,11 @@ MAX_VALVES = 5            # ShellyConfig::maxValves, per gateway
 VALVE_IDS = (200, 299)    # blutrv:<id>, ShellyConfig firstValve..lastValve
 LABEL_BYTES = 32          # ShellyConfig::maxLabelBytes, also a valve's name (maxValveNameBytes)
 PASSWORD_BYTES = 64       # ShellyConfig::maxPasswordBytes, printable ASCII
+PROBE_IDS = (100, 199)    # temperature:<id> on The Pill, ShellyConfig firstProbe..lastProbe
+MAX_PROBES = 5            # ShellyConfig::maxProbes: The Pill takes up to five DS18B20 probes
+# Why a search at the gateway found nothing (the firmware's scan "error"), as the E32 page words it (shelly.js scanWord).
+SCAN_REASONS = ((re.compile(r"^(timeout|connect_failed|closed)$"), "no_answer"), (re.compile(r"busy|interrupted"), "interrupted"),
+                (re.compile(r"^wrong_device$"), "wrong_device"), (re.compile(r"pass|realm|auth"), "password"))
 # "Test connection": the E32 asks the device, then this many reads of /status/shelly this far apart (shelly.js).
 PROBE_READS, PROBE_PAUSE = 16, 1.0
 IP = re.compile(r"(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})")
@@ -137,6 +144,97 @@ def gateway_valves(record):
     """[(device n, valve id, valve name)] of every BLU Gateway in the record."""
     return [(d["n"], v["id"], v.get("name") or "") for d in record["devices"] if d["kind"] == "gateway"
             for v in d.get("valves") or [] if type(v) is dict and type(v.get("id")) is int]
+
+
+def find_device(record, wanted, kind):
+    """The record's device of ``kind`` named by its id or its number (int or digits), else None."""
+    for device in record["devices"]:
+        if device["kind"] == kind and (device["id"] == wanted or str(device["n"]) == str(wanted)):
+            return device
+    return None
+
+
+def circuit_roles(record):
+    """{probe role: circuit id} of the roles the heating circuits measure with (supply and return)."""
+    return {role: c.get("id") for c in record["circuits"] if type(c.get("probes")) is dict
+            for role in (c["probes"].get("supply"), c["probes"].get("return")) if type(role) is str}
+
+
+def pill_probes(device, state):
+    """The Pill's probes by number: the record's assigned ones and those its state shows (assigned or present, as the
+    E32 page lists them), each [{"c", "role" (None: not used), "health", "t_c"}] (health and t_c None when unknown)."""
+    from .heating_link import PROBE_ROLES
+    rows = {}
+    for probe in device.get("probes") or []:
+        if type(probe) is dict and type(probe.get("c")) is int:
+            rows[probe["c"]] = {"c": probe["c"], "role": probe.get("role") if probe.get("role") in PROBE_ROLES else None,
+                                "health": None, "t_c": None}
+    for probe in (state or {}).get("probes") or []:
+        if type(probe) is not dict or type(probe.get("c")) is not int:
+            continue
+        if probe.get("health") == "missing" and not probe.get("role") and probe["c"] not in rows:
+            continue  # not on this Pill
+        row = rows.setdefault(probe["c"], {"c": probe["c"], "role": None, "health": None, "t_c": None})
+        row["health"] = probe.get("health") if type(probe.get("health")) is str else None
+        row["t_c"] = probe.get("t_c") if type(probe.get("t_c")) in (int, float) else None
+    return [rows[c] for c in sorted(rows)]
+
+
+def setting_roles(device_id, roles):
+    """change() for async_change: The Pill ``device_id`` with exactly ``roles`` ({probe number: role}), as the E32
+    page's "Save probe roles" sends it. Refused as the E32 would: duplicate_probe_role (a role used on another
+    Pill), unknown_circuit_probe (a circuit measures with a role that would be gone), unknown_device."""
+    def change(record):
+        device = next((d for d in record["devices"] if d["id"] == device_id and d["kind"] == "probes"), None)
+        if device is None:
+            raise Refused("unknown_device")
+        others = {p.get("role") for d in record["devices"] if d is not device for p in d.get("probes") or []
+                  if type(p) is dict}
+        if others & set(roles.values()):
+            raise Refused("duplicate_probe_role")
+        if set(circuit_roles(record)) - others - set(roles.values()):
+            raise Refused("unknown_circuit_probe")
+        probes = [{"c": c, "role": role} for c, role in sorted(roles.items())]
+        return [{**d, "probes": probes} if d is device else d for d in record["devices"]]
+    return change
+
+
+async def async_gateway_scan(link, n):
+    """Look for the valves paired at BLU Gateway ``n`` (POST /config/shelly/scan, one sign-in). Returns the Shelly
+    status. A search already running for this gateway counts as started; Refused with the E32's code otherwise
+    (scan_busy, unknown_device, unknown_command on firmware before the search)."""
+    from .controller_link import HeatingPlanRejected
+
+    async def call(client):
+        try:
+            return await client.async_shelly_scan(n)
+        except HeatingPlanRejected as err:
+            if err.error == "scan_busy":
+                status = await client.async_shelly_status()
+                scan = status.get("scan") if type(status) is dict else None
+                if type(scan) is dict and scan.get("n") == n and scan.get("state") == "pending":
+                    return status
+            raise Refused(err.error) from None
+    return await link.async_call(call, write=True)
+
+
+def scan_found(status, device):
+    """The search at gateway ``device`` as the E32's status shows it: {"state": "pending"|"ok"|"failed"|"none",
+    "done", "valves": [{"id", "name", "known"}], "more", "reason"?}. "none": no search of this gateway is known (not
+    started yet, or its result expired after 10 minutes); the E32 page keeps asking then, at most a minute."""
+    scan = (status or {}).get("scan")
+    if type(scan) is not dict or scan.get("n") != device["n"] or scan.get("state") not in ("pending", "ok", "failed"):
+        return {"state": "none", "done": False, "valves": [], "more": False}
+    listed = {v.get("id") for v in device.get("valves") or [] if type(v) is dict}
+    valves = [{"id": v["id"], "name": v["name"] if type(v.get("name")) is str else "", "known": v["id"] in listed}
+              for v in scan.get("valves") or [] if type(v) is dict and type(v.get("id")) is int
+              and VALVE_IDS[0] <= v["id"] <= VALVE_IDS[1]] if scan["state"] == "ok" else []
+    found = {"state": scan["state"], "done": scan["state"] != "pending", "valves": valves, "more": scan.get("more") is True}
+    if scan["state"] == "failed":
+        code = str(scan.get("error") or "timeout")
+        found["reason"] = next((reason for pattern, reason in SCAN_REASONS if pattern.search(code)), "no_list")
+        found["error"] = code
+    return found
 
 
 def valve_rooms(hub):

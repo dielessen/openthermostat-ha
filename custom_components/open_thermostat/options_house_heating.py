@@ -4,7 +4,7 @@ Everything the E32 device offers as a control is also here, in Configure
 (options_navigation.py gives each step its Back item):
 
 - House -> House mode and holiday: the house mode (Automatic, At home, Away,
-  Holiday) and the holiday end, with the very command of the select and the
+  Holiday and, on an E32 with house.mode.summer.v1 (1.4.1), Summer) and the holiday end, with the very command of the select and the
   datetime entity (e32_house.HouseState.async_command); "Stop holiday". On an
   E32 that plans holidays (rc.4, house.holidays.v1) it is a menu: the house
   mode, plan a holiday, change or remove one, and the temperature on holiday
@@ -28,8 +28,8 @@ from .const import DOMAIN
 from .e32_comfort import AWAY_LIMITS, MAX_AWAY_DAYS
 from .e32_flow import (COMFORT_STYLE_KEY, COMFORT_STYLES, DESIGN_FLOW_AUTOMATIC, DESIGN_FLOW_KEY, DESIGN_FLOW_LIMITS,
                        flow_link)
-from .e32_house import (MODES, async_comfort_state, holiday_periods, holiday_temperature, holiday_until,
-                        house_mode, supports_holidays, supports_house_mode)
+from .e32_house import (async_comfort_state, holiday_periods, holiday_temperature, holiday_until, house_mode,
+                        offered_modes, supports_holidays)
 from .heating_link import number
 from .native_form import remember_shown, shown_value
 
@@ -93,13 +93,14 @@ def _without(periods, period):
 # ``error`` (the form's {error}).
 
 def house_modes(away):
-    """The house modes this E32 offers: At home only with house.mode.v1."""
-    return [mode for mode in MODES if mode != "home" or supports_house_mode(away)]
+    """The house modes this E32 offers (the house mode select's options): At home only with house.mode.v1, Summer only
+    with house.mode.summer.v1 (``away`` as e32_house.HouseState.away shows it)."""
+    return offered_modes(away)
 
 
 def house_mode_input(mode, until_text, modes):
     """(mode, until) of a chosen house mode; Holiday needs the moment it ends (unix seconds: in the future, at most
-    a year ahead), the other modes have none."""
+    a year ahead), the other modes (Summer too: on until you switch it off) have none."""
     if mode not in modes:
         raise HolidayInputError("house_mode", "house_mode_invalid")
     if mode != "holiday":

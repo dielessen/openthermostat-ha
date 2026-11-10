@@ -31,6 +31,17 @@ mode and holiday reads and changes the whole list (``GET``/``POST
 /config/heating/comfort`` ``{"holidays": [{"from", "until"}]}`` in one E32 web
 session, async_change_holidays). The house is in mode holiday inside a period
 and returns to the mode it had afterwards. Older firmware: none of this.
+
+Summer (1.4.1, feature ``house.mode.summer.v1`` in the ``features`` of GET
+/config/heating, docs/engineering/ZOMERSTAND-ONTWERP.nl.md): the fifth mode,
+on until you switch it off; no room gets more than its frost limit, hot water
+and frost protection stay. It is set and read like the other modes (``mode``
+"summer" in the away status, ``{"house_mode": "summer"}``); the E32 keeps the
+mode set before it (``previous_mode``), which switching summer off brings back.
+Home Assistant offers it only when the E32's plan names the feature
+(HouseState.away adds ``features`` to the away status it shows); without it the
+mode is refused with house_mode_invalid. The season hint and its dismissal are
+in season_hint.py.
 """
 from __future__ import annotations
 
@@ -52,8 +63,9 @@ from .heating_link import HubEntity, add_options, heating_hub, number, track_ent
 
 HOUSE_MODE_CAPABILITY = "house.mode.v1"  # announced as away.mode in the E32's heating status
 HOLIDAYS_CAPABILITY = "house.holidays.v1"  # announced as the list away.holidays (the next two holidays)
+SUMMER_FEATURE = "house.mode.summer.v1"  # named in the features of GET /config/heating (the E32's room plan)
 MAX_HOLIDAYS = 8  # RoomOverrides::maxHolidays
-MODES = ["auto", "home", "away", "holiday"]
+MODES = ["auto", "home", "away", "holiday", "summer"]
 READBACK_S = 60  # how long the E32's answer to a command is shown before its next status
 KEY = "house_state"
 
@@ -68,6 +80,51 @@ def house_away(hub):
 def supports_house_mode(away):
     """E32 beta.23 and newer: the status names the mode (house.mode.v1)."""
     return type(away) is dict and away.get("mode") in MODES
+
+
+def plan_features(hub):
+    """The features the E32 named in the room plan Home Assistant last read (GET /config/heating), or []."""
+    plan = getattr(getattr(hub, "plan", None), "plan", None)
+    features = plan.get("features") if type(plan) is dict else None
+    return [f for f in features if type(f) is str] if type(features) is list else []
+
+
+def supports_summer(away):
+    """E32 1.4.1 and newer: the mode Summer (house.mode.summer.v1). ``away`` as HouseState.away shows it (with the
+    plan's ``features``); an E32 that is in summer has it anyway."""
+    if type(away) is not dict:
+        return False
+    features = away.get("features")
+    return away.get("mode") == "summer" or (type(features) is list and SUMMER_FEATURE in features)
+
+
+def offered_modes(away):
+    """The house modes this E32 offers: At home only with house.mode.v1, Summer only with house.mode.summer.v1."""
+    return [mode for mode in MODES
+            if (mode != "home" or supports_house_mode(away)) and (mode != "summer" or supports_summer(away))]
+
+
+def previous_mode(away):
+    """The mode set before Summer, which switching summer off brings back (the E32's ``previous_mode``), or None."""
+    mode = away.get("previous_mode") if type(away) is dict else None
+    return mode if mode in MODES and mode != "summer" else None
+
+
+def leave_summer(away):
+    """(mode, until) that switches summer off: the mode set before it, as the E32 reports it in summer (a holiday
+    that ended meanwhile is reported as the mode after it), else Automatic. Holiday goes without an end: the running
+    holiday simply continues (E32 1.4.1, RoomOverrides::command)."""
+    return previous_mode(away) or "auto", None
+
+
+def holiday_continues(away):
+    """In summer with a holiday running under it: Holiday needs no end (the running one continues)."""
+    return summer_on(away) and previous_mode(away) == "holiday"
+
+
+def summer_on(away):
+    """Whether the house is in summer (the mode itself, not the feature)."""
+    return type(away) is dict and away.get("mode") == "summer"
 
 
 def supports_holidays(away):
@@ -114,7 +171,7 @@ def holiday_temperature(away):
 
 
 def house_mode(away):
-    """auto, home, away or holiday; derived from the away state on firmware without house modes."""
+    """auto, home, away, holiday or summer; derived from the away state on firmware without house modes."""
     if supports_house_mode(away):
         return away["mode"]
     if type(away) is dict and away.get("on") is True and away.get("source") == "manual":
@@ -134,9 +191,9 @@ def holiday_until(value, now=None):
 
 def mode_command(away, mode, temperature=None, until=None):
     """The command for a mode, in the E32's own format (house_mode, or the older away command)."""
-    if mode not in MODES:
+    if mode not in MODES or (mode == "summer" and not supports_summer(away)):
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="house_mode_invalid")
-    if mode == "holiday" and until is None:
+    if mode == "holiday" and until is None and not holiday_continues(away):
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="house_holiday_date_needed")
     if temperature is not None and number(temperature, *AWAY_LIMITS) is None:
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="comfort_away_temperature")
@@ -144,7 +201,7 @@ def mode_command(away, mode, temperature=None, until=None):
         command = {"house_mode": mode}
         if temperature is not None:
             command["temperature"] = round(float(temperature), 2)
-        if mode == "holiday":
+        if mode == "holiday" and until is not None:
             command["until"] = until
         return command
     if mode == "home":
@@ -248,22 +305,32 @@ async def async_house_change(link, away, mode=None, until=None, temperature=None
 class HouseState:
     """The house's away status for the three controls: the E32's read-back of a command, else its status."""
 
-    def __init__(self, hub):
-        self.hub = hub
+    def __init__(self, hub, hass=None, entry=None):
+        self.hub, self.hass, self.entry = hub, hass, entry
         self.answer, self.answer_at = None, 0.0
         self.pending_until = None  # "Holiday until" chosen before the select picks holiday
 
     @property
     def away(self):
+        """The E32's answer to a command (for READBACK_S), else its status; with the plan's ``features`` when the E32
+        names Summer there (house.mode.summer.v1: the status itself does not)."""
         if self.answer is not None and time.monotonic() - self.answer_at < READBACK_S:
-            return self.answer
-        return house_away(self.hub)
+            away = self.answer
+        else:
+            away = house_away(self.hub)
+        if away is not None and "features" not in away and SUMMER_FEATURE in plan_features(self.hub):
+            away = {**away, "features": [SUMMER_FEATURE]}
+        return away
 
     async def async_command(self, mode=None, until=None, temperature=None):
-        answer = await async_house_change(self.hub.plan, self.away, mode, until, temperature)
+        before = self.away
+        answer = await async_house_change(self.hub.plan, before, mode, until, temperature)
         if answer is None:
             return  # a newer house mode came in while this one waited for an E32 web session
         self._show(answer)
+        if mode is not None and self.hass is not None and self.entry is not None:
+            from .season_hint import acted
+            acted(self.hass, self.entry, before, mode)  # the season hint shown before that this mode answers is done
 
     async def async_holidays(self, change):
         """Change the planned holidays (async_change_holidays); the E32's answer is shown at once."""
@@ -301,7 +368,7 @@ class HouseState:
 def house_state(hass, entry, hub):
     state = hass.data[DOMAIN][entry.entry_id]
     if KEY not in state:
-        state[KEY] = HouseState(hub)
+        state[KEY] = HouseState(hub, hass, entry)
         entry.async_on_unload(hub.add_listener(state[KEY].hub_changed))
     return state[KEY]
 
@@ -320,7 +387,7 @@ class HouseEntity(HubEntity):
 
 
 class HouseModeSelect(HouseEntity, SelectEntity):
-    """Automatic, at home, away or holiday."""
+    """Automatic, at home, away, holiday or (E32 1.4.1, house.mode.summer.v1) summer."""
 
     def __init__(self, house):
         super().__init__(house, "house_mode")
@@ -328,7 +395,7 @@ class HouseModeSelect(HouseEntity, SelectEntity):
     @property
     def options(self):
         away = self.house.away
-        return list(MODES) if away is None or supports_house_mode(away) else ["auto", "away", "holiday"]
+        return offered_modes(away) if away is not None else [mode for mode in MODES if mode != "summer"]
 
     @property
     def current_option(self):
@@ -348,6 +415,16 @@ class HouseModeSelect(HouseEntity, SelectEntity):
             attributes["holidays"] = [{"from": dt_util.utc_from_timestamp(f).isoformat(), "until": dt_util.utc_from_timestamp(u).isoformat()}
                                       for f, u in holiday_periods(away["holidays"])]
             attributes["holiday_temperature"] = holiday_temperature(away)
+        if supports_summer(away):
+            # 1.4.1: the mode switching summer off brings back (the house banner's button), the season hint while it
+            # is shown (season_hint.shown_hint) and the last weekly exercise of the valves and pumps in summer.
+            from .season_hint import shown_hint, summer_exercise
+            exercise = summer_exercise(away)
+            entry = self.house.entry
+            attributes.update({
+                "previous_mode": previous_mode(away),
+                "season_hint": shown_hint(entry, away, dt_util.now().date()) if entry is not None else None,
+                "summer_exercise": dt_util.utc_from_timestamp(exercise).isoformat() if exercise else None})
         return attributes
 
     async def async_select_option(self, option):
@@ -355,7 +432,7 @@ class HouseModeSelect(HouseEntity, SelectEntity):
         holiday that starts within a day, which then starts now; without any of them the error says how to start one."""
         away = self.house.away
         until = None
-        if option == "holiday":
+        if option == "holiday" and not holiday_continues(away):  # out of summer a running holiday just continues
             current = away.get("until") if house_mode(away) == "holiday" else None
             until = self.house.pending_until or current or next_holiday_end(away)
         await self.house.async_command(option, until)
