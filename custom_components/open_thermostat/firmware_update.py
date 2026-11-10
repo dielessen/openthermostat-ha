@@ -15,6 +15,18 @@ The entity keeps a record of its last install (attribute ``last_install``:
 release, SHA-256, size, start, end, duration, result and the identity the E32
 reports after its restart; never an address or a password). It is the Home
 Assistant side of an update acceptance (docs/modern-thermostat/HA-UPDATE-ACCEPTANCE.en.md).
+
+1.4.2 (HA-REREAD, plan 3.2): after a confirmed install the entity asks the room-plan link to read the E32's
+abilities again (``_abilities_read_again`` → ``RoomPlanLink.request_refresh``), and it observes every such read
+(``HeatingHub.add_firmware_listener``): an E32 that restarted on other firmware (installed from its own page, by
+another Home Assistant, a downgrade) shows its version at once, not at the next six-hourly read (review HC-16).
+
+1.4.2 (HA-SESSIONS, plan 3.16, review HC-10): every sign-in of this entity (the version read, the upload and the
+confirmation every 5 s after it) passes the integration's session gate (controller_link.SessionGate: at most two
+E32 web sessions of Home Assistant at once), so a browser on the E32's own pages keeps its sessions during an
+update. Since a restart's version reaches the entity through that observer, the scheduled check signs in to the
+E32 for its version only once a day (VERSION_READ_INTERVAL); GitHub is still asked every six hours. The read at
+start-up and the retries after a failed read always go to the E32.
 """
 from __future__ import annotations
 
@@ -41,6 +53,10 @@ from .controller_setup_flow import CONTROLLER_ADDRESS, CONTROLLER_PASSWORD
 _LOGGER = logging.getLogger(__name__)
 REPOSITORY = "dielessen/open_thermostat"
 CHECK_INTERVAL = timedelta(hours=6)
+# The scheduled check reads the version from the E32 only when no read (its own, or the room-plan link's after an
+# E32 restart) confirmed it for this long; the half hour keeps a six-hourly tick from just missing the day.
+VERSION_READ_INTERVAL = timedelta(hours=24)
+VERSION_READ_SLACK = timedelta(minutes=30)
 # After a failed read of the installed version (E32 restarting, unreachable, all
 # its web sessions in use, ...): try again after 1, 5 and 15 minutes, then the
 # normal interval. A known version is kept meanwhile.
@@ -158,7 +174,7 @@ def verify_image(image, release):
 
 class E32FirmwareUpdate(UpdateEntity):
     _attr_has_entity_name = True
-    _attr_translation_key = "e32_firmware"  # "Firmware" (EN/NL/PL)
+    _attr_translation_key = "e32_firmware"  # "Firmware" (EN/NL)
     _attr_device_class = UpdateDeviceClass.FIRMWARE
     _attr_supported_features = UpdateEntityFeature.INSTALL | UpdateEntityFeature.RELEASE_NOTES
 
@@ -173,6 +189,7 @@ class E32FirmwareUpdate(UpdateEntity):
         self._lock = asyncio.Lock()
         self._failures = 0  # failed reads in a row (RETRY_DELAYS)
         self._retry = None  # the scheduled retry (async_call_later), or None
+        self._confirmed_at = None  # time.monotonic() of the last version read from the E32 (own or the link's)
 
     @property
     def available(self):
@@ -247,7 +264,41 @@ class E32FirmwareUpdate(UpdateEntity):
             if parse_tag(latest) is not None and self._attr_installed_version is not None:
                 self._attr_latest_version = latest
         self.async_on_remove(self._cancel_retry)
+        hub = self._hub()
+        if hub is not None and hasattr(hub, "add_firmware_listener"):
+            self.async_on_remove(hub.add_firmware_listener(self._firmware_read))
         self._sync_device_version()
+
+    def _hub(self):
+        """The entry's heating hub (heating_link.heating_hub: made here when this platform asks first), or None."""
+        entry = getattr(self, "_entry", None)
+        entry_id = getattr(entry, "entry_id", None)
+        data = getattr(self.hass, "data", None) if getattr(self, "hass", None) is not None else None
+        if entry_id is None or not isinstance(data, dict) or not isinstance(data.get(DOMAIN, {}).get(entry_id), dict):
+            return None
+        from .heating_link import heating_hub
+        return heating_hub(self.hass, entry)
+
+    def _firmware_read(self, version):
+        """HA-REREAD observer: the room-plan link read the E32's abilities again after a restart; the version it
+        found is the installed one now (the E32 device and the room devices follow, _sync_device_version)."""
+        if version is None or not self._set_installed(version):
+            return
+        self._confirmed_at = time.monotonic()
+        self._failures = 0
+        self._cancel_retry()
+        if self.hass is not None and self.entity_id:
+            self.async_write_ha_state()
+
+    def _abilities_read_again(self, version):
+        """HA-REREAD hook (plan 3.2), after a confirmed install: Home Assistant reads the E32's abilities again (the
+        plan's features, its version and time zone) without a reload. Never in the way of the install's result."""
+        try:
+            link = getattr(self._hub(), "plan", None)
+            if link is not None and hasattr(link, "request_refresh"):
+                link.request_refresh(version)
+        except Exception:  # noqa: BLE001 - the install itself succeeded
+            _LOGGER.debug("OpenThermostat: could not ask for the E32's abilities after the install", exc_info=True)
 
     def _cancel_retry(self):
         if self._retry is not None:
@@ -289,19 +340,24 @@ class E32FirmwareUpdate(UpdateEntity):
             raise
         report_password(self.hass, self._entry, getattr(client, "default_password", None))
 
-    async def async_refresh(self, _now=None):
-        """Read the installed version from the E32 and the newest release from GitHub."""
-        if self._lock.locked():
-            return
-        # Only a successful read changes the installed version: an unreachable or busy
-        # E32 (restarting, all web sessions in use) or a refused password keeps the
-        # last known one (and its channel). A refused password is a Repairs item.
+    def _version_known(self):
+        """The version was read from the E32 (here or by the room-plan link) less than a day ago, and the last read
+        did not fail: the scheduled check need not sign in for it (HA-SESSIONS)."""
+        return (self._confirmed_at is not None and not self._failures and self._attr_installed_version is not None
+                and time.monotonic() - self._confirmed_at
+                < (VERSION_READ_INTERVAL - VERSION_READ_SLACK).total_seconds())
+
+    async def _read_version(self):
+        """The installed version from the E32. Only a successful read changes it: an unreachable or busy E32
+        (restarting, all web sessions in use) or a refused password keeps the last known one (and its channel).
+        A refused password is a Repairs item."""
         try:
             async with self._client() as client:
                 await self._sign_in(client)
                 version = await client.async_read("/status/version")
             if not self._set_installed(version.get("version") if isinstance(version, dict) else None):
                 raise ControllerLinkError("controller_response_invalid")
+            self._confirmed_at = time.monotonic()
             self._failures = 0
             self._cancel_retry()
         except ControllerLoginRejected:
@@ -310,6 +366,17 @@ class E32FirmwareUpdate(UpdateEntity):
             self._failures += 1
             _LOGGER.debug("E32 firmware version not read (%s); attempt %d", err, self._failures)
             self._schedule_retry()
+
+    async def async_refresh(self, _now=None):
+        """Read the installed version from the E32 and the newest release from GitHub.
+
+        ``_now``: the six-hourly schedule (async_track_time_interval). It skips the E32 while its version is known
+        from the last day (_version_known); the start-up read and the retries (no ``_now``) always read it.
+        """
+        if self._lock.locked():
+            return
+        if _now is None or not self._version_known():
+            await self._read_version()
         try:
             session = async_get_clientsession(self.hass)
             async with asyncio.timeout(30):
@@ -366,8 +433,10 @@ class E32FirmwareUpdate(UpdateEntity):
                         outcome["reported"] = reported_identity(running) or outcome["reported"]
                         if isinstance(running, dict) and running.get("version") == release["tag"]:
                             self._attr_installed_version = release["tag"]
+                            self._confirmed_at = time.monotonic()
                             self._sync_device_version()
                             outcome["result"] = "installed"
+                            self._abilities_read_again(release["tag"])
                             return
                     except ControllerLoginRejected:
                         raise  # never a second failed sign-in: Repairs asks for the new password

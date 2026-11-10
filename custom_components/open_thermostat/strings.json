@@ -99,20 +99,18 @@
       },
       "comfort_settings": {
         "title": "Room defaults",
-        "description": "For every room: the temperatures of a room without a week program, how long a window or door may be open before the room pauses, and how long a change on a thermostat lasts. A room's own settings (Configure → Rooms) take precedence.",
+        "description": "For every room: the temperatures of a room without a week program and how long a window or door may be open before the room pauses. A room's own settings (Configure → Rooms) take precedence.",
         "data": {
           "comfort_temperature": "Comfort without a week program",
           "eco_temperature": "Night without a week program",
           "contact_delay": "Pause after a window opens",
-          "door_delay": "Pause after a door opens",
-          "override_minutes": "Length of a manual change"
+          "door_delay": "Pause after a door opens"
         },
         "data_description": {
           "comfort_temperature": "Comfort for a room without a week program. With a week program, Comfort is its warmest temperature.",
           "eco_temperature": "Night for a room without a week program. With a week program, Night is its coolest temperature.",
           "contact_delay": "Minutes a window must stay open before a room pauses, so airing briefly does not stop the heating. A room's own \"Pause after (windows)\" (Configure → Rooms) takes precedence. A paused room still protects against frost.",
-          "door_delay": "The same for doors, usually longer, so letting the dog out or walking through the front door does not stop the heating. Default 5 minutes. A room's own \"Pause after (doors)\" takes precedence.",
-          "override_minutes": "A new temperature on the thermostat lasts until the next switch point of the room's week program. A room without a week program keeps it this many minutes, then follows its plan again."
+          "door_delay": "The same for doors, usually longer, so letting the dog out or walking through the front door does not stop the heating. Default 5 minutes. A room's own \"Pause after (doors)\" takes precedence."
         }
       },
       "comfort_contacts": {
@@ -582,8 +580,8 @@
           "ha_sources": "Thermostats or temperature sensors (°C or °F) in Home Assistant that measure this room. The first one with a fresh value is used; the others are backups. Drag to change the order. With one source: if it fails, the room stops asking for heat after 30 minutes. A second source, for example a Bluetooth sensor, covers that.",
           "ble_sources": "Sensors paired on the E32 itself; they keep working without Home Assistant.",
           "bluetooth_first": "On: the E32 uses its Bluetooth sensors before the Home Assistant sources.",
-          "setpoint_entity": "Optional: a thermostat or radiator valve (for example a tado or TV02), or a number with a target, to set the room with. Home Assistant writes the week program's temperature to it at every switch point; turning it changes the room until the next switch point. Turn off the device's own schedule (manual mode), otherwise it changes the temperature by itself. Empty: no setting device; set the room with its thermostat in Home Assistant or on the E32 page.{setting_hint}",
-          "fallback_temperature": "The temperature the E32 keeps when Home Assistant gives no target and the room has no week program, or its clock is not set yet.",
+          "setpoint_entity": "Optional: a thermostat or radiator valve (for example a tado or TV02), or a number with a target, to set the room with. Home Assistant keeps it at the room's temperature; turning it changes the room (until the next switch time with a week program, for good without one). Turn off the device's own schedule (manual mode), otherwise it changes the temperature by itself. A device can be the room's setting device or a radiator valve the E32 drives, not both. Empty: no setting device; set the room with its thermostat in Home Assistant or on the E32 page.{setting_hint}",
+          "fallback_temperature": "The temperature the room keeps when it has no week program, and while the E32's clock is not set yet. Without a week program a manual change becomes this temperature. On a room on Heat along only this is \"Heat along up to\": the valve opens up to it and the room asks for no heat itself.",
           "program": "Easiest: the visual planner under Week program on the OpenThermostat dashboard. This text is the advanced view of the same program: one line per group of days, for example mon-fri: 06:30 20.5; 22:30 18 and sat-sun: 08:00 20.5; 23:00 18. Temperatures in your Home Assistant unit. A line without days applies to every day. Up to 6 switch points per day; each temperature holds until the next point. Empty: no week program; the room keeps its temperature without a week program. A new room starts with the standard program \"Workdays and weekend\" (20 °C by day, 18 °C while away on workdays, 16 °C at night); clear the field if the room needs none.{resets_note}",
           "resets": "On that moment any manual change ends and the room takes this value; the E32 does not work towards it. At most four. One per line: the days, the time and a temperature or a state (on, heat along, off), for example mon-fri 22:00 14 or daily 09:00 heat along. In a room without a week program, give the evening reset time the temperature without a week program: then it also holds after a restart.",
           "inactive_until": "Only with Heating off: the date and time the room heats again by itself. Empty: off until you turn it on.",
@@ -698,7 +696,7 @@
           "gas_kwh_per_m3": "Energy per m³ of gas; your gas bill or supplier states it. Empty: 9.77 kWh/m³ (Dutch gas). Elsewhere it differs, for example about 11 kWh/m³ in the UK; natural gas is usually between 8 and 12 kWh/m³.",
           "outdoor_entity": "A temperature sensor outside (°C or °F) or a weather entity. It helps the E32 learn how fast rooms cool down.",
           "boiler_kw": "The boiler's nominal heating power in kW (type plate or manual), 3–60 kW. Suggested: {boiler_kw_suggested} kW ({boiler_kw_basis}); empty keeps that suggestion.",
-          "water_meter": "Optional: a water flow (L/min) or a water meter reading (m³ or L) that only goes up. With it, a hot-water round with water flowing is counted as tapping and one without as keeping warm, more reliably than from the boiler's temperatures alone. It stays in Home Assistant.",
+          "water_meter": "Optional: a water flow (L/min) or a water meter reading (m³ or L) that only goes up. With it, a hot-water round with water flowing is counted as tapping and one without as keeping warm, more reliably than from the boiler's temperatures alone. It stays in Home Assistant. With a hot water tank there is no such split: the E32 counts the taps itself.",
           "forecast_entity": "A weather entity with an hourly forecast. Every hour Home Assistant sends the outdoor temperature of the next 24 hours to the E32, so it can plan the heating ahead. When your outdoor temperature comes from a weather entity, that one is already filled in. Leave it empty for no forecast: the E32 then uses its own daily pattern of the outdoor temperature."
         }
       },
@@ -1307,7 +1305,7 @@
       },
       "notifications": {
         "title": "Notifications",
-        "description": "{saved}Messages on your phone. About a room (a window open while the room heats, a room that stays cold, a sensor or battery that needs attention): to the people of that room, or everyone with a phone when the room has none. About the house (problems and maintenance of the boiler and the E32): only to the people with the tick \"Also messages about the house\". Nothing is on until you switch it on.\n\nOn now: {on}\n\nPhones:\n{people}",
+        "description": "{saved}Messages on your phone. About a room (a window open while the room heats, a room that stays cold, a sensor or battery that needs attention): to the people chosen for that room on its screen on the Settings tab, or everyone with a phone until you choose. About the house (problems and maintenance of the boiler and the E32): only to the people with the tick \"Also messages about the house\". Nothing is on until you switch it on.\n\nOn now: {on}\n\nPhones:\n{people}",
         "menu_options": {
           "notify_people": "People and phones",
           "notify_house": "The house",
@@ -1364,7 +1362,7 @@
       },
       "notify_room": {
         "title": "Notifications for {room}",
-        "description": "Messages about this room go to: {people}. Messages about an open window or a cold room go only to those of them who are home. Between 23:00 and 07:00 room messages wait until the morning, and the same message comes at most once every 2 hours.",
+        "description": "{who} You choose who gets them on the room's screen on the Settings tab of the OpenThermostat dashboard. Messages about an open window or a cold room go only to those of them who are home. Between 23:00 and 07:00 room messages wait until the morning, and the same message comes at most once every 2 hours.",
         "data": {
           "on": "Notify about this room",
           "kinds": "Messages"
@@ -1526,6 +1524,7 @@
       "e32_rejected_duplicate_room": "Two rooms have the same name.",
       "e32_rejected_duplicate_source": "A sensor is listed twice in one room.",
       "e32_rejected_setpoint": "The Home Assistant entity for the target temperature is not valid.",
+      "device_two_roles": "A device can be the room's setting device or a radiator valve the E32 drives, not both. Choose one.",
       "e32_rejected_schedule": "The E32 did not accept the week program. Check the times and that every temperature is within the room's limits.",
       "e32_rejected_flow_limits": "The E32 did not accept these water temperature limits. Older E32 software accepts at most 60 °C; update the E32 to use a higher maximum.",
       "e32_flow_limits_floor_warning": "A room has floor heating. Above {floor_maximum} floor heating without a mixing valve can get too hot. Save again to keep this maximum.",
@@ -1924,6 +1923,8 @@
             "name": "Sentence",
             "state": {
               "off": "Frost protection only (room off)",
+              "off_until": "Off until {until}, then on again",
+              "off_until_follow": "Off until {until}, then heating along again",
               "summer": "Summer mode: the heating stays off until you switch this off; hot water and frost protection stay.",
               "window_open": "Paused: a window or door is open",
               "window_open_contact": "Paused: {contact} open since {since}",
@@ -2103,6 +2104,7 @@
               "legend_heating": "Heating",
               "legend_hot_water": "Hot water",
               "legend_keep_warm": "Keeping warm",
+              "legend_charging": "Charging the tank",
               "waiting": "The E32 is not reporting.",
               "now": "now",
               "warm": "{room} was warm",
@@ -2153,13 +2155,61 @@
         "name": "Smart warm-up start"
       },
       "dhw_taps_today": {
-        "name": "Hot water taps today"
+        "name": "Hot water taps today",
+        "state_attributes": {
+          "updates": {
+            "name": "Updates",
+            "state": {
+              "within_5_min_after_hot_water": "Within five minutes after a hot water period ends"
+            }
+          },
+          "litres": {
+            "name": "Hot water delivered (about, litres)"
+          },
+          "taps_counted": {
+            "name": "Taps counted",
+            "state": {
+              "water_flow": "From the hot water flow",
+              "needs_e32_update": "With a tank from E32 1.4.2"
+            }
+          }
+        }
       },
       "dhw_keep_warm_today": {
-        "name": "Keeping hot water warm today"
+        "name": "Keeping hot water warm today",
+        "state_attributes": {
+          "updates": {
+            "name": "Updates",
+            "state": {
+              "within_5_min_after_hot_water": "Within five minutes after a hot water period ends"
+            }
+          }
+        }
+      },
+      "dhw_charges_today": {
+        "name": "Charges today",
+        "state_attributes": {
+          "minutes": {
+            "name": "Minutes"
+          },
+          "updates": {
+            "name": "Updates",
+            "state": {
+              "within_5_min_after_hot_water": "Within five minutes after a hot water period ends"
+            }
+          }
+        }
       },
       "dhw_burner_time_today": {
-        "name": "Hot water burner time today"
+        "name": "Hot water burner time today",
+        "state_attributes": {
+          "updates": {
+            "name": "Updates",
+            "state": {
+              "within_5_min_after_hot_water": "Within five minutes after a hot water period ends"
+            }
+          }
+        }
       },
       "field_reported_selected_flow_temperature": {
         "name": "Water temperature target (boiler)"
@@ -3050,7 +3100,7 @@
           "heating": "Heating",
           "tapping": "Tapping",
           "keep_warm": "Keeping warm",
-          "charging": "Heating the hot water tank",
+          "charging": "Charging the tank",
           "hot_water": "Hot water"
         },
         "state_attributes": {
@@ -3081,6 +3131,7 @@
               "power_low": "low fire, calm",
               "power_mid": "medium fire",
               "power_full": "full fire",
+              "power_above": "hot water can go above 100 %",
               "starts": "Starts in the last hour",
               "calm": "calm",
               "often": "switching on and off too often",
@@ -3088,6 +3139,9 @@
               "no_e32": "No data from the E32",
               "resting": "Resting"
             }
+          },
+          "hot_water_tank": {
+            "name": "Hot water tank"
           }
         }
       },
@@ -3392,6 +3446,17 @@
           },
           "last_error_at": {
             "name": "Last error at"
+          }
+        }
+      },
+      "batteries_low": {
+        "name": "Batteries low",
+        "state_attributes": {
+          "devices": {
+            "name": "Devices"
+          },
+          "limit_pct": {
+            "name": "Limit"
           }
         }
       },
@@ -4346,7 +4411,7 @@
       "options": {
         "boost": "Boost (room maximum)",
         "timed": "For a set time",
-        "until_next": "Until the next switch point"
+        "until_next": "Until the next switch time"
       }
     },
     "program_action": {
@@ -4718,8 +4783,8 @@
       "options": {
         "window": "Window or door open while the room heats",
         "cold": "Room stays cold (more than 1 °C below its target for over an hour)",
-        "sensor": "Temperature sensor silent for 30 minutes",
-        "battery": "Battery of a thermometer or valve low"
+        "sensor": "Temperature sensor silent for 30 minutes, or another device for 24 hours",
+        "battery": "Battery low of a thermometer, valve, window or door contact or setting device"
       }
     },
     "notification_house_kind": {
@@ -4745,8 +4810,7 @@
         "phone_gone": "{service} (not found)",
         "on": "on",
         "off": "off",
-        "everyone": "everyone with a phone (this room has no people of its own)",
-        "with_house": " (also the house)",
+                "with_house": " (also the house)",
         "house_people": "They go to: {people}.",
         "house_nobody": "Nobody receives these yet: tick a person under People and phones. Until then they show in Home Assistant."
       }
@@ -4822,11 +4886,15 @@
     },
     "device_own_schedule": {
       "title": "{device} seems to run its own schedule",
-      "description": "The target of {device} (room {room}) changed by itself at the same time on several days. Turn off its own schedule (set it to manual mode), so the E32 week program decides; the device then follows it, and turning it changes the room until the next switch point."
+      "description": "The target of {device}, the setting device of {room}, changed by itself at about the same time on several days. Home Assistant sets it to manual mode where it can; this one went back to its own schedule or has none Home Assistant can switch off. Turn off its own schedule in its app or under Settings → Devices & services (set it to manual mode): every change it makes by itself counts as a manual change of the room's temperature. This message goes away by itself once the device has not changed by itself for 8 days."
+    },
+    "valve_two_roles": {
+      "title": "{device} was a setting device and a driven valve",
+      "description": "{device} was the setting device of {setting_room} and also a radiator valve the E32 drives in {room}. A device can be the room's setting device or a radiator valve the E32 drives, not both: the E32's own settings (8 °C during a pause, the warm-up target) would come back as a turn of its knob. Valve control of {room} is now off, so the valve opens and closes on its own sensor and follows what you set on it.\n\nChoose what you want on the room's screen: Settings → Rooms → {room} on the OpenThermostat dashboard (without the dashboard: Configure → Rooms). Keep it as the setting device, or choose another setting device (or none) and switch valve control on again. This message goes away when you save the room."
     },
     "setting_device_write_failed": {
       "title": "{device} does not take the room's temperature",
-      "description": "Home Assistant could not set {device}, the setting device of {room}, three times in a row. Last attempt: {error}\n\nCheck that the device is on and set to heat, that it takes a target temperature (a thermostat with only a range gets its lower value), and that it still exists under Settings → Devices & services → Entities. This message goes away by itself as soon as setting it works again. To use another device, choose it under Setting device in the room's settings (Configure → Rooms)."
+      "description": "Home Assistant could not set {device}, the setting device of {room}, three times in a row. Last attempt: {error}\n\nCheck that the device is on and set to heat, that it takes a target temperature (a thermostat with only a range gets its lower value), and that it still exists under Settings → Devices & services → Entities. This message goes away by itself as soon as setting it works again. To use another device, choose it under Setting device in the room's settings (Settings → Rooms → {room} on the OpenThermostat dashboard; without the dashboard: Configure → Rooms)."
     },
     "measurement_clock": {
       "title": "Room measurements paused: the clock of Home Assistant jumped",
@@ -4880,7 +4948,7 @@
         "step": {
           "legacy_rooms": {
             "title": "Remove old Home Assistant rooms",
-            "description": "Your rooms now live in the E32 room plan (Configure → Rooms). These older Home Assistant rooms were only needed to connect the E32 and are no longer used: {rooms}.\n\nWhat happens:\n{changes}\n\nRemoving them deletes their room devices and entities from this integration. Your sensors, thermostats and radiator valves of other integrations stay as they are. The E32 stays connected; it may restart once (about 30 seconds)."
+            "description": "Your rooms now live in the E32 room plan (Settings → Rooms on the OpenThermostat dashboard; without the dashboard: Configure → Rooms). These older Home Assistant rooms were only needed to connect the E32 and are no longer used: {rooms}.\n\nWhat happens:\n{changes}\n\nRemoving them deletes their room devices and entities from this integration. Your sensors, thermostats and radiator valves of other integrations stay as they are. The E32 stays connected; it may restart once (about 30 seconds)."
           },
           "legacy_rooms_finish": {
             "title": "Finish removing the old room",
@@ -4923,7 +4991,7 @@
         "step": {
           "legacy_rooms": {
             "title": "Remove old Home Assistant rooms",
-            "description": "Your rooms now live in the E32 room plan (Configure → Rooms). These older Home Assistant rooms were only needed to connect the E32 and are no longer used: {rooms}.\n\nWhat happens:\n{changes}\n\nRemoving them deletes their room devices and entities from this integration. Your sensors, thermostats and radiator valves of other integrations stay as they are. The E32 stays connected; it may restart once (about 30 seconds)."
+            "description": "Your rooms now live in the E32 room plan (Settings → Rooms on the OpenThermostat dashboard; without the dashboard: Configure → Rooms). These older Home Assistant rooms were only needed to connect the E32 and are no longer used: {rooms}.\n\nWhat happens:\n{changes}\n\nRemoving them deletes their room devices and entities from this integration. Your sensors, thermostats and radiator valves of other integrations stay as they are. The E32 stays connected; it may restart once (about 30 seconds)."
           },
           "legacy_rooms_finish": {
             "title": "Finish removing the old room",
@@ -4962,7 +5030,7 @@
     },
     "e32_room_choose_source": {
       "title": "Choose a temperature source for {room}",
-      "description": "{room} on the E32 used a thermostat of an old Home Assistant room as its temperature source. That old room has been removed, and it had nothing to replace it with. {room} stays as it was (also when it is inactive), but it has no working temperature source until you choose one.\n\nSelect Fix to choose a thermostat or temperature sensor, or open Configure → Rooms → {room}.",
+      "description": "{room} on the E32 used a thermostat of an old Home Assistant room as its temperature source. That old room has been removed, and it had nothing to replace it with. {room} stays as it was (also when it is inactive), but it has no working temperature source until you choose one.\n\nSelect Fix to choose a thermostat or temperature sensor, or open Settings → Rooms → {room} on the OpenThermostat dashboard (without the dashboard: Configure → Rooms → {room}).",
       "fix_flow": {
         "step": {
           "choose_source": {
@@ -4991,10 +5059,6 @@
         }
       }
     },
-    "valve_battery_low": {
-      "title": "Radiator valve battery low in {room}",
-      "description": "Battery nearly empty (about 20 % or less) in {room}: {valves}. Replace it soon: a valve with an empty battery stops following the E32. This message disappears by itself once the valve reports a battery that is no longer low."
-    },
     "valve_offline": {
       "title": "Radiator valve not reporting in {room}",
       "description": "Not reporting for more than two hours in {room}: {valves}. Check the battery and the valve's connection (Zigbee or the BLU Gateway). The room keeps heating on its other temperature sources; a valve keeps opening and closing for the last target temperature it got."
@@ -5006,6 +5070,10 @@
     "e32_backup_failing": {
       "title": "No recent backup of the E32 settings",
       "description": "{name}: Home Assistant could not back up the E32 settings for more than 3 days (last backup: {last}). Without a recent backup a replacement E32 cannot get your current settings back. Check that the E32 is on and its web page opens, and that its password in Home Assistant is still right; then press Back up E32 settings now on the E32 device. This message disappears after the next successful backup."
+    },
+    "nvs_erased": {
+      "title": "The E32 lost its stored settings",
+      "description": "{name}: when the E32 last started, its settings memory was empty. Its rooms, what it learned and its paired Bluetooth sensors are gone, and its password is back to the factory password admin.\n\nRestore the last backup: Settings → Installation → Maintenance → Restore settings to this E32 on the OpenThermostat dashboard (without the dashboard: Configure → Advanced and diagnostics → Restore settings to this E32). If Home Assistant can no longer sign in to the E32, it asks for the password first: enter admin. Then choose a new E32 password when Home Assistant asks for it.\n\nThis message goes away by itself once the E32 has its rooms back and no longer uses the factory password, or when you ignore it."
     },
     "heating_input_lost": {
       "title": "The E32 does not receive the room values from Home Assistant",
@@ -5040,7 +5108,7 @@
     },
     "e32_room_source_missing": {
       "title": "Choose a new temperature source for {room}",
-      "description": "{room} reads its temperature from {source}, which no longer exists in Home Assistant: it was renamed or removed. Until you choose another one, {room} relies on its other temperature sources, if it has any; without one it does not ask for heat.\n\nSelect Fix to choose a thermostat or temperature sensor, or open Configure → Rooms → {room}. This message goes away by itself if {source} comes back.",
+      "description": "{room} reads its temperature from {source}, which no longer exists in Home Assistant: it was renamed or removed. Until you choose another one, {room} relies on its other temperature sources, if it has any; without one it does not ask for heat.\n\nSelect Fix to choose a thermostat or temperature sensor, or open Settings → Rooms → {room} on the OpenThermostat dashboard (without the dashboard: Configure → Rooms → {room}). This message goes away by itself if {source} comes back.",
       "fix_flow": {
         "step": {
           "choose_source": {
@@ -5163,11 +5231,7 @@
     },
     "tester_recording_unavailable": {
       "title": "The E32 cannot make a bus recording",
-      "description": "{name}: the tester program is on, but this E32 has no room in its memory for a bus recording. Restart the E32 and start the recording again. You can still share the result without one, or switch the tester program off: Configure → Advanced and diagnostics → Tester program."
-    },
-    "tester_recording_update": {
-      "title": "Update the E32 for the bus recording",
-      "description": "{name}: the tester program is on, but this E32 firmware cannot make a bus recording yet. Update the E32 (Firmware update). You can still share the result without one, or switch the tester program off: Configure → Advanced and diagnostics → Tester program."
+      "description": "{name}: the tester program is on, but this E32 has no room in its memory for a bus recording. Restart the E32 and start the recording again. You can still share the result without one, or switch the tester program off: Settings → Installation → Tester program on the OpenThermostat dashboard (without the dashboard: Configure → Advanced and diagnostics → Tester program)."
     },
     "learned_not_saved": {
       "title": "The E32 could not save what it learned",
@@ -5180,39 +5244,16 @@
     "learned_not_saved_part": {
       "title": "The E32 could not save everything it learned",
       "description": "{name}: the E32 saved what it learned about every room, but not everything it learned about the house and the boiler. It keeps it in memory until there is room again, but a restart before that loses it. Nothing to do now; if this stays for days, open the E32's System → Diagnostics and share the diagnostics. This message disappears after the next complete save."
-    },
-    "learned_lost_at_restart": {
-      "title": "The E32 lost part of what it learned",
-      "description": "{name}: the E32 lost part of what it learned at its last restart: what it knows about your house fell from {before} % to {after} %. It learns it again over the next days; the heating keeps working meanwhile. If this happens again, share the E32's diagnostics (System → Diagnostics). This message disappears once the figure is back."
-    },
-    "plan_ready": {
-      "title": "The E32 is ready to plan the heating",
-      "description": "The E32's predictions for {room} have been good for a week. Let it plan the heating? It then chooses when to start and how warm the water gets, so the rooms are warm on time with as few burner starts and as little gas as it can. Your week program, temperatures and Smart warm-up stay as they are. If its predictions get worse, it goes back to heating as before by itself and asks you again later.\n\nChoose Fix to confirm, or ignore this to leave the heating as it is.",
-      "fix_flow": {
-        "step": {
-          "plan_ready": {
-            "title": "Let the E32 plan the heating",
-            "description": "Confirm that the E32 may plan the heating from now on, starting with {room}. You see the plan on the dashboard (Learning and settings → Today's plan) and on the E32's House page. The comfort style (Configure → Heating and boiler) says what it weighs: comfort first, balanced or save most."
-          }
-        },
-        "error": {
-          "plan_confirm_failed": "The E32 did not take the confirmation. Check that it is reachable and try again in a moment."
-        },
-        "abort": {
-          "plan_confirm_done": "The E32 no longer waits for this confirmation.",
-          "e32_rooms_unavailable": "The E32 cannot be reached right now. Try again in a moment."
-        }
-      }
     }
   },
   "services": {
     "set_room_override": {
       "name": "Temporary temperature for a room",
-      "description": "A temporary target temperature for a room. Boost heats to the room's maximum (one hour unless you choose a duration). The E32 ends the temporary temperature itself, also after a restart, and the room returns to its week program. Only the room's target temperature changes; the water temperature limits and frost protection stay.",
+      "description": "A temporary target temperature for a room. Boost heats to the room's maximum (one hour unless you choose a duration). The E32 ends the temporary temperature itself, also after a restart, and the room returns to its week program or its temperature without a week program. Only the room's target temperature changes, never its state: a room that is off stays off and refuses it; the water temperature limits and frost protection stay.",
       "fields": {
         "mode": {
           "name": "Kind",
-          "description": "Boost heats to the room's maximum; For a set time keeps the temperature for the duration; Until the next switch point keeps it until the week program changes."
+          "description": "Boost heats to the room's maximum; For a set time keeps the temperature for the duration; Until the next switch time keeps it until the next switch time of the room's week program (only for a room with a week program; E32 1.4.1 and older: at most 24 hours)."
         },
         "temperature": {
           "name": "Temperature",
@@ -5220,7 +5261,7 @@
         },
         "duration_minutes": {
           "name": "Duration",
-          "description": "Minutes, up to 24 hours. Empty: one hour for boost, otherwise the duration from the comfort settings."
+          "description": "Minutes, up to 24 hours. Empty: one hour for boost, otherwise two hours."
         }
       }
     },
@@ -5279,7 +5320,7 @@
   },
   "exceptions": {
     "comfort_no_clock": {
-      "message": "The E32 does not know the time yet (no time server reached). Try again in a minute, or choose a duration instead of a date or switch point."
+      "message": "The E32 does not know the time yet (no time server reached). Try again in a minute, or choose a duration instead of a date or switch time."
     },
     "comfort_room_off": {
       "message": "This room is off. Switch it on first."

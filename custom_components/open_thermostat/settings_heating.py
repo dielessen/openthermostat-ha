@@ -329,13 +329,16 @@ async def _read_care(hass, entry):
     from .e32_care import KNOBS, shown_value
     _link, settings = await _care_settings(hass, entry)
     tuning, manual = settings["tuning"], settings["tuning_manual"]
-    model = {"knobs": []}
+    model = {"knobs": [], "live": {}}
     for key, (auto, default, low, high, step, unit, _scale, _decimals) in KNOBS.items():
         model["knobs"].append({"key": key, "automatic_knob": auto, "standard": shown_value(key, default), "min": low,
                                "max": high, "step": step, "unit": unit})
         if auto:
             model[f"auto:{key}"] = key not in manual
-        model[f"value:{key}"] = shown_value(key, tuning[key])
+        # 1.4.2 (P24): the value the self-tuning keeps moving is shown, not edited: under live, outside the token, so a
+        # tune between reading and saving is no "changed elsewhere". Your own value stays in the model.
+        where = model["live"] if auto and key not in manual else model
+        where[f"value:{key}"] = shown_value(key, tuning[key])
     return model
 
 

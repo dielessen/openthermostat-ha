@@ -140,39 +140,42 @@ def inputs(hass, entry, hub):
     watch = getattr(hub, "input_watch", None) if hub is not None else None
     forwarded = list((hub.status or {}).get("ha_entities") or []) if hub is not None else []
     return {"options": options, "entities": entities, "on_e32": learned_inputs(header),
-            "forwarded_room_entities": forwarded, "forwarded": forwarded_entities(hass, forwarded),
+            "forwarded_room_entities": forwarded, "forwarded": forwarded_entities(hass, forwarded, entry),
             "comfort": comfort_configuration(entry),
             "heating_input": watch.diagnostics() if watch is not None else None}
 
 
-def forwarded_entities(hass, entity_ids):
+def forwarded_entities(hass, entity_ids, entry=None):
     """Per entity the E32's plan reads (rc.7, R2-23): does it exist (a state, a registry entry), its domain, its state,
     how long ago Home Assistant last wrote it (``last_reported``, seconds) and whether the five-minute refresh sends
-    it (heating_link.input_payload: a deleted, renamed or unavailable source sends nothing)."""
+    it (heating_link.input_payload: a deleted, renamed or unavailable source sends nothing). 1.4.2: ``target_kept``,
+    a room's setting device whose target Home Assistant keeps to itself (heating_link.target_kept; sent without it)."""
     from homeassistant.util import dt as dt_util
-    from .heating_link import input_payload
+    from .heating_link import input_payload, target_kept
     registry, now, unit = er.async_get(hass), dt_util.utcnow(), hass.config.units.temperature_unit
     result = []
     for entity_id in entity_ids:
         state = hass.states.get(entity_id) if type(entity_id) is str else None
+        kept = entry is not None and type(entity_id) is str and target_kept(hass, entry, entity_id)
         reported = getattr(state, "last_reported", None) if state is not None else None
         result.append({"entity_id": entity_id, "domain": entity_id.split(".", 1)[0] if type(entity_id) is str else None,
                        "in_states": state is not None,
                        "in_registry": type(entity_id) is str and registry.async_get(entity_id) is not None,
                        "state": state.state if state is not None else None,
                        "last_reported_age_s": round((now - reported).total_seconds(), 1) if reported else None,
-                       "sent_on_refresh": input_payload(state, unit) is not None})
+                       "target_kept": kept, "sent_on_refresh": input_payload(state, unit, target=not kept) is not None})
     return result
 
 
 def comfort_configuration(entry):
     """The comfort settings that decide what reaches the E32 besides the rooms (e32_comfort): the people of the house
-    and per room, the window and door sensors per room and the delays. Entity IDs and figures only, nothing secret."""
+    and per room, the window and door sensors per room and the delays. Entity IDs and figures only, nothing secret.
+    (1.4.2: the length of a manual change is gone.)"""
     from .e32_comfort import comfort_options
     settings = comfort_options(entry)
     return {key: settings.get(key) for key in ("presence_entities", "away_delay_min", "room_persons", "contacts",
                                                "contact_delay_s", "contact_delays", "doors", "door_delay_s",
-                                               "door_delays", "override_minutes")}
+                                               "door_delays")}
 
 
 def entity_counts(hass, entry):
@@ -248,8 +251,8 @@ def _age(clock, at):
 def setting_devices(hass, entry):
     """Per plan room its setting device and the link's state (e32_setting_device.SettingDevicePusher).
 
-    ``linked``: Home Assistant writes the E32's target to the device (the room has a week program and a setting
-    device). For a linked room: the device's state and target, the target the E32 wants shown now (None: not written
+    ``linked``: Home Assistant writes the E32's target to the device (1.4.2: every room with a setting device, with or
+    without a week program; HA-SETDEV). For a linked room: the device's state and target, the target the E32 wants shown now (None: not written
     now, for example a window pause or a room that is off), the last write (value, seconds ago), a knob change on its
     way to the E32, how many changes the device made by itself in the last days and whether that looks like its own
     schedule. Read only; a part that cannot be read is left out, never an error in the download.
@@ -270,7 +273,7 @@ def setting_devices(hass, entry):
         try:
             device = link.setting_device(room)
             program = link.has_program(room)
-            item.update(setting_device=device, week_program=program, linked=bool(device and program))
+            item.update(setting_device=device, week_program=program, linked=bool(device))
             if not item["linked"]:
                 item["proposed_device"] = link.proposed_device(room)
                 rooms.append(item)
@@ -282,7 +285,7 @@ def setting_devices(hass, entry):
                 "device_target_c": link.device_target(hass, device_state),
                 "device_step_c": link.device_step(device_state) if device_state is not None else None,
                 "room_state": (status or {}).get("state"), "setpoint_source": (status or {}).get("setpoint_source"),
-                "e32_target_c": link.SettingDevicePusher.desired(status)})
+                "e32_target_c": link.SettingDevicePusher.desired(status, room)})
             if pusher is not None:
                 pushed = (getattr(pusher, "pushed", None) or {}).get(room.get("id"))
                 pending = (getattr(pusher, "pending", None) or {}).get(room.get("id"))
@@ -322,7 +325,11 @@ def learned_store(hass, entry):
             "not_saved": {"what": missing[0], "rooms_missing": missing[1], "rooms": missing[2]} if missing else None,
             "knowledge_pct": getattr(watch, "last", None), "knowledge_pct_before_restart": getattr(watch, "before", None),
             "lost_at_restart": {"before_pct": loss[0], "after_pct": loss[1]} if loss else None,
-            "e32_restarts_seen": getattr(watch, "boots", None), "repairs": issues}
+            "e32_restarts_seen": getattr(watch, "boots", None), "repairs": issues,
+            # 1.4.2: the Repairs item waits a day (learned_store.NOT_SAVED_AFTER_S); since when the saves leave
+            # something out, in this Home Assistant run (seconds).
+            "not_saved_for_s": (round(hub.clock() - watch.not_saved_since)
+                                if getattr(watch, "not_saved_since", None) is not None and hub is not None else None)}
 
 
 def advice(hass, entry):

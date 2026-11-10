@@ -51,16 +51,25 @@ def forget_entry(hass, entry_id):
 RETIRED = ("valve_single_source", "room_group_restored", "legacy_metrics_history", "metrics_definition_v2",
            "room_model_v2",
     "room_programs",  # 1.4 (#7): a room without a program is a choice, not a fault
+    "valve_battery_low",  # 1.4.2: upcoming maintenance; the Batteries list and the battery message say it
+    # 1.4.2 (HA-LIFETIME, HC-05, T-24): an invitation that has its button and its notification ("Let the E32 plan
+    # the heating"), information after the fact (the E32 learns it again; a line in the diagnostics), and a
+    # firmware fact the tester program's screen says itself ("This E32 firmware cannot make a bus recording yet").
+    "plan_ready", "learned_lost_at_restart", "tester_recording_update",
 )
 
 
-def retired_issue(issue_id, entry_id):
-    """True for a retired key's issue id of this entry: ``<key>_<entry>`` or ``<key>_<entry>_<item>``."""
+def retired_issue(issue_id, entry_id, translation_key=None):
+    """True for a retired item of this entry: its id is ``<key>_<entry>`` or ``<key>_<entry>_<item>``, or (an item
+    of a group, issue_sync's ``<group>_<item>_<entry>``) its translation key is a retired key."""
+    if translation_key in RETIRED and (issue_id.endswith(f"_{entry_id}") or f"_{entry_id}_" in issue_id):
+        return True
     return any(issue_id == f"{key}_{entry_id}" or issue_id.startswith(f"{key}_{entry_id}_") for key in RETIRED)
 
 
 def remove_retired_issues(hass, entry_id):
     """At every setup of the entry: remove the retired items an older version left in the issue registry."""
-    for domain, issue_id in list(ir.async_get(hass).issues):
-        if domain == DOMAIN and retired_issue(issue_id, entry_id):
+    registry = ir.async_get(hass)
+    for (domain, issue_id), issue in list(registry.issues.items()):
+        if domain == DOMAIN and retired_issue(issue_id, entry_id, getattr(issue, "translation_key", None)):
             ir.async_delete_issue(hass, DOMAIN, issue_id)

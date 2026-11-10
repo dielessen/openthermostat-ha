@@ -5,18 +5,20 @@
    list; a device's screen (The Pill's probe roles, a BLU Gateway's valves and Look for valves at the gateway, Remove
    device with a question); Add a Shelly device (#devices/shelly-add) and Add a valve (#devices/valve-add) as in 1.4.
    On the boiler bus: read-only.
-   Backend settings_devices.py: the model of #devices (item None) serves every block screen and its save (renames,
-   forget, remove device, remove valves); the items shelly-add and valve-add; the actions of CONTRACT-1.4.1 §3 (scan,
-   scan_result, pair, pill_roles, set_pill_roles, gateway_scan, gateway_scan_result). The backend has no item per
-   block, so a block screen is a screen of #devices: the module keeps it in history.state (browser back and reload
-   work) and #devices/<screen> opens one (spec.redirect). Polling as the backend asks: scan_result every 3 s,
-   gateway_scan_result every 2 s for at most a minute, both stopped at done or when the screen is left (the E32 has
-   four web sessions). A bindkey and a device password go to the backend once and stay in no state, log or page. */
+   Backend settings_devices.py: every screen has its own address and model (1.4.2, plan 3.9): #devices (the three
+   blocks), #devices/bluetooth, #devices/pair, #devices/pair/<address> (the form of a device the search heard),
+   #devices/sensor/<address> (its own name, the room it measures for, Forget sensor), #devices/shelly,
+   #devices/device/<id>, #devices/bus, #devices/shelly-add and #devices/valve-add; the core reads and saves each, so
+   the browser's back button, a reload and a link work as on every other screen. The actions of CONTRACT-1.4.1 §3
+   (scan, scan_result, pair, pill_roles, set_pill_roles, gateway_scan, gateway_scan_result). The Search: with E32
+   1.4.2 (ble.discovery.v1) it is off only while a requested search is queued or running (live.discovery); older
+   firmware keeps the panel's own 95 s. Polling as the backend asks: scan_result every 3 s, gateway_scan_result every
+   2 s for at most a minute, both stopped at done or when the screen is left (the E32 has four web sessions). A
+   bindkey and a device password go to the backend once and stay in no state, log or page. */
 const TEXTS = {
  nl: {
   'Devices': 'Apparaten',
   'Back to {page}': 'Terug naar {page}',
-  'Not saved': 'Niet opgeslagen',
   'Saving…': 'Opslaan…',
   'Bluetooth sensors': 'Bluetooth-sensoren',
   'Shelly devices': 'Shelly-apparaten',
@@ -32,11 +34,30 @@ const TEXTS = {
   'Needs a newer E32 firmware': 'Vraagt om nieuwere E32-firmware',
   '{gateway} with 1 valve': '{gateway} met 1 kraan',
   '{gateway} with {n} valves': '{gateway} met {n} kranen',
-  'Which room measures with a sensor is set on the room screen.': 'Welke ruimte met een sensor meet, stel je in op het scherm van die ruimte.',
+  'Choose on a sensor\'s screen which room it measures for.': 'Op het scherm van een sensor kies je voor welke ruimte hij meet.',
   'Pair a sensor': 'Sensor koppelen',
   'No Bluetooth sensors yet. Pair your first sensor.': 'Nog geen Bluetooth-sensoren. Koppel je eerste sensor.',
-  'used by {rooms}': 'gebruikt door {rooms}',
-  'no room uses it': 'geen ruimte gebruikt hem',
+  'Measures for {rooms}': 'Meet voor {rooms}',
+  'Not assigned to a room yet': 'Nog aan geen ruimte toegewezen',
+  'Last reading {n} s ago': 'Laatste meting {n} s geleden',
+  'Last reading {n} min ago': 'Laatste meting {n} min geleden',
+  'Last reading {n} h ago': 'Laatste meting {n} uur geleden',
+  'automatic': 'automatisch',
+  'Without a name of its own, the sensor is named after the room that measures with it.': 'Zonder eigen naam heet de sensor naar de ruimte die ermee meet.',
+  'Keep this name': 'Deze naam houden',
+  'Measures for': 'Meet voor',
+  'No room': 'Geen ruimte',
+  'The room uses it as its first temperature source; other rooms stop using it.': 'De ruimte gebruikt hem als eerste temperatuurbron; andere ruimtes gebruiken hem dan niet meer.',
+  'The entity IDs in Home Assistant still carry an older name.': 'De ID\'s van de entiteiten in Home Assistant dragen nog een oudere naam.',
+  'Tidy entity IDs': 'ID\'s van entiteiten opruimen',
+  'Saved: it measures for {room} now.': 'Opgeslagen: hij meet nu voor {room}.',
+  'Saved: no room measures with it now.': 'Opgeslagen: geen ruimte meet er nu mee.',
+  'Searching… (up to 90 s)': 'Zoeken… (tot 90 s)',
+  '{room} already has {max} temperature sources. Remove one there first.': '{room} heeft al {max} temperatuurbronnen. Haal er daar eerst een weg.',
+  '{room} measures only with this sensor. Give {room} another temperature source first.': '{room} meet alleen met deze sensor. Geef {room} eerst een andere temperatuurbron.',
+  'The temperature sources of {room} cannot be changed like this ({error}). Change them on the room\'s screen.': 'De temperatuurbronnen van {room} kunnen zo niet worden gewijzigd ({error}). Wijzig ze op het scherm van de ruimte.',
+  'The room could not be changed on the E32 ({error}). Nothing was changed.': 'De ruimte kon niet op de E32 worden gewijzigd ({error}). Er is niets gewijzigd.',
+  'This room no longer exists. Choose another room.': 'Deze ruimte bestaat niet meer. Kies een andere ruimte.',
   'battery {value}': 'batterij {value}',
   'No reading': 'Geen meting',
   'Address {address}': 'Adres {address}',
@@ -208,218 +229,41 @@ const TEXTS = {
   'EMS device': 'EMS-apparaat',
   'Saved on the E32. It restarts in about 30 seconds to use the changes.': 'Opgeslagen op de E32. Hij start over ongeveer 30 seconden opnieuw om de wijzigingen te gebruiken.',
   'Saved on the E32. It restarts to use the changes as soon as an update or boiler test has finished.': 'Opgeslagen op de E32. Hij start opnieuw om de wijzigingen te gebruiken zodra een update of keteltest klaar is.',
-  'Nothing changed; the E32 was not written.': 'Er is niets gewijzigd; er is niets naar de E32 geschreven.'
- },
- pl: {
-  'Devices': 'Urządzenia',
-  'Back to {page}': 'Wróć do: {page}',
-  'Not saved': 'Niezapisane',
-  'Saving…': 'Zapisywanie…',
-  'Bluetooth sensors': 'Czujniki Bluetooth',
-  'Shelly devices': 'Urządzenia Shelly',
-  'On the boiler bus': 'Na magistrali kotła',
-  '{n} paired': 'sparowane: {n}',
-  '{n} of 8 paired': 'Sparowane: {n} z 8',
-  '1 valve': '1 zawór',
-  '{n} valves': 'Zawory: {n}',
-  'Choose your sensor.': 'Wybierz swój czujnik.',
-  'Devices found': 'Znalezione urządzenia',
-  '{n} without a reading': 'bez odczytu: {n}',
-  'No sensors paired yet': 'Brak sparowanych czujników',
-  'Needs a newer E32 firmware': 'Wymaga nowszego oprogramowania E32',
-  '{gateway} with 1 valve': '{gateway} z 1 zaworem',
-  '{gateway} with {n} valves': '{gateway} z {n} zaworami',
-  'Which room measures with a sensor is set on the room screen.': 'To, które pomieszczenie mierzy danym czujnikiem, ustawiasz na ekranie pomieszczenia.',
-  'Pair a sensor': 'Sparuj czujnik',
-  'No Bluetooth sensors yet. Pair your first sensor.': 'Brak czujników Bluetooth. Sparuj swój pierwszy czujnik.',
-  'used by {rooms}': 'używa go: {rooms}',
-  'no room uses it': 'nie używa go żadne pomieszczenie',
-  'battery {value}': 'bateria {value}',
-  'No reading': 'Brak odczytu',
-  'Address {address}': 'Adres {address}',
-  'Temperature': 'Temperatura',
-  'Humidity': 'Wilgotność',
-  'Battery': 'Bateria',
-  'Name': 'Nazwa',
-  'At most 40 characters (fewer with special letters).': 'Najwyżej 40 znaków (mniej przy znakach specjalnych).',
-  'Forget sensor': 'Zapomnij czujnik',
-  'Forget': 'Zapomnij',
-  'Forget {name}?': 'Zapomnieć {name}?',
-  'The E32 stops reading it and deletes its key, then restarts once, about 30 seconds later. To use it again, pair it again.': 'E32 przestaje go odczytywać i kasuje jego klucz, a potem uruchamia się ponownie jeden raz, około 30 sekund później. Aby znów go używać, sparuj go ponownie.',
-  'Rooms that measure with it: {rooms}.': 'Pomieszczenia, które nim mierzą: {rooms}.',
-  'The E32 listens for about 30 seconds. Wake the sensor if needed.': 'E32 nasłuchuje przez około 30 sekund. W razie potrzeby wybudź czujnik.',
-  'Search nearby': 'Szukaj w pobliżu',
-  'Searching nearby…': 'Szukanie w pobliżu…',
-  'No devices found yet. Start a search and wake the sensor if needed.': 'Nie znaleziono jeszcze urządzeń. Rozpocznij wyszukiwanie i w razie potrzeby wybudź czujnik.',
-  'Unnamed Bluetooth device': 'Urządzenie Bluetooth bez nazwy',
-  'Already added': 'Już dodano',
-  'Strong signal': 'Silny sygnał',
-  'Fair signal': 'Średni sygnał',
-  'Weak signal': 'Słaby sygnał',
-  'More devices were received than this list can hold. Search again nearer to the device you want to add.': 'Odebrano więcej urządzeń, niż mieści ta lista. Wyszukaj ponownie bliżej urządzenia, które chcesz dodać.',
-  'Sensor type': 'Typ czujnika',
-  'Guessed from the device name: check it.': 'Odgadnięty z nazwy urządzenia: sprawdź go.',
-  'Thermometer with pvvx firmware (BTHome)': 'Termometr z oprogramowaniem pvvx (BTHome)',
-  'Encryption': 'Szyfrowanie',
-  'Unencrypted': 'Bez szyfrowania',
-  'BTHome v2 encrypted': 'BTHome v2 szyfrowany',
-  'MiBeacon v4/v5 encrypted': 'MiBeacon v4/v5 szyfrowany',
-  'Encryption key (bindkey)': 'Klucz szyfrowania (bindkey)',
-  'An encrypted sensor needs its 32-character key (bindkey); the E32 stores it and never shows it again.': 'Szyfrowany czujnik potrzebuje swojego 32-znakowego klucza (bindkey); E32 go przechowuje i nigdy więcej nie pokazuje.',
-  'Pair': 'Sparuj',
-  'Pairing…': 'Parowanie…',
-  '{name} paired.': 'Sparowano: {name}.',
-  'The E32 talks to them itself over your home network, also without Home Assistant.': 'E32 rozmawia z nimi sam przez sieć domową, także bez Home Assistant.',
-  'Shelly device': 'Urządzenie Shelly',
-  'Add a Shelly device': 'Dodaj urządzenie Shelly',
-  'No Shelly devices yet.': 'Brak urządzeń Shelly.',
-  'IP address': 'Adres IP',
-  'Remove device': 'Usuń urządzenie',
-  'Remove {name}?': 'Usunąć {name}?',
-  'The E32 stops reading and switching the device. The valves of a BLU Gateway stay in their rooms until you remove them under Rooms.': 'E32 przestaje odczytywać i przełączać urządzenie. Zawory BLU Gateway zostają w swoich pomieszczeniach, dopóki ich nie usuniesz w Pomieszczenia.',
-  'Probe roles': 'Role sond',
-  'Give each probe the pipe it sits on.': 'Przypisz każdej sondzie rurę, na której jest założona.',
-  'The E32 uses the water to and back from the floor for the pump and to watch for too hot water.': 'E32 używa wody do podłogi i z powrotem do sterowania pompą i pilnowania, czy woda nie jest za gorąca.',
-  'Probe {n}': 'Sonda {n}',
-  'Back from floor loop {n}': 'Powrót z pętli podłogowej {n}',
-  'Other probe {n}': 'Inna sonda {n}',
-  'Not used': 'Nieużywana',
-  'A heating circuit measures with this probe. Change the circuit first (on the E32: Home → Heating settings).': 'Obieg grzewczy mierzy tą sondą. Najpierw zmień obieg (w E32: Home → Heating settings).',
-  'Save probe roles': 'Zapisz role sond',
-  'Probe roles saved.': 'Zapisano role sond.',
-  'The Pill reports no probes yet.': 'The Pill nie zgłasza jeszcze sond.',
-  'Try again': 'Spróbuj ponownie',
-  'Valves': 'Zawory',
-  'Valve {id}': 'Zawór {id}',
-  'room: {room}': 'pomieszczenie: {room}',
-  'No valves yet.': 'Brak jeszcze zaworów.',
-  'Add a valve': 'Dodaj zawór',
-  'Remove': 'Usuń',
-  'Remove {valve}': 'Usuń: {valve}',
-  'The E32 stops reading and driving these valves. A valve in a room stays there until you remove it under Rooms → the room → Radiator valves.': 'E32 przestaje odczytywać i sterować tymi zaworami. Zawór w pomieszczeniu zostaje tam, dopóki go nie usuniesz w Pomieszczenia → pomieszczenie → Zawory grzejnikowe.',
-  'Look for valves at the gateway': 'Szukaj zaworów w bramce',
-  'Looking for valves at the gateway…': 'Szukanie zaworów w bramce…',
-  'Tap a valve to add it.': 'Dotknij zaworu, aby go dodać.',
-  'Already in the list': 'Już na liście',
-  'The gateway reports no paired valves. Pair them in the Shelly app first.': 'Bramka nie zgłasza sparowanych zaworów. Najpierw sparuj je w aplikacji Shelly.',
-  'The gateway reported more devices than the E32 reads; not every valve may be listed.': 'Bramka zgłosiła więcej urządzeń, niż E32 odczytuje; nie każdy zawór musi być na liście.',
-  'A gateway takes at most 5 valves.': 'Bramka przyjmuje najwyżej 5 zaworów.',
-  'The devices the E32 hears on the boiler bus. There is nothing to set here.': 'Urządzenia, które E32 słyszy na magistrali kotła. Nie ma tu nic do ustawienia.',
-  'The E32 has not reported them yet.': 'E32 jeszcze ich nie zgłosił.',
-  'Nothing heard yet.': 'Na razie nic nie słychać.',
-  'Device password': 'Hasło urządzenia',
-  'The password you set in the Shelly app. It goes to the E32 only, which keeps a fingerprint of it; Home Assistant does not keep it. Leave it empty if the device has none.': 'Hasło ustawione w aplikacji Shelly. Trafia tylko do E32, który przechowuje jego odcisk; Home Assistant go nie przechowuje. Zostaw puste, jeśli urządzenie nie ma hasła.',
-  'For example 192.168.1.40. When you save, the E32 asks the device who it is, which takes up to 16 seconds.': 'Na przykład 192.168.1.40. Po zapisaniu E32 zapyta urządzenie, czym jest, co trwa do 16 sekund.',
-  'What does it do?': 'Do czego służy?',
-  'As the device says': 'Tak, jak podaje urządzenie',
-  'The E32 asks the device what it is when you save.': 'E32 zapyta urządzenie, czym jest, gdy zapiszesz.',
-  'The name the E32 and Home Assistant show, up to 32 characters.': 'Nazwa wyświetlana przez E32 i Home Assistant, najwyżej 32 znaki.',
-  'There is no BLU Gateway in the list yet. Add one first.': 'Na liście nie ma jeszcze BLU Gateway. Najpierw dodaj bramkę.',
-  'The gateway the valve is paired with.': 'Bramka, z którą zawór jest sparowany.',
-  'Valve number': 'Numer zaworu',
-  'The number the gateway gave the valve, from 200 to 299.': 'Numer nadany zaworowi przez bramkę, od 200 do 299.',
-  'Optional, for example Bathroom.': 'Opcjonalnie, na przykład Łazienka.',
-  'Save the Bluetooth changes?': 'Zapisać zmiany Bluetooth?',
-  'The E32 saves these changes and restarts once, about 30 seconds later; the heating continues after about a minute.': 'E32 zapisze te zmiany i uruchomi się ponownie jeden raz, około 30 sekund później; ogrzewanie działa dalej po około minucie.',
-  'Save and let the E32 restart': 'Zapisz i pozwól E32 uruchomić się ponownie',
-  'First set the device up in the Shelly app: your Wi-Fi, a password and the cloud off.': 'Najpierw skonfiguruj urządzenie w aplikacji Shelly: Wi-Fi, hasło i wyłączona chmura.',
-  'Give it a fixed address in your router (a DHCP reservation), so the E32 always finds it.': 'Nadaj mu stały adres w routerze (rezerwacja DHCP), aby E32 zawsze je znalazł.',
-  'Pair the valve with the gateway in the Shelly app first.': 'Najpierw sparuj zawór z bramką w aplikacji Shelly.',
-  'Then add it here by its number: the first one is usually 200, the next 201 and so on. Choose the valve\'s room under Rooms → the room → Radiator valves.': 'Potem dodaj go tutaj po numerze: pierwszy to zwykle 200, następny 201 i tak dalej. Pomieszczenie zaworu wybierasz w Pomieszczenia → pomieszczenie → Zawory grzejnikowe.',
-  '{name} added.': 'Dodano: {name}.',
-  '{name} removed.': 'Usunięto: {name}.',
-  'Valves removed: {count}.': 'Usunięto zawory: {count}.',
-  'Connect the E32 first: Configure → E32 connection.': 'Najpierw połącz E32: Konfiguruj → Połączenie z E32.',
-  'This E32 has no Shelly support. Shelly devices need an E32 V2 with firmware 1.1 or newer.': 'Ten E32 nie obsługuje urządzeń Shelly. Potrzebny jest E32 V2 z oprogramowaniem 1.1 lub nowszym.',
-  'Use a name of 1 to 40 characters without line breaks.': 'Użyj nazwy od 1 do 40 znaków bez podziału wiersza.',
-  'The E32 has no room left to store the sensors. Nothing was saved.': 'E32 nie ma już miejsca na zapisanie czujników. Nic nie zostało zapisane.',
-  'The E32 refused the changes ({error}). Nothing was saved.': 'E32 odrzucił zmiany ({error}). Nic nie zostało zapisane.',
-  'The Bluetooth sensors were changed on the E32 meanwhile. Nothing was saved; open Bluetooth sensors again.': 'Czujniki Bluetooth zostały w międzyczasie zmienione w E32. Nic nie zostało zapisane; otwórz ponownie Czujniki Bluetooth.',
-  'Enter a Bluetooth address with six hexadecimal pairs.': 'Wpisz adres Bluetooth jako sześć par znaków szesnastkowych.',
-  'This sensor is already paired with the E32.': 'Ten czujnik jest już sparowany z E32.',
-  'You can add at most 8 Bluetooth devices.': 'Możesz dodać najwyżej 8 urządzeń Bluetooth.',
-  'Choose the sensor type: the E32 cannot tell it from the name.': 'Wybierz typ czujnika: E32 nie rozpozna go po nazwie.',
-  'This Bluetooth device profile is not supported.': 'Ten profil urządzenia Bluetooth nie jest obsługiwany.',
-  'Select the encryption offered for this device profile.': 'Wybierz szyfrowanie pasujące do tego profilu urządzenia.',
-  'This sensor sends encrypted readings: enter its 32-character key (bindkey).': 'Ten czujnik szyfruje odczyty: wpisz jego 32-znakowy klucz (bindkey).',
-  'Enter exactly 32 hexadecimal characters for the bindkey.': 'Wpisz dokładnie 32 znaki szesnastkowe klucza (bindkey).',
-  'Unencrypted readings need no key: leave the bindkey empty or choose encrypted BTHome.': 'Niezaszyfrowane odczyty nie potrzebują klucza: zostaw pole bindkey puste albo wybierz szyfrowany BTHome.',
-  'Search did not start. A scan may already be running, disabled, cooling down or unavailable.': 'Wyszukiwanie się nie rozpoczęło. Być może już trwa, jest wyłączone albo trzeba chwilę poczekać.',
-  'Each probe role can be used once.': 'Każdej roli sondy można użyć tylko raz.',
-  'Choose a pipe from the list for each probe.': 'Wybierz dla każdej sondy rurę z listy.',
-  'A search runs at another gateway. Try again in a minute.': 'Trwa już wyszukiwanie w innej bramce. Spróbuj ponownie za minutę.',
-  'Enter the address as four numbers, for example 192.168.1.40.': 'Wpisz adres jako cztery liczby, na przykład 192.168.1.40.',
-  'Another device in the list has this address.': 'Inne urządzenie na liście ma ten adres.',
-  'Nothing answers at this address. Check the address and that the device is on the same network.': 'Pod tym adresem nic nie odpowiada. Sprawdź adres i czy urządzenie jest w tej samej sieci.',
-  'The device did not answer in time. Try again.': 'Urządzenie nie odpowiedziało na czas. Spróbuj ponownie.',
-  'The device asks for a password before it says what it is. Check the address.': 'Urządzenie prosi o hasło, zanim powie, czym jest. Sprawdź adres.',
-  'This address does not answer like a Shelly device of the third generation.': 'Ten adres nie odpowiada jak urządzenie Shelly trzeciej generacji.',
-  'A test is already running. Try again in a moment.': 'Test już trwa. Spróbuj ponownie za chwilę.',
-  'This device is already in the list.': 'To urządzenie jest już na liście.',
-  'The E32 has no room for this device: it takes at most 6 Shelly devices. Remove a device or use shorter names.': 'E32 nie ma miejsca na to urządzenie: przyjmuje najwyżej 6 urządzeń Shelly. Usuń urządzenie lub użyj krótszych nazw.',
-  'Use a name of up to 32 characters.': 'Użyj nazwy o długości najwyżej 32 znaków.',
-  'Use a password of up to 64 characters, without accents.': 'Użyj hasła o długości najwyżej 64 znaków, bez znaków diakrytycznych.',
-  'The device has a password: enter it, so the E32 can talk to it.': 'Urządzenie ma hasło: wpisz je, aby E32 mógł się z nim komunikować.',
-  'A heating circuit uses this plug for its pump. Take the pump out of the circuit first (on the E32: Home → Heating settings).': 'Obieg grzewczy używa tej wtyczki do swojej pompy. Najpierw wyjmij pompę z obiegu (w E32: Home → Heating settings).',
-  'A heating circuit uses a probe of this device. Change the circuit first (on the E32: Home → Heating settings).': 'Obieg grzewczy używa sondy tego urządzenia. Najpierw zmień obieg (w E32: Home → Heating settings).',
-  'Use the valve\'s number, from 200 to 299.': 'Użyj numeru zaworu, od 200 do 299.',
-  'This valve number is already in the list.': 'Ten numer zaworu jest już na liście.',
-  'Use a valve name of up to 32 characters, without quotes or backslashes.': 'Użyj nazwy zaworu o długości najwyżej 32 znaków, bez cudzysłowów i ukośników wstecznych.',
-  'The E32 refused this ({error}). Nothing was saved.': 'E32 odrzucił to ({error}). Nic nie zapisano.',
-  'The E32 could not be reached ({error}). Nothing was saved.': 'Nie udało się połączyć z E32 ({error}). Nic nie zapisano.',
-  'The E32 could not confirm that the settings were saved. Check them on the E32 before trying again.': 'E32 nie mógł potwierdzić zapisania ustawień. Sprawdź je w E32, zanim spróbujesz ponownie.',
-  'The E32 has no free web session: close E32 pages you do not use, or wait two minutes, then try again.': 'E32 nie ma wolnej sesji WWW: zamknij nieużywane strony E32 lub odczekaj dwie minuty, a potem spróbuj ponownie.',
-  'The E32 is updating or restarting. Try again once its web page opens normally.': 'E32 jest aktualizowany lub uruchamia się ponownie. Spróbuj ponownie, gdy jego strona otworzy się normalnie.',
-  'The E32 refused these settings. Nothing was saved.': 'E32 odrzucił te ustawienia. Nic nie zostało zapisane.',
-  'The E32 settings were changed meanwhile (on its web page?). Nothing was saved; try again.': 'Ustawienia E32 zostały w międzyczasie zmienione (na jego stronie?). Nic nie zostało zapisane; spróbuj ponownie.',
-  'This E32 firmware does not offer this setting. Update the E32 (Firmware update) first.': 'To oprogramowanie E32 nie ma tego ustawienia. Najpierw zaktualizuj E32 (Aktualizacja oprogramowania).',
-  'The E32 still uses its default password and accepts no changes until you choose a new one: Settings → Repairs → “E32 still uses the default password”.': 'E32 nadal używa domyślnego hasła i nie przyjmuje zmian, dopóki nie wybierzesz nowego: Ustawienia → Naprawy → „E32 nadal używa domyślnego hasła”.',
-  'The E32 no longer accepts the saved password. Home Assistant asks for the new one: Settings → Devices & services → OpenThermostat → Re-authenticate.': 'E32 nie akceptuje już zapisanego hasła. Home Assistant prosi o nowe: Ustawienia → Urządzenia i usługi → OpenThermostat → Uwierzytelnij ponownie.',
-  'Plug: switches the floor pump': 'Plug: przełącza pompę podłogową',
-  'The Pill: temperature probes on the pipes': 'The Pill: sondy temperatury na rurach',
-  'BLU Gateway: Shelly BLU TRV radiator valves': 'BLU Gateway: zawory grzejnikowe Shelly BLU TRV',
-  'waiting for the first answer': 'czeka na pierwszą odpowiedź',
-  'connected': 'połączono',
-  'not reachable': 'nieosiągalne',
-  'another device answers at this address': 'pod tym adresem odpowiada inne urządzenie',
-  'the password is not accepted': 'hasło nie jest akceptowane',
-  'the device reports an error': 'urządzenie zgłasza błąd',
-  'waiting for a report': 'czeka na zgłoszenie',
-  'reporting': 'zgłasza się',
-  'silent for 15 minutes': 'cisza od 15 minut',
-  'not reporting': 'nie zgłasza się',
-  'not found at the gateway': 'nie znaleziono w bramce',
-  'not paired with the gateway': 'nie sparowano z bramką',
-  'gateway not reachable': 'bramka nieosiągalna',
-  'Water to the floor (after the mixing valve)': 'Zasilanie podłogi (za zaworem mieszającym)',
-  'Water back from the floor': 'Powrót podłogi',
-  'Waiting for a reading': 'Czeka na odczyt',
-  'Not found on The Pill': 'Nie znaleziono w The Pill',
-  'The gateway did not answer. Try again, or add the valves by number below.': 'Bramka nie odpowiedziała. Spróbuj ponownie albo dodaj zawory poniżej według numeru.',
-  'The search was interrupted. Try again.': 'Wyszukiwanie zostało przerwane. Spróbuj ponownie.',
-  'Another device answers at this address': 'Pod tym adresem odpowiada inne urządzenie',
-  'The password is not accepted': 'Hasło nie jest akceptowane',
-  'The gateway gave no list of its valves. Update its firmware in the Shelly app, or add the valves by number below.': 'Bramka nie podała listy swoich zaworów. Zaktualizuj jej oprogramowanie w aplikacji Shelly albo dodaj zawory poniżej według numeru.',
-  'Boiler': 'Kocioł',
-  'Thermostat': 'Termostat',
-  'EMS device': 'Urządzenie EMS',
-  'Saved on the E32. It restarts in about 30 seconds to use the changes.': 'Zapisano w E32. Uruchomi się ponownie za około 30 sekund, aby użyć zmian.',
-  'Saved on the E32. It restarts to use the changes as soon as an update or boiler test has finished.': 'Zapisano w E32. Uruchomi się ponownie, aby użyć zmian, gdy tylko zakończy się aktualizacja lub test kotła.',
-  'Nothing changed; the E32 was not written.': 'Nic się nie zmieniło; nic nie zostało zapisane w E32.'
+  'Nothing changed; the E32 was not written.': 'Er is niets gewijzigd; er is niets naar de E32 geschreven.',
+  'Batteries': 'Batterijen',
+  'Every device that reports a battery, the lowest first.': 'Elk apparaat dat een batterij meldt, de laagste bovenaan.',
+  'No device reports a battery.': 'Geen apparaat meldt een batterij.',
+  'Warn below': 'Waarschuwen onder',
+  'Below this a battery counts as low: on this list, in the messages and on the dashboard.': 'Daaronder telt een batterij als laag: op deze lijst, in de meldingen en op het dashboard.',
+  'The E32 keeps its own 20 % for the radiator valves it drives itself: at 20 % and below such a valve also shows Radiator valve problem.': 'De E32 houdt voor de radiatorkranen die hij zelf aanstuurt zijn eigen 20 % aan: op 20 % en lager toont zo’n kraan ook Probleem radiatorkraan.',
+  '1 device': '1 apparaat',
+  '{n} devices': '{n} apparaten',
+  '{n} low': '{n} laag',
+  'Low': 'Laag',
+  'Fine': 'In orde',
+  'No report': 'Geen melding',
+  'Not in a room': 'In geen ruimte',
+  'last reported {moment}': 'voor het laatst gemeld {moment}',
+  'Bluetooth sensor': 'Bluetooth-sensor',
+  'Radiator valve': 'Radiatorkraan',
+  'Window or door contact': 'Raam- of deurcontact',
+  'Setting device': 'Instelapparaat',
+  'Temperature source': 'Temperatuurbron',
+  'Choose 15, 20, 25 or 30 %.': 'Kies 15, 20, 25 of 30 %.'
  }};
-const TITLES = {'shelly-add': 'Add a Shelly device', 'valve-add': 'Add a valve'};
+const TITLES = {'shelly-add': 'Add a Shelly device', 'valve-add': 'Add a valve', batteries: 'Batteries'};
 const SUBTITLES = {'shelly-add': 'First set the device up in the Shelly app: your Wi-Fi, a password and the cloud off.',
- 'valve-add': 'Pair the valve with the gateway in the Shelly app first.'};
+ 'valve-add': 'Pair the valve with the gateway in the Shelly app first.', batteries: 'Every device that reports a battery, the lowest first.'};
 // The rest of each add form's explanation, behind "More".
 const MORE = {'shelly-add': 'Give it a fixed address in your router (a DHCP reservation), so the E32 always finds it.',
  'valve-add': 'Then add it here by its number: the first one is usually 200, the next 201 and so on. Choose the valve\'s room under Rooms → the room → Radiator valves.'};
 // The block screens of #devices: [title, one sentence]; the screen above each in PARENTS.
 const SCREENS = {
- bluetooth: ['Bluetooth sensors', 'Which room measures with a sensor is set on the room screen.'],
+ bluetooth: ['Bluetooth sensors', 'Choose on a sensor\'s screen which room it measures for.'],
  pair: ['Pair a sensor', 'The E32 listens for about 30 seconds. Wake the sensor if needed.'],
  shelly: ['Shelly devices', 'The E32 talks to them itself over your home network, also without Home Assistant.'],
  bus: ['On the boiler bus', 'The devices the E32 hears on the boiler bus. There is nothing to set here.']};
-const PARENTS = Object.freeze({bluetooth: 'list', pair: 'bluetooth', shelly: 'list', bus: 'list', sensor: 'bluetooth', device: 'shelly'});
+const PARENTS = Object.freeze({bluetooth: 'list', pair: 'bluetooth', shelly: 'list', bus: 'list', sensor: 'bluetooth', device: 'shelly', batteries: 'list'});
 // The error codes of the save and of the actions (Configure's sentences; the actions' codes as glossary block "1.4.1 DEVICES-WS").
 const ERRORS = {
  connect_e32: 'Connect the E32 first: Configure → E32 connection.',
@@ -438,6 +282,12 @@ const ERRORS = {
  ble_key_invalid: 'Enter exactly 32 hexadecimal characters for the bindkey.',
  ble_key_not_used: 'Unencrypted readings need no key: leave the bindkey empty or choose encrypted BTHome.',
  ble_scan_not_started: 'Search did not start. A scan may already be running, disabled, cooling down or unavailable.',
+ // 1.4.2 (plan 3.9): "Measures for" on a sensor's screen (glossary block 1.4.2 HA-DEVICES).
+ ble_room_full: '{room} already has {max} temperature sources. Remove one there first.',
+ ble_room_only_source: '{room} measures only with this sensor. Give {room} another temperature source first.',
+ ble_room_refused: 'The temperature sources of {room} cannot be changed like this ({error}). Change them on the room\'s screen.',
+ ble_room_not_saved: 'The room could not be changed on the E32 ({error}). Nothing was changed.',
+ ble_room_missing: 'This room no longer exists. Choose another room.',
  shelly_probe_role_duplicate: 'Each probe role can be used once.',
  shelly_probe_invalid: 'Choose a pipe from the list for each probe.',
  scan_busy: 'A search runs at another gateway. Try again in a minute.',
@@ -468,7 +318,8 @@ const ERRORS = {
  e32_settings_changed: 'The E32 settings were changed meanwhile (on its web page?). Nothing was saved; try again.',
  e32_settings_update_required: 'This E32 firmware does not offer this setting. Update the E32 (Firmware update) first.',
  e32_settings_password_default: 'The E32 still uses its default password and accepts no changes until you choose a new one: Settings → Repairs → “E32 still uses the default password”.',
- e32_password_changed: 'The E32 no longer accepts the saved password. Home Assistant asks for the new one: Settings → Devices & services → OpenThermostat → Re-authenticate.'};
+ e32_password_changed: 'The E32 no longer accepts the saved password. Home Assistant asks for the new one: Settings → Devices & services → OpenThermostat → Re-authenticate.',
+ battery_limit_invalid: 'Choose 15, 20, 25 or 30 %.'};
 // Product names and short type names stay as they are in every language.
 const NAMES = {switch: 'Plug', probes: 'The Pill', gateway: 'BLU Gateway', pvvx_thermometer: 'pvvx', shelly_ht_display: 'Shelly H&T',
  xiaomi_monitor_3: 'Xiaomi', shelly_ht_full: 'Shelly BLU H&T Display', xiaomi_full: 'Xiaomi Monitor 3 (MJWSD05MMC)'};
@@ -506,7 +357,8 @@ const ICON_PATHS = Object.freeze({
  trash: 'M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z',
  signal3: 'M21,4H16V20H21V4M14,9H9V20H14V9M7,14H2V20H7V14Z',
  signal2: 'M19.5,5.5V18.5H17.5V5.5H19.5M21,4H16V20H21V4M14,9H9V20H14V9M7,14H2V20H7V14Z',
- signal1: 'M19.5,5.5V18.5H17.5V5.5H19.5M12.5,10.5V18.5H10.5V10.5H12.5M21,4H16V20H21V4M14,9H9V20H14V9M7,14H2V20H7V14Z'});
+ signal1: 'M19.5,5.5V18.5H17.5V5.5H19.5M12.5,10.5V18.5H10.5V10.5H12.5M21,4H16V20H21V4M14,9H9V20H14V9M7,14H2V20H7V14Z',
+ battery: 'M16,20H8V6H16M16.67,4H15V2H9V4H7.33A1.33,1.33 0 0,0 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67A1.33,1.33 0 0,0 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z'});
 const KIND_ICON = Object.freeze({switch: 'plug', probes: 'probe', gateway: 'gateway'});
 const BUS_ICON = Object.freeze({boiler: 'fire', thermostat: 'thermostat', device: 'devices'});
 
@@ -572,55 +424,50 @@ const pipeOf = (role, t) => {
 };
 const problem = tone => (tone ? 'attention' : 'rest');
 
-/* ---- the screens of #devices: kept in history.state, so back, forward and reload stay on them ---- */
-const state = {screen: 'list', pending: null, root: null, ctx: null, item: null, flash: null, quiet: null, form: null, scan: null, pill: null, gateway: null,
- prefill: null, valveGateway: null, valveFrom: null};
-const SCREEN = /^(bluetooth|pair|shelly|bus|sensor\/[0-9a-f]{12}|pair\/[0-9a-f]{12}|device\/[^/]+)$/;
+/* ---- the screens of #devices, one address each (1.4.2): the core reads, saves and keeps the history ---- */
+const state = {screen: 'list', root: null, ctx: null, item: null, flash: null, quiet: null, form: null, scan: null, pill: null, gateway: null,
+ prefill: null, valveGateway: null, valveFrom: null, autostart: false, followed: null};
+const SCREEN = /^(bluetooth|pair|shelly|bus|batteries|sensor\/[0-9a-f]{12}|pair\/[0-9a-f]{12}|device\/[^/]+)$/;
+const screenOf = item => (item && SCREEN.test(item) ? item : 'list');
 const parentOf = screen => (screen.startsWith('pair/') ? 'pair' : PARENTS[screen.split('/')[0]] || 'list');
-const remember = (screen, push) => {
- const next = {...(history.state || {}), openthermostat_settings: true, ot_devices: screen};
- try { history[push ? 'pushState' : 'replaceState'](next, '', '#devices'); } catch (e) { /* no history here */ }
-};
-// Show a block screen: one step in the browser's history, the page redrawn in place, the title focused.
-function show(screen, push = true) {
- remember(screen, push);
- moveTo(screen);
- redraw(true);
-}
+const routeTo = screen => (screen === 'list' ? '#devices' : '#devices/' + screen);
+// Open a screen: one step in the browser's history (the core's), its model read for it.
+function show(screen) { state.ctx?.navigate(routeTo(screen)); }
+// The screen changed (a link, back, forward, a reload): what belonged to the one before goes.
 function moveTo(screen) {
- state.screen = screen; state.flash = null; state.quiet = state.ctx?.model || null;
+ if (screen === state.screen) return false;
+ state.screen = screen; state.flash = state.flash?.model ? null : state.flash; state.quiet = null;
  // A bindkey never outlives its form; a device's screen reads its probes again.
  if (state.form && screen !== 'pair/' + state.form.address) state.form.bindkey = '';
  if (!screen.startsWith('device/')) state.pill = null;
+ return true;
 }
 const FOCUS = Object.freeze(['fk', 'found', 'foundValve', 'search', 'gatewayScan', 'saveRoles', 'pairSubmit', 'removeValve']);
 function redraw(moved) {
  const {root, ctx} = state;
- if (!root?.isConnected || !ctx || state.item != null) return;
+ if (!root?.isConnected || !ctx || screenOf(ctx.item) !== state.screen) return;
  // Focus stays where it was across a redraw (a field, a row the search found, a button), unless the screen moved.
  const a = root.getRootNode().activeElement, key = !moved && a && root.contains(a) ? FOCUS.find(k => a.dataset?.[k] != null) : null;
  const focus = key && `[data-${key.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}="${CSS.escape(a.dataset[key])}"]`;
- root.replaceChildren(...screenOf(ctx).filter(Boolean), ctx.kit.h('style', {text: STYLE}));
+ root.replaceChildren(...drawScreen(ctx).filter(Boolean), ctx.kit.h('style', {text: STYLE + BATTERY_STYLE}));
  root.dataset.screen = state.screen.split('/')[0];
- if (moved) {
+ if (focus) root.querySelector(focus)?.focus({preventScroll: true});
+}
+// A new screen: its title gets the focus (keyboard and screen reader users start there), the page scrolled up to it.
+function focusTitle(root) {
+ queueMicrotask(() => {
+  if (!root.isConnected) return;
   const host = root.getRootNode().host;
   if (host && host.getBoundingClientRect().top < 0) host.scrollIntoView({block: 'start'});
   (root.querySelector('.dv-head .title') || root.closest('.page')?.querySelector('.title'))?.focus({preventScroll: true});
- } else if (focus) root.querySelector(focus)?.focus({preventScroll: true});
+ });
 }
-// The browser's back and forward between screens of #devices (the core sees the same route and leaves it to us).
-window.addEventListener('popstate', () => {
- if (!state.root?.isConnected || state.item != null || !/^#devices\/?$/.test(location.hash)) return;
- const screen = history.state?.ot_devices;
- moveTo(typeof screen === 'string' && SCREEN.test(screen) ? screen : 'list');
- redraw(true);
-});
 // A screen's own head (the core's head stays for the list): back to the screen above, title, one sentence.
 function head(ctx, title, subtitle) {
  const {kit, t} = ctx, {h} = kit, up = parentOf(state.screen);
  const label = up === 'list' ? t('Devices') : up === 'pair' ? t('Devices found') : t(SCREENS[up][0]);
  return h('header', {class: 'head dv-head'},
-  h('a', {class: 'back', href: '#devices', 'data-dv-back': up, on: {click: e => { e.preventDefault(); show(up); }}},
+  h('a', {class: 'back', href: routeTo(up), 'data-dv-back': up, on: {click: e => { e.preventDefault(); show(up); }}},
    kit.icon('chevron-left', {size: 20}), h('span', {text: t('Back to {page}', {page: label})})),
   h('h2', {class: 'title', text: title, tabindex: '-1'}), subtitle ? h('p', {class: 'subtitle', text: subtitle}) : null);
 }
@@ -629,7 +476,10 @@ function saved(ctx, kinds) {
  const {kit, t, model: m} = ctx, done = m.live?.saved;
  if (!done || !kinds.includes(done.done) || state.quiet === m) return null;
  const name = done.name || NAMES[done.kind] || '';
- const text = done.done === 'removed' ? t('{name} removed.', {name}) : done.done === 'valves_removed' ? t('Valves removed: {count}.', {count: done.count}) : t(DONE[done.done]);
+ // "Measures for" (1.4.2): the room it measures for now, then what the E32 does with a new name.
+ const room = done.room === undefined ? '' : done.room ? t('Saved: it measures for {room} now.', {room: done.room}) : t('Saved: no room measures with it now.');
+ const text = done.done === 'removed' ? t('{name} removed.', {name}) : done.done === 'valves_removed' ? t('Valves removed: {count}.', {count: done.count})
+  : done.done === 'room_saved' ? room : [room, t(DONE[done.done])].filter(Boolean).join(' ');
  return kit.h('div', {class: 'dv-done', 'data-done': done.done}, kit.notice(text, 'success'));
 }
 // What was just added or paired, on the screen it went to, until you move on or save something else.
@@ -640,7 +490,7 @@ const flash = (ctx, kind) => {
 const toolbar = (kit, text, action) => kit.h('div', {class: 'dv-toolbar'}, kit.h('p', {class: 'help', text}), action);
 const errorLine = (kit, text) => (text ? kit.inlineError(text) : null);
 
-function screenOf(ctx) {
+function drawScreen(ctx) {
  const s = state.screen;
  if (s === 'bluetooth') return bluetoothScreen(ctx);
  if (s === 'pair') return pairScreen(ctx);
@@ -649,6 +499,7 @@ function screenOf(ctx) {
  if (s === 'shelly') return shellyScreen(ctx);
  if (s.startsWith('device/')) return deviceScreen(ctx, s.slice(7));
  if (s === 'bus') return busScreen(ctx);
+ if (s === 'batteries') return batteriesScreen(ctx);
  return listScreen(ctx);
 }
 
@@ -656,6 +507,15 @@ function screenOf(ctx) {
 function bleFacts(ctx) {
  const m = ctx.model, live = m.live?.bluetooth || {};
  return (m.bluetooth || []).map(s => ({sensor: s, info: live[s.address] || {}, temperature: reading(ctx.hass, live[s.address]?.temperature)}));
+}
+// The room a sensor measures for (the rooms whose temperature sources list it), or that it has none yet.
+const measuresLine = (t, info) => (info.rooms?.length ? t('Measures for {rooms}', {rooms: info.rooms.join(', ')}) : t('Not assigned to a room yet'));
+// The age of the sensor's last reading, from its temperature entity (age_s, sent with every E32 message).
+function lastReading(t, hass, id) {
+ const age = hass?.states?.[id]?.attributes?.age_s;
+ if (typeof age !== 'number' || age < 0) return null;
+ return age < 60 ? t('Last reading {n} s ago', {n: Math.round(age)}) : age < 3600 ? t('Last reading {n} min ago', {n: Math.floor(age / 60)})
+  : t('Last reading {n} h ago', {n: Math.floor(age / 3600)});
 }
 function listScreen(ctx) {
  const {kit, t, model: m} = ctx, {h} = kit;
@@ -668,59 +528,81 @@ function listScreen(ctx) {
    : t('{gateway} with {n} valves', {gateway: deviceName(d), n: (d.valves || []).length})) : deviceName(d))).join(' · ');
  const busLine = bus == null ? t('The E32 has not reported them yet.') : !bus.length ? t('Nothing heard yet.')
   : bus.map(d => d.name || t(ROLES[d.role] || 'EMS device')).join(' · ');
- const go = screen => ({route: '#devices/' + screen, onClick: () => show(screen)});
+ const go = screen => ({route: routeTo(screen), onClick: () => show(screen)});
  return [h('div', {class: 'card list dv-blocks'},
   item(kit, {name: 'bluetooth', label: t('Bluetooth sensors'), lines: [bleLine], data: {block: 'bluetooth'}, ...go('bluetooth')}),
   item(kit, {name: 'wifi', label: t('Shelly devices'), lines: [shellyLine], data: {block: 'shelly'}, ...go('shelly')}),
-  item(kit, {name: 'bus', label: t('On the boiler bus'), lines: [busLine], data: {block: 'bus'}, ...go('bus')}))];
+  item(kit, {name: 'bus', label: t('On the boiler bus'), lines: [busLine], data: {block: 'bus'}, ...go('bus')}),
+  batteriesRow(ctx))];
 }
 
 /* ---- Bluetooth sensors ---- */
 function bluetoothScreen(ctx) {
  const {kit, t, model: m, lang} = ctx, {h} = kit, out = [head(ctx, t('Bluetooth sensors'), t(SCREENS.bluetooth[1]))];
- out.push(flash(ctx, 'paired') || saved(ctx, ['ble_saved', 'ble_saved_restart_later', 'ble_unchanged']));
+ out.push(flash(ctx, 'paired') || flash(ctx, 'ble') || saved(ctx, ['ble_saved', 'ble_saved_restart_later', 'ble_unchanged']));
  if (m.bluetooth == null) return [...out, kit.notice(t(ERRORS.e32_settings_update_required), 'info')];
  const full = m.bluetooth.length >= MAX_SENSORS;
- const pair = button(kit, t('Pair a sensor'), () => { show('pair'); startScan(); }, 'filled', 'plus', {disabled: ctx.readOnly || full, 'data-pair': ''});
+ // Pair a sensor opens the search and starts it (a reload or a link to #devices/pair waits for you to search).
+ const pair = button(kit, t('Pair a sensor'), () => { state.autostart = true; show('pair'); }, 'filled', 'plus', {disabled: ctx.readOnly || full, 'data-pair': ''});
  if (!m.bluetooth.length) return [...out, h('div', {class: 'ot-card'}, kit.empty({icon: 'bluetooth', text: t('No Bluetooth sensors yet. Pair your first sensor.'), action: pair}))];
  out.push(toolbar(kit, t('{n} of 8 paired', {n: m.bluetooth.length}), pair));
  if (full) out.push(h('p', {class: 'help dv-full', text: t('You can add at most 8 Bluetooth devices.')}));
  const list = h('div', {class: 'card list', 'data-list': 'sensors'});
  for (const f of bleFacts(ctx)) {
-  const s = f.sensor, renamed = (ctx.values[`ble_name:${s.address}`] ?? s.name).trim() !== s.name;
-  list.append(item(kit, {name: 'bluetooth', label: s.name || hex(s.address), data: {sensor: s.address}, ...{route: '#devices/sensor/' + s.address, onClick: () => show('sensor/' + s.address)},
-   lines: [f.info.rooms?.length ? t('used by {rooms}', {rooms: f.info.rooms.join(', ')}) : t('no room uses it')],
+  const s = f.sensor, info = f.info, sig = signal(info.rssi);
+  // Per sensor: its name (marked when it is automatic), the room it measures for, its reading, battery, signal and age.
+  list.append(item(kit, {name: 'bluetooth', label: info.shown || s.name || hex(s.address), data: {sensor: s.address}, route: routeTo('sensor/' + s.address),
+   onClick: () => show('sensor/' + s.address), lines: [measuresLine(t, info)],
    live: hass => {
-    const temp = reading(hass || ctx.hass, f.info.temperature), battery = reading(hass || ctx.hass, f.info.battery);
-    return {value: temp ? shown(kit, temp, lang, 1) : '', chips: [!temp ? [t('No reading'), 'attention', 'alert'] : null,
-     battery ? [t('battery {value}', {value: shown(kit, battery, lang, 0)}), problem(battery.value <= 20)] : null, renamed ? [t('Not saved'), 'along'] : null]};
+    const temp = reading(hass || ctx.hass, info.temperature), battery = reading(hass || ctx.hass, info.battery), age = lastReading(t, hass || ctx.hass, info.temperature);
+    return {value: temp ? shown(kit, temp, lang, 1) : '', chips: [info.automatic ? [t('automatic'), 'rest'] : null, !temp ? [t('No reading'), 'attention', 'alert'] : null,
+     battery ? [t('battery {value}', {value: shown(kit, battery, lang, 0)}), problem(battery.value < (m.live?.battery_limit ?? 20))] : null, sig ? [t(sig[0]), 'rest'] : null,
+     temp && age ? [age, 'rest'] : null]};
    }}));
  }
  out.push(list);
  return out;
 }
 
+// The question of a Bluetooth save: the E32 restarts once (Configure's words).
+const restartQuestion = ctx => ({title: ctx.t('Save the Bluetooth changes?'),
+ text: ctx.t('The E32 saves these changes and restarts once, about 30 seconds later; the heating continues after about a minute.'),
+ confirm: ctx.t('Save and let the E32 restart')});
 function sensorScreen(ctx, address) {
- const {kit, t, model: m, lang} = ctx, {h} = kit, s = (m.bluetooth || []).find(x => x.address === address);
- if (!s) { state.screen = 'bluetooth'; remember('bluetooth', false); return bluetoothScreen(ctx); }
- const info = m.live?.bluetooth?.[address] || {}, type = TYPES[s.profile] ? NAMES[s.profile] : s.profile;
- const out = [head(ctx, s.name || hex(address), [type, t('Address {address}', {address: hex(address)})].join(' · '))];
- out.push(saved(ctx, ['ble_saved', 'ble_saved_restart_later', 'ble_unchanged']));
+ const {kit, t, model: m, lang} = ctx, {h} = kit;
+ if (m.missing) {  // a link to a sensor that was forgotten
+  return [head(ctx, hex(address), t('Address {address}', {address: hex(address)})), kit.notice(t(ERRORS.ble_changed), 'info',
+   kit.button(t('Bluetooth sensors'), () => show('bluetooth'), 'outlined', {'data-to-list': ''}))];
+ }
+ const info = m.live || {}, type = TYPES[m.profile] ? NAMES[m.profile] : m.profile, name = info.shown || m.own_name || hex(address);
+ const out = [head(ctx, name, [type, t('Address {address}', {address: hex(address)})].join(' · '))];
+ out.push(saved(ctx, ['ble_saved', 'ble_saved_restart_later', 'ble_unchanged', 'room_saved']));
  // The readings now, from the sensor's own Home Assistant entities (in Home Assistant's units).
  const values = h('div', {class: 'dv-readings', 'data-live': ''});
  values._live = hass => {
   const temp = reading(hass, info.temperature), hum = reading(hass, info.humidity), bat = reading(hass, info.battery);
   values.replaceChildren(kit.valueDisplay({value: temp ? kit.number(temp.value, lang, 1) : null, unit: temp?.unit, label: t('Temperature')}),
    ...(hum ? [kit.valueDisplay({value: kit.number(hum.value, lang, 0), unit: hum.unit, label: t('Humidity'), size: 'small'})] : []),
-   ...(bat ? [kit.valueDisplay({value: kit.number(bat.value, lang, 0), unit: bat.unit, label: t('Battery'), size: 'small', tone: bat.value <= 20 ? 'attention' : ''})] : []));
+   ...(bat ? [kit.valueDisplay({value: kit.number(bat.value, lang, 0), unit: bat.unit, label: t('Battery'), size: 'small', tone: bat.value < (m.live?.battery_limit ?? 20) ? 'attention' : ''})] : []));
  };
  values._live(ctx.hass);
- out.push(h('div', {class: 'ot-card dv-sensor'}, values,
-  h('p', {class: 'help', text: info.rooms?.length ? t('used by {rooms}', {rooms: info.rooms.join(', ')}) : t('no room uses it')})));
+ const age = h('p', {class: 'help', 'data-live': ''});
+ age._live = hass => { const text = lastReading(t, hass, info.temperature); age.textContent = text || ''; age.hidden = !text; };
+ age._live(ctx.hass);
+ out.push(h('div', {class: 'ot-card dv-sensor'}, values, h('p', {class: 'help', 'data-measures': '', text: measuresLine(t, info)}), age));
+ // Its own name on the E32 (a sensor without one is named after its room: marked "automatic", kept with one tap) and
+ // the room it measures for (that room's first temperature source; one plan write).
+ const auto = info.automatic ? h('div', {class: 'dv-auto', 'data-automatic': ''}, kit.chip(t('automatic'), 'rest'),
+  ctx.readOnly ? null : kit.button(t('Keep this name'), () => ctx.act({name}, restartQuestion(ctx)), 'text', {'data-keep-name': ''})) : null;
  out.push(h('div', {class: 'card form'}, h('div', {class: 'fields'},
-  ctx.field('text', `ble_name:${address}`, {label: t('Name'), maxlength: 40, help: t('At most 40 characters (fewer with special letters).')}))));
+  ctx.field('text', 'name', {label: t('Name'), maxlength: 40, help: t('Without a name of its own, the sensor is named after the room that measures with it.')}), auto,
+  ctx.field('select', 'measures_for', {label: t('Measures for'), help: t('The room uses it as its first temperature source; other rooms stop using it.'),
+   options: [{value: '', label: t('No room')}, ...(m.rooms || []).map(r => ({value: r.id, label: r.name}))]}))));
+ // Its entities still carry an older name: Installation → Tidy entity IDs renames them (with a preview first).
+ if (info.ids_stale && !ctx.readOnly) out.push(h('div', {'data-ids-stale': ''}, kit.notice(t('The entity IDs in Home Assistant still carry an older name.'), 'info',
+  kit.button(t('Tidy entity IDs'), () => ctx.navigate('#installation'), 'outlined', {'data-tidy': ''}))));
  if (!ctx.readOnly) out.push(h('div', {class: 'dv-remove'}, button(kit, t('Forget sensor'), () => ctx.act({[`ble_forget:${address}`]: true}, {
-  title: t('Forget {name}?', {name: s.name || hex(address)}),
+  title: t('Forget {name}?', {name}),
   text: [t('The E32 stops reading it and deletes its key, then restarts once, about 30 seconds later. To use it again, pair it again.'),
    info.rooms?.length ? t('Rooms that measure with it: {rooms}.', {rooms: info.rooms.join(', ')}) : ''].filter(Boolean).join(' '),
   confirm: t('Forget'), danger: true}), 'danger', 'trash', {'data-forget': address})));
@@ -728,20 +610,27 @@ function sensorScreen(ctx, address) {
 }
 
 /* ---- Pair a sensor: the E32 searches, the panel shows what it hears ---- */
-async function startScan() {
+// start: ask the E32 to search (Search); without it, follow a search that already runs (one started before, here or on
+// the E32's page) until it is done.
+async function startScan(start = true) {
  const ctx = state.ctx;
  if (!ctx || ctx.readOnly) return;
- const run = state.scan = {running: true, sensors: [], error: null, full: false, paired: null, max: MAX_SENSORS};
+ const kept = start ? [] : state.scan?.sensors || [];
+ const run = state.scan = {running: true, sensors: kept, error: null, full: false, paired: null, max: MAX_SENSORS,
+  discovery: ctx.model.live?.discovery != null};
  redraw();
- const alive = () => state.scan === run && run.running && state.root?.isConnected && state.item == null && state.screen === 'pair';
- try { await ctx.action('scan'); } catch (e) { if (state.scan === run) { run.running = false; run.error = e.text; redraw(); } return; }
+ const alive = () => state.scan === run && run.running && state.root?.isConnected && state.ctx?.item === 'pair' && state.screen === 'pair';
+ if (start) {
+  try { await ctx.action('scan'); } catch (e) { if (state.scan === run) { run.running = false; run.error = e.text; redraw(); } return; }
+ }
  while (alive()) {
   await sleep(POLL_BLE_MS);
   if (!alive()) break;
   try {
    const r = await state.ctx.action('scan_result');
    if (state.scan !== run) return;
-   Object.assign(run, {sensors: r.sensors || [], full: r.full === true, paired: r.paired, max: r.max || MAX_SENSORS});
+   Object.assign(run, {sensors: r.sensors || [], full: r.full === true, paired: r.paired, max: r.max || MAX_SENSORS,
+    discovery: r.discovery != null});
    if (r.done) run.running = false;
   } catch (e) { if (state.scan !== run) return; run.running = false; run.error = e.text; }
   if (state.screen === 'pair') redraw();
@@ -750,10 +639,21 @@ async function startScan() {
  if (state.scan === run) run.running = false;
 }
 function pairScreen(ctx) {
- const {kit, t} = ctx, {h} = kit, scan = state.scan, out = [head(ctx, t('Pair a sensor'), t(SCREENS.pair[1]))];
- const running = !!scan?.running, found = scan?.sensors || [];
- const atMax = scan?.paired != null ? scan.paired >= scan.max : (ctx.model.bluetooth || []).length >= MAX_SENSORS;
- if (running) out.push(h('div', {class: 'dv-status', 'data-status': 'searching'}, kit.statusLine(t('Searching nearby…'), 'accent')));
+ const {kit, t, model: m} = ctx, {h} = kit, out = [head(ctx, t('Pair a sensor'), t(SCREENS.pair[1]))];
+ if (m.supported === false) return [...out, kit.notice(t(ERRORS.e32_settings_update_required), 'info')];
+ // Opened from Pair a sensor: search at once. Opened while a search runs (E32 1.4.2: queued or running; older firmware:
+ // the panel's own, younger than 95 s): follow it, Search stays off until it is done. An automatic scan of the E32
+ // (it reads its paired sensors) is no search: Search stays on.
+ const follow = !!m.live?.searching && state.followed !== m;
+ if (!ctx.readOnly && !state.scan?.running && (state.autostart || follow)) {
+  const start = state.autostart;
+  state.autostart = false; state.followed = m;
+  queueMicrotask(() => startScan(start));
+ }
+ const scan = state.scan, running = !!scan?.running || follow, found = scan?.sensors || [];
+ const atMax = scan?.paired != null ? scan.paired >= scan.max : m.paired >= (m.max || MAX_SENSORS);
+ const searching = (scan ? scan.discovery : m.live?.discovery != null) ? t('Searching… (up to 90 s)') : t('Searching nearby…');
+ if (running) out.push(h('div', {class: 'dv-status', 'data-status': 'searching'}, kit.statusLine(searching, 'accent')));
  out.push(errorLine(kit, scan?.error));
  const again = button(kit, t('Search nearby'), () => startScan(), found.length ? 'outlined' : 'filled', 'magnify', {disabled: ctx.readOnly || running, 'data-search': ''});
  if (!running) out.push(h('div', {class: 'dv-actions'}, again));
@@ -770,21 +670,24 @@ function pairScreen(ctx) {
     disabled: d.known || atMax || ctx.readOnly, onClick: () => openForm(d)}));
   }
   out.push(list);
- } else if (running) out.push(h('div', {class: 'dv-wait', role: 'status', 'aria-label': t('Searching nearby…')}, kit.skeleton('rows', 3)));
+ } else if (running) out.push(h('div', {class: 'dv-wait', role: 'status', 'aria-label': searching}, kit.skeleton('rows', 3)));
  else if (scan && !scan.error) out.push(h('div', {class: 'ot-card'}, kit.empty({icon: 'bluetooth', text: t('No devices found yet. Start a search and wake the sensor if needed.')})));
  return out;
 }
-function openForm(d) {
+function formOf(d) {
  const profile = TYPES[d.kind] ? d.kind : null;
- state.form = {address: d.address, heard: d.name || '', rssi: d.rssi, name: d.name || '', profile, guessed: !!profile,
+ return {address: d.address, heard: d.name || '', rssi: d.rssi, name: d.name || '', profile, guessed: !!profile,
   encryption: profile ? (TYPES[profile].includes(d.encryption) ? d.encryption : TYPES[profile][0]) : null, bindkey: '', errors: {}, base: null, busy: false};
+}
+function openForm(d) {
+ state.form = formOf(d);
  show('pair/' + d.address);
 }
 function pairForm(ctx, address) {
- const {kit, t, hass} = ctx, {h} = kit, f = state.form;
- // Reloaded or back here after pairing: the search's list instead.
- if (!f || f.address !== address) { state.screen = 'pair'; remember('pair', false); return pairScreen(ctx); }
- const sig = signal(f.rssi);
+ const {kit, t, hass, model: m} = ctx, {h} = kit;
+ // A link or a reload: the form from what the E32 heard (#devices/pair/<address> reads it), else empty.
+ if (!state.form || state.form.address !== address) state.form = formOf({address, ...(m.live?.heard || {})});
+ const f = state.form, sig = signal(f.rssi);
  const out = [head(ctx, f.heard || t('Unnamed Bluetooth device'), [t('Address {address}', {address: hex(address)}), sig ? t(sig[0]) : ''].filter(Boolean).join(' · '))];
  const fields = {};
  const add = (key, api) => { fields[key] = api; if (f.errors[key]) api.setError(f.errors[key]); return api.el; };
@@ -807,9 +710,10 @@ function pairForm(ctx, address) {
   Object.assign(key.input, {type: 'password', autocomplete: 'off', spellcheck: false});
   parts.push(add('bindkey', key));
  }
+ if (m.known) out.push(kit.notice(t(ERRORS.ble_already_paired), 'info'));
  out.push(h('div', {class: 'card form'}, errorLine(kit, f.base), h('div', {class: 'fields'}, ...parts)));
  out.push(h('div', {class: 'dv-actions'}, button(kit, f.busy ? t('Pairing…') : t('Pair'), () => pair(fields), 'filled', 'bluetooth',
-  {disabled: ctx.readOnly || f.busy, 'data-pair-submit': ''})));
+  {disabled: ctx.readOnly || f.busy || !!m.known, 'data-pair-submit': ''})));
  return out;
 }
 const root = () => state.root;
@@ -826,9 +730,8 @@ async function pair(fields) {
   const sensor = state.scan?.sensors?.find(d => d.address === f.address);
   if (sensor) sensor.known = true;
   state.form = null;  // the key with it
-  state.pending = 'bluetooth';
   state.flash = {kind: 'paired', done: 'paired', text: `${ctx.t('{name} paired.', {name: values.name.trim()})} ${ctx.t(restart)}`};
-  ctx.navigate('#devices');
+  ctx.navigate(routeTo('bluetooth'));
  } catch (e) {
   if (state.form !== f) return;
   f.busy = false;
@@ -860,14 +763,18 @@ function shellyScreen(ctx) {
   const valves = d.kind === 'gateway' ? (d.valves || []).length : null;
   list.append(item(kit, {name: KIND_ICON[d.kind] || 'devices', label: deviceName(d), data: {device: d.id},
    lines: [[t(JOBS[d.kind]), d.ip].join(' · '), valves == null ? '' : valves === 1 ? t('1 valve') : t('{n} valves', {n: valves})],
-   chips: [healthChip(t, live[String(d.n)])], route: '#devices/device/' + encodeURIComponent(d.id), onClick: () => show('device/' + d.id)}));
+   chips: [healthChip(t, live[String(d.n)])], route: routeTo('device/' + d.id), onClick: () => show('device/' + d.id)}));
  }
  out.push(list);
  return out;
 }
 function deviceScreen(ctx, id) {
- const {kit, t, model: m} = ctx, {h} = kit, d = m.shelly?.devices.find(x => x.id === id), live = m.live?.shelly || {};
- if (!d) { state.screen = 'shelly'; remember('shelly', false); return shellyScreen(ctx); }
+ const {kit, t, model: m} = ctx, {h} = kit, d = m.device, live = m.live?.shelly || {};
+ if (m.supported === false) return [head(ctx, t('Shelly device'), null), kit.notice(t(ERRORS.shelly_unsupported), 'info')];
+ if (!d) {  // a link to a device that was removed
+  return [head(ctx, t('Shelly device'), null), kit.notice(t('No Shelly devices yet.'), 'info',
+   kit.button(t('Shelly devices'), () => show('shelly'), 'outlined', {'data-to-list': ''}))];
+ }
  const out = [head(ctx, deviceName(d), t(JOBS[d.kind]))];
  const chip = healthChip(t, live[String(d.n)]);
  out.push(h('div', {class: 'ot-card dv-facts'}, h('span', {class: 'row-icon'}, icon(kit, KIND_ICON[d.kind] || 'devices')),
@@ -956,7 +863,7 @@ async function startGatewayScan(d) {
  if (!ctx || ctx.readOnly) return;
  const run = state.gateway = {id: d.id, n: d.n, running: true, result: null, error: null, timeout: false, until: Date.now() + GATEWAY_MS};
  redraw();
- const alive = () => state.gateway === run && run.running && state.root?.isConnected && state.item == null && state.screen === 'device/' + d.id;
+ const alive = () => state.gateway === run && run.running && state.root?.isConnected && state.screen === 'device/' + d.id;
  try { await ctx.action('gateway_scan', {gateway: d.n}); } catch (e) { if (state.gateway === run) { run.running = false; run.error = e.text; redraw(); } return; }
  while (alive()) {
   await sleep(POLL_GATEWAY_MS);
@@ -973,7 +880,7 @@ async function startGatewayScan(d) {
  if (state.gateway === run) run.running = false;
 }
 function gatewayCards(ctx, d) {
- const {kit, t, model: m} = ctx, {h} = kit, live = m.live?.shelly || {}, max = m.shelly.max_valves, valves = d.valves || [];
+ const {kit, t, model: m} = ctx, {h} = kit, live = m.live?.shelly || {}, max = m.max_valves, valves = d.valves || [];
  const full = valves.length >= max;
  const list = h('div', {class: 'card list dv-inner', 'data-list': 'valves'});
  for (const v of valves) {
@@ -1025,6 +932,45 @@ function busScreen(ctx) {
  return out;
 }
 
+/* ---- #devices/batteries (1.4.2, HA-BATTERIES): every battery on one list, the limit in its head ---- */
+// The backend's item "batteries" (settings_devices.py, device_battery.collect): {limit_pct, limits, live.devices: [{id, name,
+// room, room_name, kind, pct, low, reported_at, source, entity_id}]}, low first. Read from Home Assistant alone (no E32 sign-in).
+const BATTERY_KINDS = Object.freeze({thermometer: ['Bluetooth sensor', 'bluetooth'], valve: ['Radiator valve', 'valve'],
+ contact: ['Window or door contact', 'window'], setting_device: ['Setting device', 'thermostat'],
+ temperature_source: ['Temperature source', 'thermometer'], gateway: ['Gateway', 'gateway']});
+const BATTERY_STYLE = `.dv-bat .ot-card-head{margin-bottom:var(--ot-s2)}.dv-bat>.field{border-top:0;padding-top:0}
+.dv-bat>.dv-inner{margin-top:var(--ot-s3)}.dv-bat>.ot-empty{padding:var(--ot-s4) var(--ot-s2)}.dv-bat .btn.ot-more{min-height:44px}
+.dv-bat .ot-seg-btn{min-height:44px;min-width:44px}`;
+// The row on #devices: how many devices report a battery, a red label while one is low.
+function batteriesRow(ctx) {
+ const {kit, t, model: m} = ctx, b = m.live?.batteries;
+ if (!b) return null;
+ const line = !b.devices ? t('No device reports a battery.') : b.devices === 1 ? t('1 device') : t('{n} devices', {n: b.devices});
+ return item(kit, {name: 'battery', label: t('Batteries'), lines: [line], data: {block: 'batteries'}, route: routeTo('batteries'), onClick: () => show('batteries'),
+  chips: [b.low ? [t('{n} low', {n: b.low}), 'attention', 'alert'] : null]});
+}
+function batteriesScreen(ctx) {
+ const {kit, t, model: m, lang, hass} = ctx, {h} = kit, rows = m.live?.devices || [];
+ const lows = rows.filter(r => r.low).length;
+ const head = rows.length ? [rows.length === 1 ? t('1 device') : t('{n} devices', {n: rows.length}), lows ? t('{n} low', {n: lows}) : ''].filter(Boolean).join(' · ') : '';
+ const limit = ctx.field('segmented', 'limit_pct', {label: t('Warn below'), help: t('Below this a battery counts as low: on this list, in the messages and on the dashboard.'),
+  more: t('The E32 keeps its own 20 % for the radiator valves it drives itself: at 20 % and below such a valve also shows Radiator valve problem.'),
+  options: (m.limits || [15, 20, 25, 30]).map(v => ({value: v, label: kit.together(`${kit.number(v, lang, 0)} %`)}))});
+ const body = card(kit, {icon: 'battery', title: t('Batteries'), summary: head, cls: 'dv-bat', data: {card: 'batteries'}}, limit);
+ if (!rows.length) { body.append(kit.empty({icon: 'info', text: t('No device reports a battery.')})); return [body]; }
+ const list = h('div', {class: 'card list dv-inner', 'data-list': 'batteries'});
+ for (const r of rows) {
+  const [kind, name] = BATTERY_KINDS[r.kind] || BATTERY_KINDS.thermometer;
+  const when = r.reported_at ? kit.time.moment(hass, r.reported_at) : '';
+  list.append(item(kit, {name, label: r.name, data: {battery: r.id, low: r.low === true ? 'true' : r.low === false ? 'false' : 'unknown'},
+   lines: [[r.room_name || t('Not in a room'), t(kind)].join(' · '), when ? t('last reported {moment}', {moment: when}) : ''],
+   value: r.pct != null ? `${kit.number(r.pct, lang, 0)} %` : r.low === false ? t('Fine') : r.low == null ? t('No report') : '',
+   chips: [r.low ? [t('Low'), 'attention', 'alert'] : null]}));
+ }
+ body.append(list);
+ return [body];
+}
+
 /* ---- #devices/shelly-add and #devices/valve-add (1.4's forms, in a card) ---- */
 function addDevice(ctx) {
  const {kit, t} = ctx;
@@ -1059,18 +1005,26 @@ function addValve(ctx) {
   ctx.field('text', 'name', {label: t('Name'), maxlength: 32, help: t('Optional, for example Bathroom.')})), kit.more(t(MORE['valve-add']), ctx.lang));
 }
 
-// The editable values: each paired sensor's name (#devices); the add forms.
+// The editable values: a sensor's name and the room it measures for (#devices/sensor/<address>); the add forms.
 function values(m) {
  if (m.screen === 'shelly-add') return {ip: '', kind: 'auto', label: '', password: ''};
+ if (m.screen === 'batteries') return {limit_pct: m.limit_pct};
  if (m.screen === 'valve-add') {
   const g = m.gateways?.find(x => x.valves.length < m.max_valves) || m.gateways?.[0];
   let valve = m.valve_range?.[0] ?? 200;
   while (g && g.valves.includes(valve)) valve++;
   return {gateway: g ? String(g.n) : '', valve, name: ''};
  }
- return Object.fromEntries((m.bluetooth || []).map(s => [`ble_name:${s.address}`, s.name]));
+ if (m.screen === 'sensor' && !m.missing) return {name: m.live?.shown || m.own_name || '', measures_for: m.measures_for || ''};
+ return {};
 }
-const renamed = (v, m) => (m.bluetooth || []).filter(s => (v[`ble_name:${s.address}`] ?? s.name).trim() !== s.name);
+// What a sensor's save sends: only what you changed ("" for no room is null).
+function sensorSave(v, m) {
+ const was = values(m), out = {};
+ if (String(v.name ?? '').trim() !== String(was.name).trim()) out.name = String(v.name ?? '').trim();
+ if ((v.measures_for || '') !== was.measures_for) out.measures_for = v.measures_for || null;
+ return out;
+}
 
 const STYLE = `.dv{display:grid;gap:var(--ot-s3)}.dv>*{margin:0}.page:has(.dv-head)>.head{display:none}.dv-head{margin-bottom:var(--ot-s1)}
 .dv .notice,.dv .inline-error{margin:0}.dv-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}.dv-toolbar.end{justify-content:flex-end}
@@ -1088,43 +1042,58 @@ button.dv-row:disabled .row-label{color:var(--ot-muted)}button.dv-row:disabled:h
 .card.form>.ot-more-wrap{padding:0 0 var(--ot-s3)}
 .dv-facts{display:flex;align-items:center;gap:var(--ot-s3);flex-wrap:wrap}.dv-fact{display:grid;gap:2px;flex:1 1 auto;min-width:0}
 .dv-ip{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.dv-why{padding:0 var(--ot-s1)}
+.dv-auto{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:calc(-1 * var(--ot-s2))}
 .ot-value[data-tone=attention] .ot-value-figure{color:var(--ot-attention-ink)}
 @media(max-width:420px){.dv-inner{margin:0 calc(-1 * var(--ot-s3))}.dv-none{padding:var(--ot-s3)}.dv-value{font-size:var(--ot-text-m)}}`;
 
+// The title of a screen while its model loads (its own head replaces it then).
+const LOADING = {bluetooth: 'Bluetooth sensors', pair: 'Pair a sensor', shelly: 'Shelly devices', bus: 'On the boiler bus', sensor: 'Bluetooth sensors',
+ device: 'Shelly devices', batteries: 'Batteries'};
+
 (window.OpenThermostatSettingsSections ||= []).push(['devices', {
- title: (model, item) => TITLES[item] || 'Devices',
+ title: (model, item) => TITLES[item] || (item && SCREEN.test(item) ? LOADING[item.split('/')[0]] : null) || 'Devices',
  subtitle: (model, item) => SUBTITLES[item] || null,
  texts: TEXTS,
  errors: ERRORS,
  cards: true,
  values,
- // #devices/<screen> (a link, the guide, a reload elsewhere) opens that screen of #devices: the backend has one model for them.
- redirect: item => (item && SCREEN.test(item) ? (state.pending = item, '#devices') : null),
- // The add forms go back to the screen they came from.
- parent: item => (item === 'valve-add' && state.valveFrom ? {route: '#devices/device/' + encodeURIComponent(state.valveFrom.id), label: state.valveFrom.name}
-  : {route: '#devices/shelly', label: 'Shelly devices'}),
- // Only the names you changed; the add forms as they are.
+ // The screen above: a block's list, the search above its form; the add forms go back to the screen they came from.
+ parent: item => {
+  if (item === 'valve-add' && state.valveFrom) return {route: routeTo('device/' + state.valveFrom.id), label: state.valveFrom.name};
+  if (item === 'shelly-add' || item === 'valve-add') return {route: routeTo('shelly'), label: 'Shelly devices'};
+  const up = SCREEN.test(item) ? parentOf(item) : 'list';
+  return {route: routeTo(up), label: up === 'list' ? 'Devices' : up === 'pair' ? 'Devices found' : SCREENS[up][0]};
+ },
+ // A sensor's screen: only what you changed; the add forms as they are; the blocks have nothing to save.
  toSave: (v, m) => {
   if (m.screen === 'valve-add') state.valveGateway = v.gateway;
-  return m.screen ? v : Object.fromEntries(renamed(v, m).map(s => [`ble_name:${s.address}`, v[`ble_name:${s.address}`]]));
+  return m.screen === 'sensor' ? sensorSave(v, m) : m.screen ? v : {};
  },
- confirm: (v, m, ctx) => (!m.screen && renamed(v, m).length ? {title: ctx.t('Save the Bluetooth changes?'),
-  text: ctx.t('The E32 saves these changes and restarts once, about 30 seconds later; the heating continues after about a minute.'),
-  confirm: ctx.t('Save and let the E32 restart')} : null),
- // After adding: the list the device or valve went into, with what was added.
+ // A new name on the E32 restarts it once: asked first (Configure's words).
+ confirm: (v, m, ctx) => (m.screen === 'sensor' && sensorSave(v, m).name !== undefined ? restartQuestion(ctx) : null),
+ // After adding: the list the device or valve went into, with what was added; after forgetting or removing: the list.
  saved: (model, item) => {
   const done = model.live?.saved;
   if (item === 'shelly-add' && done?.done === 'added') {
    const name = done.name || NAMES[done.kind] || '';
    state.flash = {kind: 'shelly', done: 'added', make: t => t('{name} added.', {name})};
-   return '#devices/shelly';
+   return routeTo('shelly');
   }
   if (item === 'valve-add' && done?.done === 'valve_added') {
    const g = (model.gateways || []).find(x => String(x.n) === String(state.valveGateway));
    const found = g && state.gateway?.id === g.id ? state.gateway.result?.valves?.find(v => v.id === done.valve) : null;
    if (found) found.known = true;
    state.flash = {kind: 'valve', done: 'valve_added', make: t => t('{name} added.', {name: t('Valve {id}', {id: done.valve}) + (done.name ? ` · ${done.name}` : '')})};
-   return g ? '#devices/device/' + encodeURIComponent(g.id) : '#devices/shelly';
+   return g ? routeTo('device/' + g.id) : routeTo('shelly');
+  }
+  if (model.screen === 'sensor' && model.missing && DONE[done?.done]) {
+   state.flash = {kind: 'ble', done: done.done, make: t => t(DONE[done.done])};
+   return routeTo('bluetooth');
+  }
+  if (model.screen === 'device' && !model.device && done?.done === 'removed') {
+   const name = done.name || NAMES[done.kind] || '';
+   state.flash = {kind: 'shelly', done: 'removed', make: t => t('{name} removed.', {name})};
+   return routeTo('shelly');
   }
   return null;
  },
@@ -1133,17 +1102,18 @@ button.dv-row:disabled .row-label{color:var(--ot-muted)}button.dv-row:disabled:h
   const {kit} = ctx, el = kit.h('div', {class: 'dv'});
   state.ctx = ctx; state.root = el; state.item = ctx.item;
   if (ctx.item === 'shelly-add' || ctx.item === 'valve-add') {
+   moveTo(ctx.item);
    el.dataset.screen = ctx.item;
-   el.append(ctx.item === 'shelly-add' ? addDevice(ctx) : addValve(ctx), kit.h('style', {text: STYLE}));
+   el.append(ctx.item === 'shelly-add' ? addDevice(ctx) : addValve(ctx), kit.h('style', {text: STYLE + BATTERY_STYLE}));
    return el;
   }
-  if (state.pending) { state.screen = state.pending; state.pending = null; remember(state.screen, false); }
-  else { const s = history.state?.ot_devices; state.screen = typeof s === 'string' && SCREEN.test(s) ? s : 'list'; }
-  // What was just added or paired belongs to the model read after it.
+  const moved = moveTo(screenOf(ctx.item));
+  // What was just added, paired or forgotten belongs to the model read after it.
   const f = state.flash;
   if (f && !f.model) { f.model = ctx.model; if (f.make) f.text = f.make(ctx.t); }
-  el.append(...screenOf(ctx).filter(Boolean), kit.h('style', {text: STYLE}));
+  el.append(...drawScreen(ctx).filter(Boolean), kit.h('style', {text: STYLE + BATTERY_STYLE}));
   el.dataset.screen = state.screen.split('/')[0];
+  if (moved) focusTitle(el);
   return el;
  }
 }]);

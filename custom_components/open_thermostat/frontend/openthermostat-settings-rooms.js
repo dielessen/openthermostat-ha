@@ -8,6 +8,8 @@
 const TEXTS = {
  nl: {
   'Driven by temperature; the position cannot be read': 'Gestuurd op temperatuur; de stand is niet uit te lezen',
+  'Regulates itself to the target; the position cannot be read': 'Regelt zichzelf naar het doel; de stand is niet uit te lezen',
+  'Set to manual by Home Assistant at {time}': 'Door Home Assistant op handmatig gezet om {time}',
   'Through Home Assistant': 'Via Home Assistant',
   'Valve control': 'Radiatorkranen aansturen',
   'On: these valves follow the room (only while the E32 controls the boiler itself). Off: the valves keep their own settings and nothing is sent to them.': 'Aan: deze kranen volgen de ruimte (alleen zolang de E32 de ketel zelf aanstuurt). Uit: de kranen houden hun eigen instellingen en er gaat niets naar ze toe.',
@@ -27,11 +29,13 @@ const TEXTS = {
   'On': 'Aan',
   'Heat along only': 'Alleen meeverwarmen',
   'Off': 'Uit',
-  'Off until {moment}': 'Uit tot {moment}',
+  'Off until {moment}, then on again': 'Uit tot {moment}, daarna weer aan',
+  'Off until {moment}, then heating along again': 'Uit tot {moment}, daarna weer meeverwarmen',
   'Radiators': 'Radiatoren',
   'Floor heating': 'Vloerverwarming',
   'No temperature yet': 'Nog geen temperatuur',
-  'Bluetooth sensor {name}': 'Bluetooth-sensor {name}',
+  'The E32 measures this thermometer itself; choose it as the source, so it also works without Home Assistant.': 'De E32 meet deze thermometer zelf; kies hem als bron, dan werkt het ook zonder Home Assistant.',
+  'Use the E32\'s sensor': 'Sensor van de E32 gebruiken',
   'Room name': 'Naam van de ruimte',
   'The name you see in Home Assistant and on the E32. Up to 40 letters (fewer with accents or emoji); renaming keeps the room and its history.': 'De naam die je in Home Assistant en op de E32 ziet. Maximaal 40 tekens (minder met accenten of emoji); hernoemen behoudt de ruimte en haar geschiedenis.',
   'Heating': 'Verwarmen',
@@ -58,12 +62,34 @@ const TEXTS = {
   '{n} min ago': '{n} min geleden',
   '{n} h ago': '{n} uur geleden',
   'Setting device (optional)': 'Instelapparaat (optioneel)',
-  'A thermostat or radiator valve (for example a tado or TV02), or a number with a target, to set the room with. Home Assistant writes the week program\'s temperature to it at every switch point; turning it changes the room until the next switch point. Turn off the device\'s own schedule (manual mode), otherwise it changes the temperature by itself.': 'Een thermostaat of radiatorkraan (bijvoorbeeld een tado of TV02), of een getal met een doel, om de ruimte mee in te stellen. Home Assistant zet bij elk schakelpunt de temperatuur van het weekprogramma erop; eraan draaien verandert de ruimte tot het volgende schakelpunt. Zet het eigen programma van het apparaat uit (handmatige stand), anders verandert het de temperatuur zelf.',
+  'A thermostat or radiator valve (for example a tado or TV02), or a number with a target, to set the room with. Home Assistant keeps it at the room\'s temperature; turning it changes the room (until the next switch time with a week program, for good without one). Turn off the device\'s own schedule (manual mode), otherwise it changes the temperature by itself.': 'Een thermostaat of radiatorkraan (bijvoorbeeld een tado of TV02), of een getal met een doel, om de ruimte mee in te stellen. Home Assistant houdt het op de temperatuur van de ruimte; eraan draaien verandert de ruimte (met een weekprogramma tot de volgende schakeltijd, zonder weekprogramma voorgoed). Zet het eigen programma van het apparaat uit (handmatige stand), anders verandert het de temperatuur zelf.',
+  'With On, this valve regulates on its own sensor and often closes before the room is warm; consider valve control with a separate thermometer instead.': 'Op Aan regelt deze kraan op zijn eigen voeler en sluit hij vaak vóór de ruimte warm is; overweeg kraansturing met een losse thermometer.',
   'Last written: {temperature} at {time}': 'Laatst geschreven: {temperature} om {time}',
   'Last turned on the device: {temperature} at {time}': 'Laatst aan het apparaat gedraaid: {temperature} om {time}',
   'Nothing written to it yet.': 'Er is nog niets naartoe geschreven.',
   'Temperature without a week program': 'Temperatuur zonder weekprogramma',
-  'The temperature the E32 keeps when Home Assistant gives no target and the room has no week program, or its clock is not set yet.': 'De temperatuur die de E32 aanhoudt als Home Assistant geen doel doorgeeft en de ruimte geen weekprogramma heeft, of zijn klok nog niet is gezet.',
+  'The temperature the room keeps when it has no week program, and while the E32\'s clock is not set yet. Without a week program a manual change becomes this temperature.': 'De temperatuur die de ruimte aanhoudt als ze geen weekprogramma heeft, en zolang de klok van de E32 nog niet gezet is. Zonder weekprogramma wordt een handmatige wijziging deze temperatuur.',
+  'Heat along up to': 'Meeverwarmen tot',
+  'The valve opens up to this temperature; the room asks for no heat itself. This is the same setting as the temperature without a week program.': 'De kraan gaat open tot deze temperatuur; de ruimte vraagt zelf geen warmte. Dit is dezelfde instelling als de temperatuur zonder weekprogramma.',
+  'This room follows its week program; the valve gets those temperatures.': 'Deze ruimte volgt haar weekprogramma; de kraan krijgt die temperaturen.',
+  'Use one fixed temperature': 'Gebruik één vaste temperatuur',
+  'Use one fixed temperature?': 'Eén vaste temperatuur gebruiken?',
+  'The week program of {name} is removed, and {temperature} becomes its temperature from now on. You can change that temperature here afterwards.': 'Het weekprogramma van {name} wordt verwijderd en {temperature} wordt vanaf nu haar temperatuur. Die temperatuur kun je hier daarna nog wijzigen.',
+  'Remove the week program': 'Weekprogramma verwijderen',
+  'Now {temperature} from the week program, until {time}': 'Nu {temperature} uit het weekprogramma, tot {time}',
+  'Now {temperature} from the week program': 'Nu {temperature} uit het weekprogramma',
+  'Now {temperature}: the temperature without a week program': 'Nu {temperature}: de temperatuur zonder weekprogramma',
+  'Temporarily {temperature} until {time}': 'Tijdelijk {temperature} tot {time}',
+  'Temporarily {temperature}': 'Tijdelijk {temperature}',
+  'Now {temperature} from the reset time of {time}': 'Nu {temperature} door het terugzetmoment van {time}',
+  'Now {temperature} from a reset time': 'Nu {temperature} door een terugzetmoment',
+  '{temperature}: summer mode': '{temperature}: Zomerstand',
+  '{temperature}: a window or door is open': '{temperature}: er staat een raam of deur open',
+  'Boost until {time}': 'Boost tot {time}',
+  'Boost active': 'Boost actief',
+  'Use {temperature}': 'Neem {temperature} over',
+  'The advice changed in the meantime. Reload the page.': 'Het advies is intussen veranderd. Herlaad de pagina.',
+  'There is no advice to use for this room right now. Reload the page.': 'Er is nu geen advies om over te nemen voor deze ruimte. Herlaad de pagina.',
   'Week program': 'Weekprogramma',
   'Every day': 'Elke dag',
   'Start with the standard week program': 'Beginnen met het standaardweekprogramma',
@@ -93,8 +119,10 @@ const TEXTS = {
   'The E32 already has 8 rooms. Remove a room first.': 'De E32 heeft al 8 ruimtes. Verwijder eerst een ruimte.',
   'This room is no longer on the E32.': 'Deze ruimte staat niet meer op de E32.',
   'The rooms were changed on the E32 twice while saving. Nothing was saved; try again.': 'De ruimtes zijn tijdens het opslaan twee keer op de E32 gewijzigd. Er is niets opgeslagen; probeer het opnieuw.',
-  'The rooms no longer fit on the E32 (4 KB). Use shorter names, fewer sources or fewer switch points. Nothing was saved.': 'De ruimtes passen niet meer op de E32 (4 KB). Gebruik kortere namen, minder bronnen of minder schakelpunten. Er is niets opgeslagen.',
-  'The E32 has no storage space left for its rooms. Remove a room you no longer use, or a few switch points, and save again. Nothing was saved.': 'De E32 heeft geen opslagruimte meer voor zijn ruimtes. Verwijder een ruimte die je niet meer gebruikt, of een paar schakelpunten, en sla opnieuw op. Er is niets opgeslagen.',
+  'The rooms no longer fit on the E32 (4 KB). Use shorter names, fewer sources or fewer switch times. Nothing was saved.': 'De ruimtes passen niet meer op de E32 (4 KB). Gebruik kortere namen, minder bronnen of minder schakeltijden. Er is niets opgeslagen.',
+  'The E32 has no storage space left for its rooms. Remove a room you no longer use, or a few switch times, and save again. Nothing was saved.': 'De E32 heeft geen opslagruimte meer voor zijn ruimtes. Verwijder een ruimte die je niet meer gebruikt, of een paar schakeltijden, en sla opnieuw op. Er is niets opgeslagen.',
+  'A device can be the room\'s setting device or a radiator valve the E32 drives, not both. Choose one.': 'Een apparaat kan het instelapparaat van de ruimte zijn óf een kraan die de E32 aanstuurt, niet allebei. Kies er één.',
+  'Choose one of the people in the list.': 'Kies een van de personen in de lijst.',
   'The E32 could not confirm the change. Reload the page to see what is saved.': 'De E32 kon de wijziging niet bevestigen. Laad de pagina opnieuw om te zien wat er is opgeslagen.',
   'The E32 could not be reached ({error}). Nothing was saved.': 'De E32 is niet bereikbaar ({error}). Er is niets opgeslagen.',
   'The E32 sent rooms this version cannot read. Update the E32 firmware and the integration together.': 'De E32 stuurde ruimtes die deze versie niet kan lezen. Werk de E32-firmware en de integratie samen bij.',
@@ -117,24 +145,36 @@ const TEXTS = {
   'Own value': 'Eigen waarde',
   'This room uses its own value.': 'Deze ruimte gebruikt een eigen waarde.',
   'Battery {level}': 'Batterij {level}',
+  'Battery low': 'Batterij bijna leeg',
   'Last report {age}': 'Laatste melding {age}',
   'Not found in Home Assistant': 'Niet gevonden in Home Assistant',
   'Model of {name}': 'Model van {name}',
   'No radiator valves in this room.': 'Geen radiatorkranen in deze ruimte.',
+  'The radiator valves could not be read ({error}). Reload.': 'De radiatorkranen konden niet gelezen worden ({error}). Herlaad.',
+  'Reload': 'Opnieuw laden',
+  'Could not be read': 'Niet te lezen',
   'At most {max} radiator valves per room.': 'Hoogstens {max} radiatorkranen per ruimte.',
   'Add a valve': 'Kraan toevoegen',
   'Driven by position': 'Gestuurd op stand',
   'Persons of this room': 'Personen van deze ruimte',
   'Empty: the room follows the house.': 'Leeg: de ruimte volgt het huis.',
   'Temperature when this room\'s people are away': 'Temperatuur als de mensen van deze ruimte weg zijn',
-  'Messages about this room go to: {people}.': 'Berichten over deze ruimte gaan naar: {people}.',
+  'Who gets them': 'Wie krijgt ze',
+  'Everyone with a phone': 'Iedereen met een telefoon',
+  'Chosen people': 'Gekozen personen',
+  'Recipients': 'Ontvangers',
+  '{name} (not found)': '{name} (niet gevonden)',
+  'Messages about {room} go to {people}.': 'Berichten van {room} gaan naar {people}.',
+  'Messages about {room} go to everyone with a phone.': 'Berichten van {room} gaan naar iedereen met een telefoon.',
+  'Messages about {room} go to nobody; they show in Home Assistant only.': 'Berichten van {room} gaan naar niemand; ze verschijnen alleen in Home Assistant.',
+  ' and ': ' en ',
   'Notify about this room': 'Meldingen over deze ruimte',
   'Off: no messages about this room.': 'Uit: geen berichten over deze ruimte.',
   'Messages': 'Berichten',
   'Window or door open while the room heats': 'Raam of deur open terwijl de ruimte verwarmt',
   'Room stays cold (more than 1 °C below its target for over an hour)': 'Ruimte blijft koud (meer dan 1 °C onder de gewenste temperatuur, langer dan een uur)',
-  'Temperature sensor silent for 30 minutes': 'Temperatuursensor 30 minuten stil',
-  'Battery of a thermometer or valve low': 'Batterij van een thermometer of kraan bijna leeg',
+  'Temperature sensor silent for 30 minutes, or another device for 24 hours': 'Temperatuursensor 30 minuten stil, of een ander apparaat 24 uur',
+  'Battery low of a thermometer, valve, window or door contact or setting device': 'Batterij bijna leeg van een thermometer, kraan, raam- of deurcontact of instelapparaat',
   'window open': 'raam open',
   'too cold': 'te koud',
   'sensor silent': 'sensor stil',
@@ -145,7 +185,6 @@ const TEXTS = {
   'No rooms yet. Add your first room.': 'Nog geen ruimtes. Voeg je eerste ruimte toe.',
   '1 room': '1 ruimte',
   '{n} rooms': '{n} ruimtes',
-  'until {moment}': 'tot {moment}',
   '{temperature} now': 'nu {temperature}',
   '1 source': '1 bron',
   '{n} sources': '{n} bronnen',
@@ -179,181 +218,7 @@ const TEXTS = {
   'The E32 did not accept the radiator valves ({error}).': 'De E32 heeft de radiatorkranen niet aangenomen ({error}).',
   'Choose a temperature between {away_range}, or leave it empty for the house away temperature.': 'Kies een temperatuur tussen {away_range}, of laat het veld leeg voor de afwezigheidstemperatuur van het huis.',
   'Choose a person, group, zone or switch that exists.': 'Kies een bestaande persoon, groep, zone of schakelaar.',
-  'Choose at least one message, or switch notifications off.': 'Kies minstens één bericht, of zet de meldingen uit.'},
- pl: {
-  'Driven by temperature; the position cannot be read': 'Sterowany temperaturą; nie można odczytać położenia',
-  'Through Home Assistant': 'Przez Home Assistant',
-  'Valve control': 'Sterowanie zaworami',
-  'On: these valves follow the room (only while the E32 controls the boiler itself). Off: the valves keep their own settings and nothing is sent to them.': 'Włączone: te zawory podążają za pomieszczeniem (tylko gdy E32 sam steruje kotłem). Wyłączone: zawory zachowują własne ustawienia i nic do nich nie jest wysyłane.',
-  'Kept on the E32': 'Zachowany na E32',
-  'On the BLU Gateway': 'Przy BLU Gateway',
-  'Add from the BLU Gateway': 'Dodaj z BLU Gateway',
-  'Choose a valve': 'Wybierz zawór',
-  'Use limits between {range} with the minimum not above the maximum, and a temperature without a week program within them.': 'Użyj limitów w zakresie {range}, z minimum nie wyższym niż maksimum, oraz temperatury bez programu tygodniowego mieszczącej się w nich.',
-  'A temperature of the week program is outside the room\'s temperature limits.': 'Temperatura programu tygodniowego jest poza limitami temperatury pomieszczenia.',
-  'A floor loop valve cannot be kept open as the water\'s path: choose it in one of the two lists only.': 'Zaworu pętli podłogowej nie można zostawić otwartego jako drogi dla wody: wybierz go tylko na jednej z dwóch list.',
-  'This needs newer E32 firmware. Update the E32 first (Settings → Updates → OpenThermostat E32 Firmware), then try again. Nothing has been changed.': 'To wymaga nowszego oprogramowania E32. Najpierw zaktualizuj E32 (Ustawienia → Aktualizacje → OpenThermostat E32 Firmware), a potem spróbuj ponownie. Nic nie zostało zmienione.',
-  'Something in the form was not valid. Try again.': 'Coś w formularzu było nieprawidłowe. Spróbuj ponownie.',
-  'Rooms': 'Pomieszczenia',
-  'New room': 'Nowe pomieszczenie',
-  'Add room': 'Dodaj pomieszczenie',
-  'The E32 holds at most {max} rooms. Remove a room first.': 'E32 mieści najwyżej {max} pomieszczeń. Najpierw usuń pomieszczenie.',
-  'On': 'Włączone',
-  'Heat along only': 'Grzeje tylko razem z innymi',
-  'Off': 'Wyłączone',
-  'Off until {moment}': 'Wyłączone do {moment}',
-  'Radiators': 'Grzejniki',
-  'Floor heating': 'Ogrzewanie podłogowe',
-  'No temperature yet': 'Brak jeszcze temperatury',
-  'Bluetooth sensor {name}': 'Czujnik Bluetooth {name}',
-  'Room name': 'Nazwa pomieszczenia',
-  'The name you see in Home Assistant and on the E32. Up to 40 letters (fewer with accents or emoji); renaming keeps the room and its history.': 'Nazwa widoczna w Home Assistant i na E32. Do 40 liter (mniej przy znakach diakrytycznych lub emoji); zmiana nazwy zachowuje pomieszczenie i jego historię.',
-  'Heating': 'Ogrzewanie',
-  'The room can ask for heat.': 'Pomieszczenie może prosić o ciepło.',
-  'The room keeps its target and its radiator valves open for it, but it never asks for heat; it warms while the boiler runs for other rooms.': 'Pomieszczenie zachowuje swoją temperaturę docelową, a zawory grzejnikowe otwierają się dla niej, ale nigdy nie prosi o ciepło; nagrzewa się, gdy kocioł grzeje dla innych pomieszczeń.',
-  'The room asks for no heat.': 'Pomieszczenie nie prosi o ciepło.',
-  'Off until (optional)': 'Wyłączony do (opcjonalnie)',
-  'The date and time the room heats again by itself. Empty: off until you turn it on.': 'Data i godzina, od której pomieszczenie samo znów grzeje. Puste: wyłączone, dopóki go nie włączysz.',
-  'Heating type': 'Rodzaj ogrzewania',
-  'Radiators or floor heating. Floor heating warms up slowly and needs cooler water, so each type gets its own water temperature.': 'Grzejniki lub ogrzewanie podłogowe. Podłogówka nagrzewa się powoli i potrzebuje chłodniejszej wody, więc każdy rodzaj ma własną temperaturę wody.',
-  'Temperature sources': 'Źródła temperatury',
-  'The first one with a fresh value is used; the others are backups. With one source: if it fails, the room stops asking for heat after 30 minutes. A second source, for example a Bluetooth sensor, covers that.': 'Używany jest pierwszy ze świeżą wartością; pozostałe są zapasowe. Przy jednym źródle: gdy przestanie działać, pomieszczenie po 30 minutach przestaje prosić o ciepło. Drugie źródło, np. czujnik Bluetooth, temu zapobiega.',
-  'Used first': 'Używane jako pierwsze',
-  'Use first': 'Używaj jako pierwszego',
-  'Use {name} first': 'Używaj {name} jako pierwszego',
-  'Remove {name}': 'Usuń: {name}',
-  'Add a source': 'Dodaj źródło',
-  'At most four temperature sources per room.': 'Najwyżej cztery źródła temperatury na pomieszczenie.',
-  'No source yet: choose at least one.': 'Brak źródła: wybierz co najmniej jedno.',
-  'Search by name': 'Szukaj po nazwie',
-  'Bluetooth sensor on the E32': 'Czujnik Bluetooth na E32',
-  'No reading': 'Brak odczytu',
-  'just now': 'przed chwilą',
-  '{n} min ago': '{n} min temu',
-  '{n} h ago': '{n} godz. temu',
-  'Setting device (optional)': 'Urządzenie nastawcze (opcjonalnie)',
-  'A thermostat or radiator valve (for example a tado or TV02), or a number with a target, to set the room with. Home Assistant writes the week program\'s temperature to it at every switch point; turning it changes the room until the next switch point. Turn off the device\'s own schedule (manual mode), otherwise it changes the temperature by itself.': 'Termostat lub głowica grzejnikowa (na przykład tado lub TV02) albo liczba z wartością docelową, którymi ustawiasz pomieszczenie. Home Assistant w każdym punkcie przełączenia zapisuje na nim temperaturę z programu tygodniowego; zmiana na nim obowiązuje do następnego punktu przełączenia. Wyłącz własny harmonogram urządzenia (tryb ręczny), inaczej samo zmienia temperaturę.',
-  'Last written: {temperature} at {time}': 'Ostatnio zapisano: {temperature} o {time}',
-  'Last turned on the device: {temperature} at {time}': 'Ostatnio zmieniono na urządzeniu: {temperature} o {time}',
-  'Nothing written to it yet.': 'Jeszcze nic na nim nie zapisano.',
-  'Temperature without a week program': 'Temperatura bez programu tygodniowego',
-  'The temperature the E32 keeps when Home Assistant gives no target and the room has no week program, or its clock is not set yet.': 'Temperatura, którą E32 utrzymuje, gdy Home Assistant nie podaje celu, a pomieszczenie nie ma programu tygodniowego lub zegar E32 nie jest jeszcze ustawiony.',
-  'Week program': 'Program tygodniowy',
-  'Every day': 'Codziennie',
-  'Start with the standard week program': 'Zacznij od standardowego programu tygodniowego',
-  '“Workdays and weekend”: 20 °C by day, 18 °C while away on workdays, 16 °C at night. You change it afterwards in the week planner. Off: the room keeps its temperature without a week program.': '„Dni robocze i weekend”: 20 °C w dzień, 18 °C podczas nieobecności w dni robocze, 16 °C w nocy. Zmienisz go potem w planerze tygodniowym. Wyłączone: pomieszczenie utrzymuje swoją temperaturę bez programu tygodniowego.',
-  'At most four reset times per room.': 'Najwyżej cztery godziny powrotu na pomieszczenie.',
-  'Smart warm-up': 'Inteligentne nagrzewanie',
-  'As the house': 'Jak cały dom',
-  'No window or door contacts': 'Brak czujników okien i drzwi',
-  'Remove room': 'Usuń pomieszczenie',
-  'Remove {name}?': 'Usunąć {name}?',
-  'The E32 forgets the room with its week program and reset times, and Home Assistant removes its devices. This cannot be undone.': 'E32 zapomina pomieszczenie wraz z jego programem tygodniowym i godzinami powrotu, a Home Assistant usuwa jego urządzenia. Tego nie można cofnąć.',
-  'Give the room a name of up to 40 letters (fewer with accents or emoji).': 'Nadaj pomieszczeniu nazwę do 40 liter (mniej przy znakach diakrytycznych lub emoji).',
-  '{source} cannot be used here. Choose a thermostat or a temperature sensor; for the setting device a thermostat, radiator valve or number.': 'Nie można tu użyć {source}. Wybierz termostat lub czujnik temperatury; jako urządzenie nastawcze termostat, głowicę grzejnikową lub liczbę.',
-  '{source} cannot be used: its name in Home Assistant is longer than 80 characters.': 'Nie można użyć {source}: jego nazwa w Home Assistant ma więcej niż 80 znaków.',
-  '{source} does not exist in Home Assistant.': '{source} nie istnieje w Home Assistant.',
-  '{source} reports no current temperature. Choose a thermostat that measures the room, or a temperature sensor.': '{source} nie zgłasza bieżącej temperatury. Wybierz termostat, który mierzy temperaturę pomieszczenia, lub czujnik temperatury.',
-  '{source} does not report a temperature (°C or °F). Choose a temperature sensor.': '{source} nie zgłasza temperatury (°C lub °F). Wybierz czujnik temperatury.',
-  'Choose 1 to 4 temperature sources.': 'Wybierz od 1 do 4 źródeł temperatury.',
-  'A source is in the list twice.': 'Źródło występuje na liście dwa razy.',
-  'Another room has this name.': 'Inne pomieszczenie ma już tę nazwę.',
-  'The E32 cannot use this setting device. Choose another one.': 'E32 nie może użyć tego urządzenia nastawczego. Wybierz inne.',
-  'Reset time {line}: choose a time, at least one day and a temperature in whole or half degrees.': 'Godzina powrotu {line}: wybierz godzinę, co najmniej jeden dzień i temperaturę w pełnych lub połówkowych stopniach.',
-  'Reset time {line}: the temperature is outside the room\'s temperature limits.': 'Godzina powrotu {line}: temperatura jest poza limitami temperatury pomieszczenia.',
-  'Reset time {line}: another reset time is already set for that day and time.': 'Godzina powrotu {line}: na ten dzień i tę godzinę jest już ustawiona godzina powrotu.',
-  'The E32 did not accept the reset times ({error}). Check the days, the times and the temperatures.': 'E32 nie przyjął godzin powrotu ({error}). Sprawdź dni, godziny i temperatury.',
-  'Choose a moment in the future (before 2100) for “Off until”, or leave it empty.': 'Wybierz dla „Wyłączony do” przyszłą datę i godzinę (przed 2100) albo zostaw pole puste.',
-  'The E32 already has 8 rooms. Remove a room first.': 'E32 ma już 8 pomieszczeń. Najpierw usuń pomieszczenie.',
-  'This room is no longer on the E32.': 'Tego pomieszczenia nie ma już na E32.',
-  'The rooms were changed on the E32 twice while saving. Nothing was saved; try again.': 'Pomieszczenia zostały dwukrotnie zmienione na E32 podczas zapisywania. Nic nie zapisano; spróbuj ponownie.',
-  'The rooms no longer fit on the E32 (4 KB). Use shorter names, fewer sources or fewer switch points. Nothing was saved.': 'Pomieszczenia nie mieszczą się już na E32 (4 KB). Użyj krótszych nazw, mniej źródeł lub mniej punktów przełączenia. Nic nie zapisano.',
-  'The E32 has no storage space left for its rooms. Remove a room you no longer use, or a few switch points, and save again. Nothing was saved.': 'E32 nie ma już miejsca na pomieszczenia. Usuń nieużywane pomieszczenie lub kilka punktów przełączenia i zapisz ponownie. Nic nie zapisano.',
-  'The E32 could not confirm the change. Reload the page to see what is saved.': 'E32 nie mógł potwierdzić zmiany. Wczytaj stronę ponownie, aby zobaczyć, co zapisano.',
-  'The E32 could not be reached ({error}). Nothing was saved.': 'Nie udało się połączyć z E32 ({error}). Nic nie zapisano.',
-  'The E32 sent rooms this version cannot read. Update the E32 firmware and the integration together.': 'E32 przesłał pomieszczenia, których ta wersja nie potrafi odczytać. Zaktualizuj razem oprogramowanie E32 i integrację.',
-  'The E32 no longer accepts the saved password. Home Assistant asks for the new one: Settings → Devices & services → OpenThermostat → Re-authenticate.': 'E32 nie akceptuje już zapisanego hasła. Home Assistant prosi o nowe: Ustawienia → Urządzenia i usługi → OpenThermostat → Uwierzytelnij ponownie.',
-  'The E32 did not accept the room ({error}). Nothing was saved.': 'E32 nie przyjął pomieszczenia ({error}). Nic nie zapisano.',
-  'The E32 did not accept the week program. Check it in the week planner.': 'E32 nie przyjął programu tygodniowego. Sprawdź go w planerze tygodniowym.',
-  'General': 'Ogólne',
-  'Temperature': 'Temperatura',
-  'Windows and doors': 'Okna i drzwi',
-  'Radiator valves': 'Zawory grzejnikowe',
-  'Persons': 'Osoby',
-  'Notifications for this room': 'Powiadomienia dla tego pomieszczenia',
-  'Temperature limits': 'Limity temperatury',
-  'Window contacts': 'Czujniki okien',
-  'Door contacts': 'Czujniki drzwi',
-  'Pause after (windows)': 'Pauza po (okna)',
-  'Pause after (doors)': 'Pauza po (drzwi)',
-  'As the house ({value})': 'Jak cały dom ({value})',
-  'The house value applies; you change it under House.': 'Obowiązuje wartość domu; zmieniasz ją w sekcji Dom.',
-  'Own value': 'Własna wartość',
-  'This room uses its own value.': 'To pomieszczenie używa własnej wartości.',
-  'Battery {level}': 'Bateria {level}',
-  'Last report {age}': 'Ostatni raport {age}',
-  'Not found in Home Assistant': 'Nie znaleziono w Home Assistant',
-  'Model of {name}': 'Model: {name}',
-  'No radiator valves in this room.': 'Brak zaworów grzejnikowych w tym pomieszczeniu.',
-  'At most {max} radiator valves per room.': 'Najwyżej {max} zawory grzejnikowe na pomieszczenie.',
-  'Add a valve': 'Dodaj zawór',
-  'Driven by position': 'Sterowany położeniem',
-  'Persons of this room': 'Osoby tego pomieszczenia',
-  'Empty: the room follows the house.': 'Puste: pomieszczenie podąża za domem.',
-  'Temperature when this room\'s people are away': 'Temperatura, gdy osób z tego pomieszczenia nie ma',
-  'Messages about this room go to: {people}.': 'Wiadomości o tym pomieszczeniu trafiają do: {people}.',
-  'Notify about this room': 'Powiadomienia o tym pomieszczeniu',
-  'Off: no messages about this room.': 'Wyłączone: brak wiadomości o tym pomieszczeniu.',
-  'Messages': 'Wiadomości',
-  'Window or door open while the room heats': 'Okno lub drzwi otwarte podczas ogrzewania',
-  'Room stays cold (more than 1 °C below its target for over an hour)': 'Pomieszczenie pozostaje zimne (ponad 1 °C poniżej temperatury docelowej przez ponad godzinę)',
-  'Temperature sensor silent for 30 minutes': 'Czujnik temperatury milczy od 30 minut',
-  'Battery of a thermometer or valve low': 'Słaba bateria termometru lub zaworu',
-  'window open': 'otwarte okno',
-  'too cold': 'za zimno',
-  'sensor silent': 'czujnik milczy',
-  'battery low': 'słaba bateria',
-  'Resets at {time} to {value}': 'Godzina powrotu {time}: {value}',
-  'At {time} to {value}': 'Godzina powrotu {time}: {value}',
-  'Room': 'Pomieszczenie',
-  'No rooms yet. Add your first room.': 'Brak jeszcze pomieszczeń. Dodaj pierwsze pomieszczenie.',
-  '1 room': '1 pomieszczenie',
-  '{n} rooms': 'Pomieszczenia: {n}',
-  'until {moment}': 'do {moment}',
-  '{temperature} now': 'teraz {temperature}',
-  '1 source': '1 źródło',
-  '{n} sources': 'Źródła: {n}',
-  'setting device {name}': 'urządzenie ustawiające {name}',
-  'No week program': 'Brak programu tygodniowego',
-  'Reset times': 'Godziny powrotu',
-  'Windows: {n}': 'Okna: {n}',
-  'doors: {n}': 'drzwi: {n}',
-  '1 valve': '1 zawór',
-  '{n} valves': 'Zawory: {n}',
-  'No radiator valves': 'Brak zaworów grzejnikowych',
-  'Follows the house': 'Podąża za domem',
-  'The first one with a fresh value is used; the others are backups.': 'Używane jest pierwsze z aktualną wartością; pozostałe są zapasowe.',
-  'A thermostat or valve you set the room with.': 'Termostat lub zawór, którym ustawiasz pomieszczenie.',
-  'The target temperature, the temperature without a week program and the program stay within these limits.': 'Temperatura docelowa, temperatura bez programu tygodniowego i program mieszczą się w tych limitach.',
-  'Minimum temperature': 'Temperatura minimalna',
-  'Maximum temperature': 'Temperatura maksymalna',
-  'The week planner is not loaded on this page.': 'Planer tygodniowy nie jest wczytany na tej stronie.',
-  'Leave without saving the week program?': 'Wyjść bez zapisania programu tygodniowego?',
-  'What you changed in the week program of {name} is lost.': 'To, co zmieniono w programie tygodniowym pomieszczenia {name}, zostanie utracone.',
-  'Leave': 'Wyjdź',
-  'Choose at most eight different sensors.': 'Wybierz najwyżej osiem różnych czujników.',
-  'Choose window, door or opening sensors only.': 'Wybierz tylko czujniki okien, drzwi lub otwarcia.',
-  'A sensor is a window or a door, not both: choose it in one of the two fields.': 'Czujnik jest oknem albo drzwiami, nie jednym i drugim: wybierz go w jednym z dwóch pól.',
-  'The pause delay lies between 0 and 30 minutes.': 'Opóźnienie pauzy wynosi od 0 do 30 minut.',
-  'This valve is already used (here or in another room).': 'Ten zawór jest już używany (tutaj lub w innym pomieszczeniu).',
-  'Choose the valve\'s model.': 'Wybierz model zaworu.',
-  'The E32 drives at most 16 radiator valves, 24 with the BLU Gateway (E32 1.1).': 'E32 steruje najwyżej 16 zaworami grzejnikowymi, 24 z BLU Gateway (E32 1.1).',
-  'Choose a radiator valve from the list (not an OpenThermostat thermostat or this room\'s temperature source).': 'Wybierz zawór grzejnikowy z listy (nie termostat OpenThermostat ani źródło temperatury tego pomieszczenia).',
-  'A room has at most 8 radiator valves, and at most 4 that are not on the BLU Gateway.': 'Pomieszczenie ma najwyżej 8 zaworów grzejnikowych, w tym najwyżej 4 spoza BLU Gateway.',
-  'The E32 did not accept the radiator valves ({error}).': 'E32 nie przyjął zaworów grzejnikowych ({error}).',
-  'Choose a temperature between {away_range}, or leave it empty for the house away temperature.': 'Wybierz temperaturę w zakresie {away_range} albo zostaw pole puste, aby użyć temperatury nieobecności domu.',
-  'Choose a person, group, zone or switch that exists.': 'Wybierz istniejącą osobę, grupę, strefę lub przełącznik.',
-  'Choose at least one message, or switch notifications off.': 'Wybierz co najmniej jedną wiadomość albo wyłącz powiadomienia.'}};
+  'Choose at least one message, or switch notifications off.': 'Kies minstens één bericht, of zet de meldingen uit.'}};
 // The sentence of each code; Configure's own (strings.json options.error), the new parts' as ROOM-BACKEND sends them.
 const ERRORS = {
  e32_name_invalid: 'Give the room a name of up to 40 letters (fewer with accents or emoji).',
@@ -381,8 +246,8 @@ const ERRORS = {
  e32_room_limit: 'The E32 already has 8 rooms. Remove a room first.',
  e32_room_missing: 'This room is no longer on the E32.',
  e32_plan_changed: 'The rooms were changed on the E32 twice while saving. Nothing was saved; try again.',
- e32_plan_too_large: 'The rooms no longer fit on the E32 (4 KB). Use shorter names, fewer sources or fewer switch points. Nothing was saved.',
- e32_storage_full: 'The E32 has no storage space left for its rooms. Remove a room you no longer use, or a few switch points, and save again. Nothing was saved.',
+ e32_plan_too_large: 'The rooms no longer fit on the E32 (4 KB). Use shorter names, fewer sources or fewer switch times. Nothing was saved.',
+ e32_storage_full: 'The E32 has no storage space left for its rooms. Remove a room you no longer use, or a few switch times, and save again. Nothing was saved.',
  e32_unconfirmed: 'The E32 could not confirm the change. Reload the page to see what is saved.',
  e32_unreachable: 'The E32 could not be reached ({error}). Nothing was saved.',
  e32_plan_invalid: 'The E32 sent rooms this version cannot read. Update the E32 firmware and the integration together.',
@@ -401,7 +266,12 @@ const ERRORS = {
  e32_valves_rejected: 'The E32 did not accept the radiator valves ({error}).',
  e32_away_invalid: 'Choose a temperature between {away_range}, or leave it empty for the house away temperature.',
  presence_entity_invalid: 'Choose a person, group, zone or switch that exists.',
- notification_kinds_needed: 'Choose at least one message, or switch notifications off.'};
+ notification_kinds_needed: 'Choose at least one message, or switch notifications off.',
+ // 1.4.2: one role per valve (HA-SETDEV's check, on the field setpoint_entity), the recipients and the advice button.
+ device_two_roles: 'A device can be the room\'s setting device or a radiator valve the E32 drives, not both. Choose one.',
+ notification_person_invalid: 'Choose one of the people in the list.',
+ advice_changed: 'The advice changed in the meantime. Reload the page.',
+ advice_unavailable: 'There is no advice to use for this room right now. Reload the page.'};
 
 const NEW = 'new-room';
 // A room's state: its word, the label's tone (orange heats, amber heats along, grey off) and its one-line explanation
@@ -409,13 +279,21 @@ const NEW = 'new-room';
 const STATES = {active: ['On', 'heat', 'The room can ask for heat.', 'fire'],
  follow: ['Heat along only', 'along', 'The room keeps its target and its radiator valves open for it, but it never asks for heat; it warms while the boiler runs for other rooms.', 'thermometer'],
  inactive: ['Off', 'rest', 'The room asks for no heat.', 'close']};
+// "Off until 14:00, then on again" / "then heating along again" (CONTRACT-1.4.2 §3, the room card's words): what the room
+// returns to (the model's ``after``, 1.4.2 P10).
+const OFF_UNTIL = {active: 'Off until {moment}, then on again', follow: 'Off until {moment}, then heating along again'};
+const offUntil = (kit, hass, t, moment, after) => t(OFF_UNTIL[after] || OFF_UNTIL.active, {moment: kit.time.moment(hass, moment)});
+// What a room that is Off returns to as the screen shows it: the stored one while it is Off, else the state it is
+// switched off from (the E32 remembers Heat along only).
+const afterOf = (model, values) => (model.state === 'inactive' ? model.after || 'active' : values.state === 'inactive' && model.state === 'follow' ? 'follow' : 'active');
 const EMITTERS = {radiator: ['Radiators', 'radiator'], floor: ['Floor heating', 'floor']};
 const WARM_UP = {house: 'As the house', on: 'On', off: 'Off'};
 // The valve control as the glossary says it (radiator valve: driven by temperature, or by position).
 // How a valve is driven (radiator_valves.list[].driven), in the glossary's words (1.4.1 ROOM-BACKEND).
 const DRIVEN = {position: 'Driven by position', temperature: 'Driven by temperature; the position cannot be read', home_assistant: 'Through Home Assistant'};
 const KINDS = {window: 'Window or door open while the room heats', cold: 'Room stays cold (more than 1 °C below its target for over an hour)',
- sensor: 'Temperature sensor silent for 30 minutes', battery: 'Battery of a thermometer or valve low'};
+ sensor: 'Temperature sensor silent for 30 minutes, or another device for 24 hours',
+ battery: 'Battery low of a thermometer, valve, window or door contact or setting device'};
 const KIND_SHORT = {window: 'window open', cold: 'too cold', sensor: 'sensor silent', battery: 'battery low'};
 // The next reset time on the room card's words (room-status-card.js RESET, word for word).
 const RESET = ['Resets at {time} to {value}', 'At {time} to {value}'];
@@ -494,7 +372,7 @@ function card(ctx, room, {compact, current} = {}) {
  wrap._live = hass => {
   const now = measured(hass, room.entities), target = num(hass?.states?.[room.entities?.climate]?.attributes?.temperature), lang = kit.langOf(hass);
   const [word, tone, , icon] = STATES[room.state] || STATES.active;
-  const until = room.state === 'inactive' && room.inactive_until ? t('Off until {moment}', {moment: kit.time.moment(hass, room.inactive_until)}) : '';
+  const until = room.state === 'inactive' && room.inactive_until ? offUntil(kit, hass, t, room.inactive_until, room.after) : '';
   const lines = compact ? [] : [doing(kit, hass, hass?.states?.[reasonOf(hass, room)]) || (now == null ? t('No temperature yet') : ''), until, resetLine(kit, hass, room.entities?.climate, t)];
   wrap.replaceChildren(kit.roomCard({name: room.name, compact, current, route, emitter: EMITTERS[room.emitter]?.[1] || 'radiator',
    onClick: e => { e.preventDefault(); ctx.navigate(route); }, temperature: now == null ? null : now.toLocaleString(lang, {minimumFractionDigits: 1, maximumFractionDigits: 1}),
@@ -507,8 +385,17 @@ function card(ctx, room, {compact, current} = {}) {
 
 /* ---- the fields of this section (the kit's field contract: {el, setError, setMark, focus}) ---- */
 const bleOf = (model, id) => (Array.isArray(model.ble) ? model.ble.find(s => s.id === id) : model.ble?.[id] != null ? {id, name: model.ble[id]} : null);
-const sourceName = (source, model, hass, t) => (source.type === 'ble' ? t('Bluetooth sensor {name}', {name: bleOf(model, source.id)?.name || source.id})
+// A source by the name you know it by: the E32's Bluetooth sensor by its name, a Home Assistant entity by its name.
+const sourceName = (source, model, hass) => (source.type === 'ble' ? bleOf(model, source.id)?.name || source.id
  : hass?.states?.[source.id]?.attributes?.friendly_name || source.id);
+// What a source is, in words (owner 10 Nov, "dat is echt onduidelijk"): "Bluetooth sensor on the E32 · A3:E8:DB" or
+// "Home Assistant · BTHome · sensor.atc_a3e8db_temperature" (the integration from live.integrations).
+const address = id => (/^[0-9a-f]{12}$/i.test(id) ? id.slice(6).toUpperCase().replace(/(..)(?=.)/g, '$1:') : id);
+function sourceKind(source, model, hass, t) {
+ if (source.type === 'ble') return [t('Bluetooth sensor on the E32'), address(source.id)];
+ const platform = hass?.entities?.[source.id]?.platform;
+ return ['Home Assistant', platform ? model.live?.integrations?.[platform] || platform : '', source.id];
+}
 function reading(kit, source, model, hass) {
  const eid = source.type === 'ble' ? bleOf(model, source.id)?.entity_id : source.id, st = eid && hass?.states?.[eid];
  if (!st) return ['', null];
@@ -524,20 +411,26 @@ function sourcesField(ctx) {
   const body = h('div', {class: 'rr-list'}), api = shell('sources', o, body, false);
   const own = new Set(model.own || []), bleByEntity = new Map((model.ble || []).filter(s => s.entity_id).map(s => [s.entity_id, s]));
   const emit = () => o.onChange?.(copy(list));
+  // HA-DEVICES (1.4.2): a Home Assistant source that is the same thermometer as a Bluetooth sensor paired on the E32.
+  const twin = model.live?.e32_sensor_suggestion;
   const draw = focusAdd => {
-   const items = list.map((source, i) => {
-    const name = sourceName(source, model, ctx.hass, t), detail = h('span', {class: 'pick-id'});
+   const items = list.flatMap((source, i) => {
+    const name = sourceName(source, model, ctx.hass), kind = h('span', {class: 'pick-id rr-kind', text: sourceKind(source, model, ctx.hass, t).filter(Boolean).join(' · ')});
+    const detail = h('span', {class: 'pick-id'});
     const el = h('div', {class: 'pick', 'data-source': `${source.type}:${source.id}`, 'data-live': ''},
-     h('span', {class: 'pick-text'}, h('span', {class: 'pick-name'}, name, i === 0 && list.length > 1 ? chip(t('Used first'), 'accent') : null), detail),
+     h('span', {class: 'pick-text'}, h('span', {class: 'pick-name'}, h('span', {text: name}), i === 0 && list.length > 1 ? chip(t('Used first'), 'accent') : null), kind, detail),
      o.disabled || i === 0 ? null : button(t('Use first'), () => { list = grouped([source, ...list.filter(x => x !== source)]); draw(); emit(); }, 'text small',
       {'aria-label': t('Use {name} first', {name}), 'data-first': ''}),
      o.disabled ? null : iconButton('close', t('Remove {name}', {name}), () => { list = list.filter(x => x !== source); draw(); emit(); }, {'data-remove': ''}));
     el._live = hass => {
      const [v, s] = reading(kit, source, model, hass);
-     detail.textContent = [source.type === 'ble' ? t('Bluetooth sensor on the E32') : '', v || t('No reading'), v ? age(s, t) : ''].filter(Boolean).join(' · ');
+     detail.textContent = [v || t('No reading'), v ? age(s, t) : ''].filter(Boolean).join(' · ');
     };
     el._live(ctx.hass);
-    return el;
+    if (source.type !== 'ha' || !twin || twin.entity_id !== source.id || list.some(x => x.type === 'ble' && x.id === twin.address)) return [el];
+    const swap = () => { list = list.map(x => (x === source ? {type: 'ble', id: twin.address} : x)); draw(); emit(); };
+    return [el, h('div', {class: 'rr-twin', 'data-twin': source.id}, h('p', {class: 'help', text: t('The E32 measures this thermometer itself; choose it as the source, so it also works without Home Assistant.')}),
+     o.disabled ? null : button(t('Use the E32\'s sensor'), swap, 'text small', {'data-use-twin': ''}))];
    });
    const parts = [...items];
    if (!list.length) parts.push(h('p', {class: 'help', text: t('No source yet: choose at least one.')}));
@@ -606,14 +499,12 @@ function contactsField(ctx) {
   return api;
  };
 }
-// A valve's battery and last report, from the entities on its device (hass.states).
-function valveStatus(kit, hass, eid, t) {
- const st = hass?.states?.[eid], device = hass?.entities?.[eid]?.device_id;
- const battery = device ? Object.values(hass.entities).map(e => hass.states?.[e.entity_id]).find(s => s && hass.entities[s.entity_id]?.device_id === device
-  && s.attributes?.device_class === 'battery') : null;
- const level = num(battery?.state);
- return [level == null ? '' : t('Battery {level}', {level: `${kit.number(level, kit.langOf(hass), 0)} %`}), st ? t('Last report {age}', {age: age(st, t)}) : t('Not found in Home Assistant')]
-  .filter(Boolean).join(' · ');
+// A valve's battery and last report: its battery entity as the backend names it (battery_entity_id, 1.4.2 P21: no
+// registry scan here), a percentage or a "low" binary sensor, and the valve's own state (hass.states).
+function valveStatus(kit, hass, eid, t, batteryId) {
+ const st = hass?.states?.[eid], battery = batteryId ? hass?.states?.[batteryId] : null, level = num(battery?.state);
+ const said = level != null ? t('Battery {level}', {level: `${kit.number(level, kit.langOf(hass), 0)} %`}) : battery?.state === 'on' ? t('Battery low') : '';
+ return [said, st ? t('Last report {age}', {age: age(st, t)}) : t('Not found in Home Assistant')].filter(Boolean).join(' · ');
 }
 // A valve as the save takes it (S-ROOM-BACKEND: {entity_id, model}, a kept valve {id}, a BLU Gateway valve {id, role, keep_open}).
 const valveSave = v => (v.kind === 'kept' ? {id: v.id} : v.kind === 'gateway' ? {id: v.id, role: v.role ?? null, keep_open: !!v.keep_open}
@@ -633,7 +524,10 @@ function valvesField(ctx) {
    const shownIds = new Set(value.list.map(valveKey));
    const rows = value.list.map((save, i) => {
     const v = known.get(valveKey(save)) || {name: valveKey(save)}, name = v.name || valveKey(save), status = h('span', {class: 'pick-id'});
-    const word = [v.kind === 'kept' ? t('Kept on the E32') : v.kind === 'gateway' ? t('On the BLU Gateway') : '', v.driven ? t(DRIVEN[v.driven] || v.driven) : '']
+    // HA-DEVICES (HC-11): a valve Home Assistant drives that reports no opening regulates itself to the target.
+    const selfRegulating = (model.live?.self_regulating || []).some(x => x === v.id || x === v.entity_id || x === v.name);
+    const word = [v.kind === 'kept' ? t('Kept on the E32') : v.kind === 'gateway' ? t('On the BLU Gateway') : '',
+     selfRegulating ? t('Regulates itself to the target; the position cannot be read') : v.driven ? t(DRIVEN[v.driven] || v.driven) : '']
      .filter(Boolean).join(' · ');
     const select = v.choose_model ? h('select', {class: 'input rr-model', 'aria-label': t('Model of {name}', {name}), disabled: o.disabled, 'data-fk': `radiator_valves:${i}:model`},
      ...(m.models || []).map(x => h('option', {value: x.key, text: x.name}))) : null;
@@ -641,7 +535,7 @@ function valvesField(ctx) {
     const el = h('div', {class: 'pick rr-valve', 'data-valve': valveKey(save), 'data-live': ''},
      h('span', {class: 'pick-text'}, h('span', {class: 'pick-name', text: name}), word ? h('span', {class: 'pick-id', text: word}) : null, save.entity_id ? status : null, select),
      o.disabled ? null : kit.iconButton('close', t('Remove {name}', {name}), () => { value.list.splice(i, 1); draw(true); emit(); }, {'data-remove': ''}));
-    el._live = hass => { if (save.entity_id) status.textContent = valveStatus(kit, hass, save.entity_id, t); };
+    el._live = hass => { if (save.entity_id) status.textContent = valveStatus(kit, hass, save.entity_id, t, v.battery_entity_id); };
     el._live(ctx.hass);
     return el;
    });
@@ -696,27 +590,54 @@ function personsField(ctx) {
   return api;
  };
 }
+// Who gets a room's messages in one sentence (HA-NOTIFY's recipients_line): the backend's while you did not change the
+// choice, else the same words for what you chose (names joined as the backend joins them).
+function recipientsLine(ctx, chosen) {
+ const {t, model} = ctx, people = model.live?.notifications?.people || [], room = model.name || '';
+ const stored = model.live?.notifications?.recipients_line;
+ if (stored && same(chosen, model.notifications.recipients ?? null)) return stored[ctx.kit.langOf(ctx.hass)] || stored.en || '';
+ if (chosen == null) return t('Messages about {room} go to everyone with a phone.', {room});
+ if (!chosen.length) return t('Messages about {room} go to nobody; they show in Home Assistant only.', {room});
+ const names = chosen.map(id => people.find(p => p.person === id)?.name || id);
+ return t('Messages about {room} go to {people}.', {room, people: names.length === 1 ? names[0] : names.slice(0, -1).join(', ') + t(' and ') + names.at(-1)});
+}
 function notificationsField(ctx) {
  return o => {
   const {kit, t, model} = ctx, m = model.notifications, {h} = kit, value = copy(o.value), body = h('div', {class: 'rr-group'});
   const api = kit.shell('notifications', o, body, false), emit = () => o.onChange?.(copy(value));
-  const who = (m.recipients || []).length ? t('Messages about this room go to: {people}.', {people: m.recipients.join(', ')}) : '';
+  const people = model.live?.notifications?.people || [];
   const draw = () => {
    const toggle = kit.fields.toggle({key: 'notifications:on', hass: ctx.hass, label: t('Notify about this room'), value: value.on, disabled: o.disabled,
-    help: value.on ? who : t('Off: no messages about this room.'), onChange: v => { value.on = v; if (v && !value.kinds.length) value.kinds = [...(m.kind_choices || [])]; draw(); emit(); }});
+    help: value.on ? '' : t('Off: no messages about this room.'), onChange: v => { value.on = v; if (v && !value.kinds.length) value.kinds = [...(m.kind_choices || [])]; draw(); emit(); }});
    const kinds = value.on ? h('div', {class: 'choices', role: 'group', 'aria-label': t('Messages')}, ...(m.kind_choices || []).map(k => {
     const box = h('input', {type: 'checkbox', disabled: o.disabled, 'data-fk': 'notifications:kind:' + k});
     box.checked = value.kinds.includes(k);
     box.addEventListener('change', () => { value.kinds = (m.kind_choices || []).filter(x => (x === k ? box.checked : value.kinds.includes(x))); emit(); });
     return h('label', {class: 'choice'}, box, h('span', {class: 'choice-text'}, h('span', {class: 'choice-label', text: KINDS[k] ? t(KINDS[k]) : k})));
    })) : null;
-   body.replaceChildren(toggle.el, ...(kinds ? [kinds] : []));
+   // 1.4.2 (plan 3.4): who gets them, the room's own recipients apart from its persons for presence.
+   const who = value.on && 'recipients' in value ? recipientsPicker(ctx, o, value, people, () => { draw(); emit(); }) : [];
+   body.replaceChildren(toggle.el, ...(kinds ? [kinds] : []), ...who);
   };
   draw();
   api.target = () => body.querySelector('input');
   api.describe();
   return api;
  };
+}
+
+// [Everyone with a phone | Chosen people], the people as chips (fields.entity with multiple), and the line who gets them.
+function recipientsPicker(ctx, o, value, people, changed) {
+ const {kit, t} = ctx, chosen = value.recipients;
+ const seg = kit.fields.segmented({key: 'notifications:who', hass: ctx.hass, label: t('Who gets them'), disabled: o.disabled, value: chosen == null ? 'everyone' : 'chosen',
+  options: [{value: 'everyone', label: t('Everyone with a phone')}, {value: 'chosen', label: t('Chosen people')}],
+  onChange: v => { value.recipients = v === 'everyone' ? null : people.filter(p => p.chosen).map(p => p.person); changed(); }});
+ const names = Object.fromEntries(people.map(p => [p.person, p.found === false ? t('{name} (not found)', {name: p.name}) : p.name]));
+ const picker = chosen == null ? null : kit.fields.entity({hass: ctx.hass, key: 'notifications:recipients', label: t('Recipients'), multiple: true, showIds: false,
+  disabled: o.disabled, choices: people.map(p => p.person), names, value: chosen, placeholder: t('Search by name'),
+  onChange: v => { value.recipients = v; line.textContent = recipientsLine(ctx, v); o.onChange?.(copy(value)); }});
+ const line = kit.h('p', {class: 'help rr-recipients', 'data-recipients': '', text: recipientsLine(ctx, chosen)});
+ return [seg.el, ...(picker ? [picker.el] : []), line];
 }
 
 /* ---- the screens ---- */
@@ -733,25 +654,29 @@ function roomList(ctx) {
 const opened = new Map();
 function summaries(ctx) {
  const {kit, t, model: m, values: v, hass, lang} = ctx, unit = m.unit || '°C', out = {};
- const until = v.state === 'inactive' && v.inactive_until ? ' ' + t('until {moment}', {moment: kit.time.moment(hass, v.inactive_until)}) : '';
- out.general = `${t(STATES[v.state]?.[0] || 'On')}${until} · ${t(EMITTERS[v.emitter]?.[0] || 'Radiators')}`;
+ const state = v.state === 'inactive' && v.inactive_until ? offUntil(kit, hass, t, v.inactive_until, afterOf(m, v)) : t(STATES[v.state]?.[0] || 'On');
+ out.general = `${state} · ${t(EMITTERS[v.emitter]?.[0] || 'Radiators')}`;
  const now = measured(hass, m.entities);
  out.temperature = [now == null ? t('No temperature yet') : t('{temperature} now', {temperature: kit.degrees(now, unit, lang)}),
   (v.sources || []).length === 1 ? t('1 source') : t('{n} sources', {n: (v.sources || []).length}),
   v.setpoint_entity ? t('setting device {name}', {name: nameOf(hass, v.setpoint_entity)}) : ''].filter(Boolean).join(' · ');
- const groups = m.program || [];
+ // The week program, its reset times and Smart warm-up are read values (live, 1.4.2 P1): the planner saves them.
+ const live = m.live || {}, groups = live.program || [];
  out.week = [groups.length ? groups.slice(0, 2).map(g => `${dayText(g.days, kit, hass, t)} ${g.points.map(([at]) => kit.time.format(hass, at)).join(', ')}`).join(' · ')
-  : t('No week program'), (m.resets || []).length ? `${t('Reset times')}: ${m.resets.length}` : '',
-  m.smart_warm_up ? `${t('Smart warm-up')}: ${t(WARM_UP[m.smart_warm_up] || 'As the house')}` : ''].filter(Boolean).join(' · ');
+  : t('No week program'), (live.resets || []).length ? `${t('Reset times')}: ${live.resets.length}` : '',
+  live.smart_warm_up ? `${t('Smart warm-up')}: ${t(WARM_UP[live.smart_warm_up] || 'As the house')}` : ''].filter(Boolean).join(' · ');
  const c = v.contacts;
  if (c) out.contacts = c.windows.length || c.doors.length ? [t('Windows: {n}', {n: c.windows.length}), t('doors: {n}', {n: c.doors.length})].join(' · ') : t('No window or door contacts');
  const rv = v.radiator_valves;
  if (rv) out.valves = rv.list.length ? [rv.list.length === 1 ? t('1 valve') : t('{n} valves', {n: rv.list.length}),
   rv.control === true || rv.control === false ? `${t('Valve control')}: ${t(rv.control ? 'On' : 'Off')}` : ''].filter(Boolean).join(' · ') : t('No radiator valves');
+ else if (live.radiator_valves_error) out.valves = t('Could not be read');
  const p = v.persons;
  if (p) out.persons = p.entity_ids.length ? p.entity_ids.map(e => nameOf(hass, e, m.persons.choices)).join(', ') : t('Follows the house');
  const n = v.notifications;
- if (n) out.notifications = n.on ? `${t('On')}: ${n.kinds.map(k => t(KIND_SHORT[k] || k)).join(', ')}` : t('Off');
+ if (n) out.notifications = n.on ? [`${t('On')}: ${n.kinds.map(k => t(KIND_SHORT[k] || k)).join(', ')}`, !('recipients' in n) ? ''
+  : n.recipients == null ? t('Everyone with a phone') : n.recipients.map(id => (live.notifications?.people || []).find(p => p.person === id)?.name || id).join(', ')]
+  .filter(Boolean).join(' · ') : t('Off');
  if (v.minimum_temperature != null) out.limits = `${kit.number(v.minimum_temperature, lang)}–${kit.degrees(v.maximum_temperature, unit, lang)}`;
  return out;
 }
@@ -770,11 +695,17 @@ function roomPage(ctx) {
   help: t('The date and time the room heats again by itself. Empty: off until you turn it on.')});
  until.hidden = v.state !== 'inactive';
  const states = (m.states || ['active', 'inactive']).map(s => ({value: s, label: t(STATES[s][0]), help: t(STATES[s][2]), tone: STATES[s][1]}));
+ // The temperature without a week program: on Heat along only it is "Heat along up to" in General, right under the state
+ // (plan 3.3, one field, not two); otherwise in Temperature. It moves with the state you choose.
+ const fixed = h('div', {class: 'rr-fixed', 'data-fixed': ''}), inGeneral = h('div', {class: 'rr-slot'}), inTemperature = h('div', {class: 'rr-slot'});
+ const placeFixed = () => { const follow = v.state === 'follow'; fixed.replaceChildren(...fixedBlock(ctx, follow)); (follow ? inGeneral : inTemperature).append(fixed); };
+ const hint = h('div', {class: 'rr-hint', 'data-hint': ''});
+ const drawHint = () => hint.replaceChildren(...(valveHint(m, v) ? [kit.notice(t('With On, this valve regulates on its own sensor and often closes before the room is warm; consider valve control with a separate thermometer instead.'), 'info')] : []));
  const parts = [fold('general',
   ctx.field('text', 'name', {label: t('Room name'), maxlength: 40, required: true,
    more: t('The name you see in Home Assistant and on the E32. Up to 40 letters (fewer with accents or emoji); renaming keeps the room and its history.')}),
-  ctx.field('segmented', 'state', {label: t('Heating'), options: states, onChange: s => { until.hidden = s !== 'inactive'; }}),
-  until,
+  ctx.field('segmented', 'state', {label: t('Heating'), options: states, onChange: s => { until.hidden = s !== 'inactive'; placeFixed(); drawHint(); }}),
+  until, inGeneral,
   ctx.field('segmented', 'emitter', {label: t('Heating type'), options: Object.entries(EMITTERS).map(([value, [label, icon]]) => ({value, label: t(label), icon})),
    more: t('Radiators or floor heating. Floor heating warms up slowly and needs cooler water, so each type gets its own water temperature.')}))];
  // 2. Temperature
@@ -782,11 +713,10 @@ function roomPage(ctx) {
   ctx.field(sourcesField(ctx), 'sources', {label: t('Temperature sources'), help: t('The first one with a fresh value is used; the others are backups.'),
    more: t('The first one with a fresh value is used; the others are backups. With one source: if it fails, the room stops asking for heat after 30 minutes. A second source, for example a Bluetooth sensor, covers that.')}),
   ctx.field('entity', 'setpoint_entity', {label: t('Setting device (optional)'), domains: ['climate', 'input_number', 'number'], placeholder: t('Search by name'),
-   filter: (st, eid) => !(m.own || []).includes(eid), help: t('A thermostat or valve you set the room with.'),
-   more: t('A thermostat or radiator valve (for example a tado or TV02), or a number with a target, to set the room with. Home Assistant writes the week program\'s temperature to it at every switch point; turning it changes the room until the next switch point. Turn off the device\'s own schedule (manual mode), otherwise it changes the temperature by itself.')}),
-  isNew ? null : settingLine(ctx),
-  ctx.field('stepper', 'fallback_temperature', {label: t('Temperature without a week program'), unit, step: unit === '°F' ? 1 : 0.5, min: m.limits?.minimum, max: m.limits?.maximum,
-   more: t('The temperature the E32 keeps when Home Assistant gives no target and the room has no week program, or its clock is not set yet.')})));
+   filter: (st, eid) => !(m.own || []).includes(eid), help: t('A thermostat or valve you set the room with.'), onChange: drawHint,
+   more: t('A thermostat or radiator valve (for example a tado or TV02), or a number with a target, to set the room with. Home Assistant keeps it at the room\'s temperature; turning it changes the room (until the next switch time with a week program, for good without one). Turn off the device\'s own schedule (manual mode), otherwise it changes the temperature by itself.')}),
+  hint, isNew ? null : settingLine(ctx), inTemperature));
+ placeFixed(); drawHint();
  // 3. Week program: the planner itself (WEEK-V2: the program, the reset times and Smart warm-up live in it).
  parts.push(fold('week', isNew ? ctx.field('toggle', 'standard_program', {label: t('Start with the standard week program'),
   more: t('“Workdays and weekend”: 20 °C by day, 18 °C while away on workdays, 16 °C at night. You change it afterwards in the week planner. Off: the room keeps its temperature without a week program.')})
@@ -794,6 +724,10 @@ function roomPage(ctx) {
  // 4.–8. Windows and doors, radiator valves, persons, notifications, limits: each only where this firmware has it.
  if (!isNew && m.contacts) parts.push(fold('contacts', ctx.field(contactsField(ctx), 'contacts', {})));
  if (!isNew && m.radiator_valves) parts.push(fold('valves', ctx.field(valvesField(ctx), 'radiator_valves', {})));
+ // P12: the valve record could not be read now: the block stays, says why and offers a new read (HA-DEVICES' key).
+ else if (!isNew && m.features?.radiator_valves !== false && m.live?.radiator_valves_error) parts.push(fold('valves',
+  kit.notice(t('The radiator valves could not be read ({error}). Reload.', {error: m.live.radiator_valves_error}), 'warning',
+   kit.button(t('Reload'), () => ctx.navigate('#rooms/' + encodeURIComponent(m.id)), 'text', {'data-reload-valves': ''}))));
  if (!isNew && m.persons) parts.push(fold('persons', ctx.field(personsField(ctx), 'persons', {})));
  if (!isNew && m.notifications) parts.push(fold('notifications', ctx.field(notificationsField(ctx), 'notifications', {})));
  if (v.minimum_temperature != null) {
@@ -822,6 +756,66 @@ function roomPage(ctx) {
  page.addEventListener('change', () => queueMicrotask(() => { const s = summaries(ctx); for (const [k, el] of Object.entries(made)) el.setSummary?.(s[k]); }));
  return page;
 }
+// A radiator valve as the setting device of a room that is On (CONTRACT-1.4.2 §2 setting_device_hint): said while you
+// choose (the climate entities that are valves, live.valve_setting_devices), and for the stored choice.
+const valveHint = (m, v) => v.state === 'active' && !!v.setpoint_entity && ((m.live?.valve_setting_devices || []).includes(v.setpoint_entity)
+ || (m.live?.setting_device_hint === 'valve_on_active' && v.setpoint_entity === m.setpoint_entity && m.state === 'active'));
+// Where the room's target comes from now, in the room card's words (live.target_source; plan 3.3).
+function sourceLine(ctx) {
+ const {kit, t, model: m, hass} = ctx, s = m.live?.target_source;
+ if (!s || ctx.item === NEW) return null;
+ const temperature = kit.degrees(num(s.temperature), m.unit || '°C', ctx.lang), time = s.until ? kit.time.moment(hass, s.until) : '';
+ const words = {
+  program: time ? ['Now {temperature} from the week program, until {time}', {temperature, time}] : ['Now {temperature} from the week program', {temperature}],
+  fixed: ['Now {temperature}: the temperature without a week program', {temperature}],
+  manual: time ? ['Temporarily {temperature} until {time}', {temperature, time}] : ['Temporarily {temperature}', {temperature}],
+  reset: s.reset_time ? ['Now {temperature} from the reset time of {time}', {temperature, time: kit.time.format(hass, s.reset_time)}] : ['Now {temperature} from a reset time', {temperature}],
+  summer: ['{temperature}: summer mode', {temperature}], window: ['{temperature}: a window or door is open', {temperature}],
+  boost: time ? ['Boost until {time}', {time}] : ['Boost active', {}]}[s.source];
+ return words && (temperature || s.source === 'boost') ? kit.h('p', {class: 'help rr-source', 'data-target-source': s.source, text: kit.together(t(...words))}) : null;
+}
+// HA-ADVICE's sentence beside the field (live.advice: heat along or a fixed temperature), its "More" and "Use 18 °C".
+function adviceBlock(ctx) {
+ const {kit, t, model: m} = ctx, a = m.live?.advice, lang = kit.langOf(ctx.hass), unit = m.unit || '°C';
+ const text = a && (a['text_' + lang] || a.text_en);
+ if (!text || ctx.item === NEW) return null;
+ const more = a['more_' + lang] || a.more_en, target = num(a.target_c), error = kit.h('div', {class: 'rr-advice-error'});
+ // The room model's plain sentence (live.model: how fast it cools and warms) goes under "More" with the assumptions.
+ const model = m.live?.model?.['sentence_' + lang] || m.live?.model?.sentence_en;
+ const box = kit.h('div', {class: 'rr-advice', 'data-advice': ''}, kit.h('p', {class: 'help', text: kit.together(text)}),
+  more || model ? kit.more([more, model].filter(Boolean).join(' '), lang) : null);
+ if (target == null || ctx.readOnly) return box;
+ const shown = unit === '°F' ? Math.round((target * 9 / 5 + 32) * 10) / 10 : target;
+ const use = kit.button(t('Use {temperature}', {temperature: kit.degrees(shown, unit, ctx.lang)}), async () => {
+  use.disabled = true; error.replaceChildren();
+  // A routine plan write of HA-ADVICE (the self-tuning does not restart); then the screen reads the room again.
+  try { await ctx.action('adopt_advice', {temperature: target}); ctx.navigate('#rooms/' + encodeURIComponent(m.id)); }
+  catch (err) { use.disabled = false; error.replaceChildren(kit.inlineError(err?.text || ctx.errorText(err?.code || 'unknown'))); }
+ }, 'text', {'data-adopt': ''});
+ box.append(use, error);
+ return box;
+}
+// The fixed temperature's block: the field (or, on Heat along only with a week program, the sentence and "Use one fixed
+// temperature"), the line where the target comes from now, and the advice.
+function fixedBlock(ctx, follow) {
+ const {kit, t, model: m, values: v} = ctx, {h} = kit, unit = m.unit || '°C';
+ const program = ctx.item !== NEW && (m.live?.program || []).length > 0;
+ const parts = [];
+ if (follow && program) {
+  const temperature = kit.degrees(num(v.fallback_temperature), unit, ctx.lang);
+  parts.push(h('div', {class: 'field rr-program-note', 'data-field': 'fallback_temperature'}, h('span', {class: 'label', text: t('Heat along up to')}),
+   h('p', {class: 'help', text: t('This room follows its week program; the valve gets those temperatures.')}),
+   ctx.readOnly ? null : kit.button(t('Use one fixed temperature'), () => ctx.act({remove_program: true, fallback_temperature: v.fallback_temperature}, {
+    title: t('Use one fixed temperature?'), confirm: t('Remove the week program'), danger: true,
+    text: t('The week program of {name} is removed, and {temperature} becomes its temperature from now on. You can change that temperature here afterwards.', {name: m.name, temperature})}),
+   'text', {'data-remove-program': ''})));
+ } else {
+  parts.push(ctx.field('stepper', 'fallback_temperature', {label: t(follow ? 'Heat along up to' : 'Temperature without a week program'), unit, step: unit === '°F' ? 1 : 0.5,
+   min: m.limits?.minimum, max: m.limits?.maximum, help: follow ? t('The valve opens up to this temperature; the room asks for no heat itself. This is the same setting as the temperature without a week program.') : null,
+   more: follow ? null : t('The temperature the room keeps when it has no week program, and while the E32\'s clock is not set yet. Without a week program a manual change becomes this temperature.')}));
+ }
+ return [...parts, sourceLine(ctx), adviceBlock(ctx)].filter(Boolean);
+}
 function settingLine(ctx) {
  const {kit, t, model} = ctx, el = kit.h('p', {class: 'help rr-setting', 'data-live': ''}), lang = ctx.lang;
  el._live = hass => {
@@ -831,6 +825,8 @@ function settingLine(ctx) {
   if (typeof a.setting_device_written === 'number') lines.push(t('Last written: {temperature} at {time}', {temperature: kit.degrees(a.setting_device_written, '°C', lang), time: kit.time.moment(hass, a.setting_device_written_at)}));
   if (typeof a.setting_device_knob === 'number') lines.push(t('Last turned on the device: {temperature} at {time}', {temperature: kit.degrees(a.setting_device_knob, '°C', lang), time: kit.time.moment(hass, a.setting_device_knob_at)}));
   if (!lines.length) lines.push(t('Nothing written to it yet.'));
+  // HA-SETDEV (V4): when Home Assistant last set the device to manual (it ran its own schedule).
+  if (a.setting_device_set_to_manual) lines.push(t('Set to manual by Home Assistant at {time}', {time: kit.time.moment(hass, a.setting_device_set_to_manual)}));
   if (a.setting_device_error) lines.push(String(a.setting_device_error));
   el.hidden = false; el.textContent = kit.together(lines.join(' · '));
  };
@@ -838,10 +834,14 @@ function settingLine(ctx) {
  return el;
 }
 // The week planner of this one room (CONTRACT-1.4.1 §4): the same element as the dashboard's card, kept per room so a
-// redraw of the screen never loses what you changed in it; it saves on its own button.
+// redraw of the screen never loses what you changed in it; it saves on its own button. 1.4.2 (P11): a room that is
+// removed or added again (same name, same id) gets a new one; the element reads again when the screen opens after
+// PLANNER_FRESH_MS (a tablet that stays open) or when the room's program changed elsewhere, never while it holds changes.
+const PLANNER_FRESH_MS = 5 * 60000;
 const planners = new Map();
+const forgetPlanners = id => { for (const key of [...planners.keys()]) if (key.endsWith('/' + id)) planners.delete(key); };
 function planner(ctx) {
- const {kit, t, model: m} = ctx, {h} = kit, key = ctx.entry_id + '/' + m.id;
+ const {kit, t, model: m} = ctx, {h} = kit, key = ctx.entry_id + '/' + m.id, program = JSON.stringify(m.live?.program || []);
  if (!customElements.get('openthermostat-e32-week')) {
   // The dashboard's Week program view is gone (1.4.1): no link to it, only the plain fact.
   return h('div', {class: 'rr-week'}, kit.notice(t('The week planner is not loaded on this page.'), 'warning'));
@@ -849,10 +849,14 @@ function planner(ctx) {
  let entry = planners.get(key);
  if (!entry) {
   const el = document.createElement('openthermostat-e32-week');
-  entry = {el, dirty: false};
+  entry = {el, dirty: false, loaded: Date.now(), program};
   el.addEventListener('openthermostat-week-dirty', e => { entry.dirty = !!e.detail?.dirty; });
   el.setConfig({type: 'custom:openthermostat-e32-week', entry_id: ctx.entry_id, room_id: m.id, embedded: true});
   planners.set(key, entry);
+ } else if (!(entry.dirty || entry.el.dirty === true || entry.el.anyDirty === true)
+  && (Date.now() - entry.loaded > PLANNER_FRESH_MS || entry.program !== program)) {
+  entry.loaded = Date.now(); entry.program = program;
+  if (ctx.hass) entry.el.load?.();  // Home Assistant answers from the plan it holds: no E32 sign-in
  }
  entry.el.hass = ctx.hass;
  ctx.guard(() => (entry.dirty || entry.el.dirty === true || entry.el.anyDirty === true ? {title: t('Leave without saving the week program?'),
@@ -878,7 +882,8 @@ function valuesOf(model) {
  if (model.contacts) { const {windows = [], doors = [], window_delay_s = null, door_delay_s = null} = model.contacts; v.contacts = {windows: [...windows], doors: [...doors], window_delay_s, door_delay_s}; }
  if (model.radiator_valves) v.radiator_valves = {list: (model.radiator_valves.list || []).map(valveSave), control: model.radiator_valves.control ?? null};
  if (model.persons) v.persons = {entity_ids: [...(model.persons.entity_ids || [])], away_temperature: model.persons.away_temperature ?? null};
- if (model.notifications) v.notifications = {on: !!model.notifications.on, kinds: [...(model.notifications.kinds || [])]};
+ if (model.notifications) v.notifications = {on: !!model.notifications.on, kinds: [...(model.notifications.kinds || [])],
+  ...('recipients' in model.notifications ? {recipients: model.notifications.recipients == null ? null : [...model.notifications.recipients]} : {})};
  if (model.limits && model.limits.minimum != null) { v.minimum_temperature = model.limits.minimum; v.maximum_temperature = model.limits.maximum; }
  return v;
 }
@@ -890,6 +895,10 @@ const STYLE = `.rr-toolbar{display:flex;align-items:center;justify-content:space
 .rr-list,.rr-group{display:grid;gap:var(--ot-s2);max-width:560px}.rr-group>.field{padding:var(--ot-s2) 0;margin:0;border:0}
 .rr-group>.field:first-child{padding-top:0}.rr-own{display:grid;gap:var(--ot-s2);padding:var(--ot-s2) 0}.rr-own>.field{padding:0;margin:0;border:0}
 .pick .btn{flex:none}.rr-valve .pick-text{gap:4px}.rr-model{max-width:320px;min-height:40px;padding:6px 10px;margin-top:4px}
+.rr-list .pick-name{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}.rr-twin{display:grid;justify-items:start;gap:0;margin:-4px 0 0 12px}
+.rr-fixed{display:grid}.rr-fixed>.field{padding:var(--ot-s3) 0;margin:0;border:0}.rr-source{margin:-8px 0 0;padding-bottom:var(--ot-s3)}
+.rr-advice{display:grid;justify-items:start;gap:4px;padding-bottom:var(--ot-s3)}.rr-program-note{display:grid;justify-items:start;gap:4px}
+.rr-hint .notice{margin:0 0 var(--ot-s3)}.rr-recipients{margin:0}
 .rr-setting{margin:-8px 0 0;padding-bottom:var(--ot-s3)}.rr-why{padding:var(--ot-s3) 0 0}
 .rr-week{padding:var(--ot-s3) 0}.rr-full{margin-top:var(--ot-s3)}.rr-remove{margin-top:var(--ot-s5);display:flex;justify-content:flex-start}
 .rr-nav{display:grid;gap:var(--ot-s2)}.rr-nav .title{margin-bottom:var(--ot-s1)}.rr-nav .btn{justify-self:start;margin-top:var(--ot-s1)}
@@ -911,8 +920,11 @@ const STYLE = `.rr-toolbar{display:flex;align-items:center;justify-content:space
   const shown = valuesOf(model);
   return Object.fromEntries(Object.entries(values).filter(([k, x]) => !same(x, shown[k])));
  },
- // After adding: the page of the new room; after removing: the list.
- saved: (model, item) => (model.removed ? '#rooms' : item === NEW && model.id ? '#rooms/' + encodeURIComponent(model.id) : null),
+ // After adding: the page of the new room; after removing: the list. Either way that room's planner starts afresh (P11).
+ saved: (model, item) => {
+  if (model.removed || item === NEW) forgetPlanners(model.id);
+  return model.removed ? '#rooms' : item === NEW && model.id ? '#rooms/' + encodeURIComponent(model.id) : null;
+ },
  // A value changed elsewhere too, in the words of this section.
  shown: (key, value, t) => {
   if (key === 'state') return t(STATES[value]?.[0] || value);
@@ -921,7 +933,7 @@ const STYLE = `.rr-toolbar{display:flex;align-items:center;justify-content:space
   if (key === 'contacts') return [...(value?.windows || []), ...(value?.doors || [])].join(', ');
   if (key === 'radiator_valves') return (value?.list || []).map(valveKey).join(', ');
   if (key === 'persons') return (value?.entity_ids || []).join(', ');
-  if (key === 'notifications') return t(value?.on ? 'On' : 'Off');
+  if (key === 'notifications') return [t(value?.on ? 'On' : 'Off'), ...(value?.recipients ? [value.recipients.join(', ')] : [])].join(' · ');
   return undefined;
  },
  nav,

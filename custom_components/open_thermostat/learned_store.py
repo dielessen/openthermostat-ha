@@ -1,4 +1,4 @@
-"""Two Repairs items about what the E32 learned and could not keep (1.1.1, R-E-04).
+"""A Repairs item about what the E32 learned and could not keep (1.1.1, R-E-04; 1.4.2: one, after a day).
 
 On 5 November the E32 lost what it learned at a restart, and nothing showed it (R-E-04: the boot's "restored"
 and the save's count were RAM log lines only). The E32 (SL-A, ``LearnedStore::addJson``, TELEMETRIEBUDGET.nl.md
@@ -21,12 +21,14 @@ refused: ``reserve_entries``, what the E32 keeps free for its own settings (null
   the learned record needs. Firmware without them gets the text without that sentence
   (``learned_not_saved_no_counts``). A save
   that kept every room but not all the rest (``complete`` false: the house and boiler part) raises
-  ``learned_not_saved_part``. Either goes once a later save is complete.
-- ``learned_lost_at_restart``: right after an E32 restart, the knowledge figure ("Known about your house", the
-  insight's ``knowledge.pct``) is more than LOSS_POINTS below the last figure before it: "the E32 lost part of
-  what it learned at the restart", with both figures. It goes once the figure is back within LOSS_POINTS, or at
-  the next restart that loses nothing. Kept in memory only: Home Assistant has to have seen the figure before the
-  restart (it has, unless Home Assistant itself was off then).
+  ``learned_not_saved_part``. Either goes once a later save is complete. 1.4.2 (HC-05, Repairs only for faults):
+  raised only once the condition has lasted NOT_SAVED_AFTER_S (a day; its own text says "if this stays for days"):
+  a save that leaves something out for a while is normal while the E32 makes room. Counted in this Home Assistant
+  run (a restart of Home Assistant starts the day again).
+- A restart that lost what the E32 learned (right after an E32 restart, the knowledge figure, "Known about your
+  house", the insight's ``knowledge.pct``, is more than LOSS_POINTS below the last figure before it): information
+  after the fact, the E32 learns it again. 1.4.2: no Repairs item any more (``learned_lost_at_restart`` is in
+  issue_sync.RETIRED); the diagnostics download says it (support_diagnostics.learned_store, ``lost_at_restart``).
 """
 from __future__ import annotations
 
@@ -37,6 +39,8 @@ from .issue_sync import clear_issues, sync_issues
 
 GROUP = "learned_store"
 LOSS_POINTS = 30
+NOT_SAVED_AFTER_S = 24 * 3600  # 1.4.2: the Repairs item only once the last saves left something out for a day
+STATE_KEY = "learned_store_watch"
 COUNTS = ("restored_rooms", "restored_parts", "rooms", "saved_rooms", "saves", "pending_entries", "nvs_free_entries",
           "reserve_entries", "needed_entries")
 # The largest believable count: rooms (RoomPlan::maxRooms is 8) and saves (uint16) fit; NVS entries of 4 KB pages too.
@@ -89,8 +93,9 @@ class LearnedStoreWatch:
         self.boots = getattr(hub, "boots", 0)
         self.before = None      # the knowledge figure before the latest restart
         self.last = None        # the latest knowledge figure of this E32 boot
-        self.loss = None        # (before, after) of a restart that lost what it learned
+        self.loss = None        # (before, after) of a restart that lost what it learned (diagnostics only)
         self.after_restart = False
+        self.not_saved_since = None  # hub clock time since the saves leave something out
 
     @callback
     def check(self):
@@ -111,24 +116,29 @@ class LearnedStoreWatch:
         wanted = {}
         status = store_status(summary)
         missing = not_saved(status)
-        if missing is not None and missing[0] == "rooms":
-            placeholders = {"name": self.entry.title, "missing": missing[1], "of": missing[2]}
-            why = memory(status)
-            wanted["not_saved"] = (("learned_not_saved", {**placeholders, **why}) if why is not None
-                                   else ("learned_not_saved_no_counts", placeholders))
-        elif missing is not None:
-            wanted["not_saved"] = ("learned_not_saved_part", {"name": self.entry.title})
-        if self.loss is not None:
-            wanted["lost"] = ("learned_lost_at_restart", {"name": self.entry.title, "before": self.loss[0],
-                                                          "after": self.loss[1]})
+        clock = getattr(self.hub, "clock", None)
+        now = clock() if callable(clock) else 0
+        if missing is None:
+            if status is not None:
+                self.not_saved_since = None  # a complete save (or none yet this boot): the day starts again
+        elif self.not_saved_since is None:
+            self.not_saved_since = now
+        if missing is not None and now - self.not_saved_since >= NOT_SAVED_AFTER_S:
+            if missing[0] == "rooms":
+                placeholders = {"name": self.entry.title, "missing": missing[1], "of": missing[2]}
+                why = memory(status)
+                wanted["not_saved"] = (("learned_not_saved", {**placeholders, **why}) if why is not None
+                                       else ("learned_not_saved_no_counts", placeholders))
+            else:
+                wanted["not_saved"] = ("learned_not_saved_part", {"name": self.entry.title})
         sync_issues(self.hass, self.entry.entry_id, GROUP, wanted)
 
 
 async def async_setup_learned_store(hass, entry):
-    """Product entries: the two Repairs items (no entities)."""
+    """Product entries: the Repairs item (no entities)."""
     from .heating_link import heating_hub
     hub = heating_hub(hass, entry)
-    watch = hass.data[DOMAIN][entry.entry_id]["learned_store_watch"] = LearnedStoreWatch(hass, entry, hub)
+    watch = hass.data[DOMAIN][entry.entry_id][STATE_KEY] = LearnedStoreWatch(hass, entry, hub)
     entry.async_on_unload(hub.add_listener(watch.check))
     entry.async_on_unload(lambda: clear_issues(hass, entry.entry_id, GROUP))
     watch.check()

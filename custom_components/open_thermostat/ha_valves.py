@@ -17,8 +17,13 @@ sends anything for it; Home Assistant drives it with the E32's own rules
   period when the entity has it and is in another mode. Never ``turn_off``;
 - health: unavailable or unknown for 2 h is offline; the battery is a battery
   sensor on the same device (else its low-battery binary sensor, else a battery
-  attribute of the entity), low at 20 % or on; the opening is a ``valve_position``/``position`` attribute or a position /
-  pi_heating_demand sensor on the device, when there is one.
+  attribute of the entity: device_battery.battery_of, the one reader the Batteries
+  list and the messages use too); "low_battery" at 20 % and below or on, as the
+  firmware's own valve health (TrvControl::lowBatteryPct, "Valve problem"); the
+  house's battery limit (device_battery.limit_pct) is for the Batteries list, the
+  "Batteries low" entity and the messages. The opening is a ``valve_position``/
+  ``position`` attribute or a position / pi_heating_demand sensor on the device,
+  when there is one.
 
 A failing service call is logged once per value and tried again a minute later at
 the earliest: never an exception into the telemetry listeners, never a write storm.
@@ -31,7 +36,6 @@ import time
 
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import callback
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 
 from .heating_link import celsius, number
@@ -94,31 +98,25 @@ class HaValveDriver:
         self._tracked, self._unsubscribe, self._retry = (), None, None
 
     # -- what Home Assistant knows of a valve -----------------------------------------------
-    def _device_entities(self, entity_id):
-        registry = er.async_get(self.hass)
-        entry = registry.async_get(entity_id)
-        if entry is None or entry.device_id is None:
-            return []
-        return [e for e in er.async_entries_for_device(registry, entry.device_id) if e.entity_id != entity_id]
-
     def _related(self, entity_id):
-        """(battery %, battery low, position %) from the valve's own device, each None when unknown."""
-        pct = low = position = None
-        for entry in self._device_entities(entity_id):
+        """(battery %, battery low, position %) from the valve's own device, each None when unknown. The battery is
+        the shared reader's (device_battery.battery_of: also the Batteries list and the messages read it)."""
+        from .device_battery import battery_of, device_entities
+        battery = battery_of(self.hass, entity_id)
+        pct, low = (battery["pct"], battery["low"]) if battery is not None else (None, None)
+        position = None
+        for entry in device_entities(self.hass, entity_id):
             state = self.hass.states.get(entry.entity_id)
-            if state is None or state.state in GONE:
+            if state is None or state.state in GONE or entry.domain != "sensor":
                 continue
             kind = entry.device_class or entry.original_device_class or state.attributes.get("device_class")
-            if entry.domain == "sensor" and kind == "battery" and pct is None:
-                value = number(state.state, 0, 100)
-                pct = round(value) if value is not None else None
-            elif entry.domain == "binary_sensor" and kind == "battery" and low is None and state.state in ("on", "off"):
-                low = state.state == "on"
-            elif entry.domain == "sensor" and position is None and any(
+            if kind != "battery" and any(
                     word in " ".join(str(x or "") for x in (entry.entity_id, entry.original_name, entry.translation_key))
                     .lower().replace(" ", "_") for word in POSITION_WORDS):
                 value = number(state.state, 0, 100)
-                position = round(value) if value is not None else None
+                if value is not None:
+                    position = round(value)
+                    break
         return pct, low, position
 
     def view(self, entity_id):
@@ -137,9 +135,6 @@ class HaValveDriver:
                 if value is not None:
                     position = round(value)
                     break
-            if pct is None:  # some integrations put it on the climate entity itself
-                value = number(state.attributes.get("battery_level", state.attributes.get("battery")), 0, 100)
-                pct = round(value) if value is not None else None
             setpoint = celsius(state.attributes.get("temperature"), self.hass.config.units.temperature_unit, 0, 50)
             if setpoint is not None:
                 found["setpoint_c"] = setpoint

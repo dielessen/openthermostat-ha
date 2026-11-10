@@ -33,8 +33,13 @@ Each problem is also a Repairs issue (issue_sync.py), created when the
 problem starts and removed when it clears; the water pressure keeps its own
 issue (heating_advice.py).
 
+1.4.2 (HC-05, Repairs only for faults): the slow room and the burner that keeps
+switching on and off are advice, not faults. They no longer turn the sensor on
+and raise no Repairs item; they are the attribute ``advice`` (the same plain
+sentences), which the dashboard's Learning view shows under "Worth checking".
+
 Attributes: ``problems`` (stable ids, for automations) and ``reasons`` (the
-same in plain English, Dutch or Polish, following the Home Assistant language), so a
+same in plain English or Dutch, following the Home Assistant language), so a
 user's own notification automation can say what is wrong.
 """
 from __future__ import annotations
@@ -65,6 +70,8 @@ ROOM_WITHOUT_MEASUREMENT = ("stale", "lost")
 # Active-control warnings that mean the heating does not work as it should.
 # (boiler_limit_unknown only says the E32 still waits for the boiler's maximum.)
 ACTIVE_WARNINGS = ("foreign_controller", "measurement_lost", "boiler_no_response", "transmit_failed")
+# 1.4.2 (HC-05): conditions that are advice, not a fault: in ``advice``, never on and never a Repairs item.
+ADVICE = ("room_slow", "short_cycling_persists")
 
 TEXT = {
     "en": {
@@ -132,37 +139,6 @@ TEXT = {
                         "Herstelt het niet vanzelf, open dan de integratie: Configureren → E32-verbinding.",
         "short_cycling_persists": "De brander slaat nog steeds te vaak aan en uit, ook nu de E32 de rusttijd heeft "
                                   "verlengd. Laat de instellingen van de ketel nakijken, bijvoorbeeld door je installateur.",
-    },
-    "pl": {
-        "room_without_measurement": "{room}: brak pomiaru temperatury od ponad 30 minut, więc to pomieszczenie "
-                                    "nie żąda ciepła. Sprawdź baterię i odległość czujnika.",
-        "room_without_measurement_source": "{room}: brak pomiaru temperatury od ponad 30 minut, więc to "
-                                           "pomieszczenie nie żąda ciepła. Sprawdź {source} w Home Assistant; w "
-                                           "przypadku czujnika Bluetooth baterię i odległość od E32.",
-        "e32_offline": "E32 nie odzywa się od ponad 10 minut. Sprawdź jego zasilanie i Wi-Fi.",
-        "e32_stalled": "E32 jest online, ale od ponad 15 minut nie przychodzą jego wartości pomieszczeń i kotła, "
-                       "więc Home Assistant pokazuje je jako niedostępne. Uruchom ponownie E32.",
-        "awaiting_confirmation": "E32 czeka, aż potwierdzisz, że może sterować kotłem; do tego czasu nie grzeje. "
-                                 "Otwórz na E32 stronę Rooms → Active control.",
-        "awaiting_confirmation_thermostat": "E32 czeka, aż potwierdzisz, że stary termostat jest odłączony; do tego "
-                                            "czasu nie grzeje. Otwórz na E32 stronę Rooms → Active control.",
-        "pressure_low": "Ciśnienie wody jest niskie ({pressure} bar). Uzupełnij wodę w instalacji grzewczej.",
-        "pressure_high": "Ciśnienie wody jest wysokie ({pressure} bar). Zleć sprawdzenie naczynia wzbiorczego.",
-        "active_foreign_controller": "Inny termostat nadal wysyła do kotła żądania ciepła, więc E32 nie może go bezpiecznie "
-                                      "sterować. Odłącz ten termostat od kotła.",
-        "active_measurement_lost": "E32 stracił pomiary z pomieszczeń i przestał żądać ciepła. Sprawdź czujniki temperatury "
-                                   "w pomieszczeniach: baterie i odległość.",
-        "active_boiler_no_response": "Kocioł nie reaguje na żądanie ciepła z E32. Sprawdź kabel między E32 a kotłem i czy kocioł "
-                                   "jest włączony.",
-        "active_transmit_failed": "E32 nie może wysłać żądania ciepła do kotła. Sprawdź kabel między E32 a kotłem.",
-        "room_slow": "{room}: pomieszczenie żąda ciepła, ale od {hours} godz. pozostaje ponad {margin} °C poniżej "
-                     "temperatury docelowej. Sprawdź, czy grzejniki lub ogrzewanie podłogowe się nagrzewają i czy "
-                     "najwyższa temperatura wody (na kotle i na stronie E32 Home) jest wystarczająco wysoka.",
-        "session_lost": "E32 jest online, ale Home Assistant od ponad {minutes} minut nie ma z nim działającego "
-                        "połączenia, więc pomieszczenia nie dostają nowych temperatur docelowych z Home Assistant. "
-                        "Jeśli połączenie samo nie wróci, otwórz integrację: Konfiguruj → Połączenie z E32.",
-        "short_cycling_persists": "Palnik nadal zbyt często się włącza, mimo że E32 wydłużył przerwę między startami. "
-                                  "Zleć sprawdzenie ustawień kotła, na przykład instalatorowi.",
     },
 }
 
@@ -352,21 +328,6 @@ SHORT = {
         "session_lost": "Home Assistant is de E32 kwijt",
         "short_cycling_persists": "Brander slaat te vaak aan en uit",
     },
-    "pl": {
-        "room_without_measurement": "Brak pomiaru: {room}",
-        "e32_offline": "E32 się nie odzywa",
-        "e32_stalled": "E32 nie wysyła wartości",
-        "awaiting_confirmation": "Czeka na Twoje potwierdzenie",
-        "pressure_low": "Ciśnienie wody za niskie",
-        "pressure_high": "Ciśnienie wody za wysokie",
-        "active_foreign_controller": "Inny termostat nadal działa",
-        "active_measurement_lost": "Utracono pomiary pomieszczeń",
-        "active_boiler_no_response": "Kocioł nie odpowiada",
-        "active_transmit_failed": "Brak łączności z kotłem",
-        "room_slow": "{room}: zbyt zimno",
-        "session_lost": "Home Assistant utracił E32",
-        "short_cycling_persists": "Palnik zbyt często się włącza",
-    },
 }
 
 
@@ -376,7 +337,7 @@ def _number(value):
 
 
 def render(problems, lang):
-    """The plain-language reasons in a language (English, Dutch or Polish; English otherwise)."""
+    """The plain-language reasons in a language (English or Dutch; English otherwise)."""
     from .heating_advice import fmt
     texts = TEXT.get(lang, TEXT["en"])
     return [texts[key + "_thermostat" if values.get("thermostat") else key + "_source" if values.get("source")
@@ -406,7 +367,7 @@ def issues(problems, lang, reconfirm=False):
     """
     result = {}
     for (key, values), reason in zip(problems, render(problems, lang)):
-        if key in NO_ISSUE or reconfirm and key == "awaiting_confirmation":
+        if key in NO_ISSUE or key in ADVICE or reconfirm and key == "awaiting_confirmation":
             continue
         item = key + ("_" + values["room_id"] if "room_id" in values else "")
         result[item] = ("heating_problem", {"reason": reason})
@@ -421,7 +382,7 @@ class HeatingProblemSensor(BinarySensorEntity):
     _attr_translation_key = "heating_problem"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     # The texts are shown and sent, not kept in the history.
-    _unrecorded_attributes = frozenset({"reasons", "reason"})
+    _unrecorded_attributes = frozenset({"reasons", "reason", "advice"})
 
     def __init__(self, entry, hub):
         from .room_plan import has_room_plan
@@ -430,6 +391,7 @@ class HeatingProblemSensor(BinarySensorEntity):
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, hub.prefix)})
         self.tracker = ProblemTracker(hub.clock(), expect_telemetry=has_room_plan(entry))
         self.current = []
+        self.advice = []  # (id, placeholders) of the advice conditions (ADVICE)
         self._written = None
 
     def _session_ready(self):
@@ -467,13 +429,17 @@ class HeatingProblemSensor(BinarySensorEntity):
         self.tracker.observe(self.hub, now, self._session_ready())
         from .insight import room_names  # the dashboard's names: a room renamed in Home Assistant keeps its name
         names = room_names(self.hub, getattr(self, "hass", None), getattr(self.entry, "entry_id", None))
-        self.current = self.tracker.problems(self.hub, now, self._advice_items(), self._room_sources, names)
+        found = self.tracker.problems(self.hub, now, self._advice_items(), self._room_sources, names)
+        self.current = [item for item in found if item[0] not in ADVICE]
+        self.advice = [item for item in found if item[0] in ADVICE]
         from .e32_reconfirm import reconfirm_required, update_reconfirm_issue
         if getattr(self, "hass", None) is not None:
             update_reconfirm_issue(self.hass, self.entry, self.hub)
         if getattr(self, "hass", None) is not None and self.entity_id:
             reconfirm = reconfirm_required(self.hub)
-            written = (self.is_on, tuple(key for key, _ in self.current), self.extra_state_attributes["reasons"], reconfirm)
+            attributes = self.extra_state_attributes
+            written = (self.is_on, tuple(key for key, _ in self.current), attributes["reasons"], attributes["advice"],
+                       reconfirm)
             if written != self._written:
                 self._written = written
                 self.async_write_ha_state()
@@ -491,7 +457,8 @@ class HeatingProblemSensor(BinarySensorEntity):
         lang = language(self.hass) if getattr(self, "hass", None) is not None else "en"
         return {"problems": [key for key, _ in self.current], "reasons": render(self.current, lang),
                 "reason": render_short(self.current, lang),
-                "rooms": [values["room_id"] for key, values in self.current if "room_id" in values]}
+                "rooms": [values["room_id"] for key, values in self.current if "room_id" in values],
+                "advice": render(self.advice, lang)}
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

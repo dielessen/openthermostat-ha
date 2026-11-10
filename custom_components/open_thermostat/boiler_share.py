@@ -24,14 +24,20 @@ GitHub issue form, prefilled with the short summary. Home Assistant never sends 
 
 While the Tester program is on, Home Assistant reads the recording's status once when it starts (a Repairs
 notice when this E32 cannot record) and then once a minute only while a recording runs (a notification when it
-holds its 30 minutes). Nothing is polled while it is off; no MQTT topic.
+holds its 30 minutes). It also follows the heating status it already receives for the evidence of the E32's
+active control (ActiveControlWatch, 1.4.2 plan 3.8): when the E32 took over, its warnings since then and hot water
+during its heat request, kept in .storage/open_thermostat.active_control and shared as "active_control". Nothing
+is polled or kept while it is off (switching it off removes that log); no MQTT topic.
 """
 from __future__ import annotations
 
+import asyncio
+import copy
 import hashlib
 import json
 import logging
 import re
+from datetime import timedelta, timezone
 from urllib.parse import urlencode
 
 from homeassistant.core import callback
@@ -52,7 +58,6 @@ MAX_URL = 6 * 1024
 POLL_S = 60
 WINDOW_S = 1800
 ISSUE_UNAVAILABLE = "tester_recording_unavailable"
-ISSUE_UPDATE = "tester_recording_update"
 NOTIFY_SHARE = "open_thermostat_tester_share_{entry}"
 NOTIFY_FULL = "open_thermostat_tester_recording_{entry}"
 
@@ -89,6 +94,7 @@ TEXT = {
         "fields": "- Which boiler values the E32 found, and how far control of this boiler is tested.",
         "probe": "- The result of the attended boiler test: {outcome}.",
         "no_probe": "- No attended boiler test was run.",
+        "active": "- Active control: {days} days watched; warnings since the takeover: {warnings}.",
         "recording": "- The bus recording: {minutes} minutes of messages on the boiler cable ({frames} messages). "
                      "They include room temperatures and the clock of your thermostat. They hold no Wi-Fi name, "
                      "network address or room names.",
@@ -105,7 +111,9 @@ TEXT = {
                 "can open your Home Assistant's address can download them meanwhile.",
         "full_title": "The bus recording has its 30 minutes",
         "full": "The E32 now holds 30 minutes of messages from your boiler and keeps the newest 30 minutes until you "
-                "stop it. Share it: Configure → Advanced and diagnostics → Tester program → Share result.",
+                "stop it. Share it: Settings → Installation → Tester program → Share result on the OpenThermostat "
+                "dashboard (without the dashboard: Configure → Advanced and diagnostics → Tester program → Share "
+                "result).",
         "family.plus": "EMS+", "family.classic": "EMS", "family.conflict": "two protocols", "family.unknown": "not known yet",
         "product": "product {product}", "version": "version {version}", "unknown": "not recognised yet",
         "outcome.passed": "passed", "outcome.stop_not_supported": "no clean stop", "outcome.inconclusive": "not conclusive",
@@ -123,6 +131,7 @@ TEXT = {
         "fields": "- Welke ketelwaarden de E32 vond, en hoe ver het aansturen van deze ketel getest is.",
         "probe": "- De uitkomst van de bijgewoonde keteltest: {outcome}.",
         "no_probe": "- Er is geen bijgewoonde keteltest gedaan.",
+        "active": "- Actieve regeling: {days} dagen gevolgd; waarschuwingen sinds de overname: {warnings}.",
         "recording": "- De busopname: {minutes} minuten berichten op de ketelkabel ({frames} berichten). Daarin staan "
                      "ruimtetemperaturen en de klok van je thermostaat. Er staat geen wifinaam, netwerkadres of "
                      "ruimtenaam in.",
@@ -139,46 +148,13 @@ TEXT = {
                 "adres van je Home Assistant kan openen, kan ze in die tijd downloaden.",
         "full_title": "De busopname heeft zijn 30 minuten",
         "full": "De E32 heeft nu 30 minuten berichten van je ketel en houdt de nieuwste 30 minuten tot je stopt. Deel "
-                "hem: Configureren → Geavanceerd en diagnose → Testerprogramma → Deel resultaat.",
+                "hem: Instellen → Installatie → Testerprogramma → Deel resultaat op het OpenThermostat-dashboard "
+                "(zonder het dashboard: Configureren → Geavanceerd en diagnose → Testerprogramma → Deel resultaat).",
         "family.plus": "EMS+", "family.classic": "EMS", "family.conflict": "twee protocollen", "family.unknown": "nog niet bekend",
         "product": "product {product}", "version": "versie {version}", "unknown": "nog niet herkend",
         "outcome.passed": "geslaagd", "outcome.stop_not_supported": "geen schone stop", "outcome.inconclusive": "niet duidelijk",
         "outcome.failed": "mislukt", "outcome.not_started": "niet gestart", "outcome.attendance_expired": "niemand bevestigde hem",
         "outcome.stopped": "gestopt", "outcome.other": "afgelopen",
-    },
-    "pl": {
-        "title": "Wynik Twojego kotła jest gotowy do udostępnienia",
-        "intro": "Home Assistant zapisał pliki dla programu testerów OpenThermostat. Nic nie zostało wysłane: to Ty "
-                 "decydujesz, co opublikujesz.",
-        "contents": "**Co w nich jest**",
-        "boiler": "- Twój kocioł, tak jak rozpoznał go E32: {boiler}.",
-        "versions": "- Wersje oprogramowania E32 ({e32}) i tej integracji ({integration}).",
-        "telegrams": "- Jakie komunikaty wysyła kocioł, jak często i jak są długie ({types} rodzajów).",
-        "fields": "- Jakie wartości kotła znalazł E32 i na ile sterowanie tym kotłem jest przetestowane.",
-        "probe": "- Wynik nadzorowanego testu kotła: {outcome}.",
-        "no_probe": "- Nie przeprowadzono nadzorowanego testu kotła.",
-        "recording": "- Nagranie magistrali: {minutes} minut komunikatów na przewodzie kotła ({frames} komunikatów). "
-                     "Zawierają temperatury pomieszczeń i zegar Twojego termostatu. Nie ma w nich nazwy Wi-Fi, adresu "
-                     "sieciowego ani nazw pomieszczeń.",
-        "no_recording": "- Brak nagrania magistrali: {why}",
-        "why.idle": "żadnego nie zrobiono. Uruchom je w Programie testerów, odczekaj 30 minut i udostępnij ponownie.",
-        "why.unavailable": "ten E32 nie ma na nie miejsca w pamięci.",
-        "why.not_supported": "to oprogramowanie E32 jeszcze nie nagrywa. Najpierw zaktualizuj E32.",
-        "why.failed": "nie udało się go odczytać z E32. Spróbuj ponownie Udostępnij wynik.",
-        "todo": "**Co zrobić**",
-        "step1": "1. Pobierz pliki i otwórz je, aby zobaczyć, co udostępniasz: {links}.",
-        "step2": "2. Otwórz [formularz GitHub]({url}). Jest już wypełniony krótkim podsumowaniem. Dołącz pliki i zdjęcia "
-                 "kotła, zaznacz pole i opublikuj.",
-        "keep": "Pliki zostają w folderze www/open_thermostat Home Assistanta, dopóki ich nie usuniesz. Do tego czasu "
-                "może je pobrać każdy, kto może otworzyć adres Twojego Home Assistanta.",
-        "full_title": "Nagranie magistrali ma swoje 30 minut",
-        "full": "E32 ma teraz 30 minut komunikatów z Twojego kotła i zachowuje najnowsze 30 minut, dopóki go nie "
-                "zatrzymasz. Udostępnij je: Konfiguruj → Zaawansowane i diagnostyka → Program testerów → Udostępnij wynik.",
-        "family.plus": "EMS+", "family.classic": "EMS", "family.conflict": "dwa protokoły", "family.unknown": "jeszcze nieznany",
-        "product": "produkt {product}", "version": "wersja {version}", "unknown": "jeszcze nie rozpoznany",
-        "outcome.passed": "zaliczony", "outcome.stop_not_supported": "brak czystego zatrzymania",
-        "outcome.inconclusive": "niejednoznaczny", "outcome.failed": "niezaliczony", "outcome.not_started": "nie rozpoczęty",
-        "outcome.attendance_expired": "nikt go nie potwierdził", "outcome.stopped": "zatrzymany", "outcome.other": "zakończony",
     },
 }
 
@@ -318,8 +294,275 @@ def recording_part(status, *, file=None, data=None, state=None):
             "polls": _int(status.get("polls")) or 0, "dropped": _int(status.get("dropped")) or 0}
 
 
-def build_share(raw, *, integration, created, recording):
-    """The boiler-share 1 document from the E32's answers (raw: path -> parsed JSON or None) and the recording part."""
+# ---- active control: the evidence of the E32's own takeover (1.4.2 plan 3.8, review F17/G8) ---------------------
+#
+# For an EMS Classic boiler the switch-over is the E32's own takeover (TakeoverReadiness, ActiveHeatGuard), and the
+# seven days of active control a table row needs are evidence only when nothing went wrong meanwhile. The E32 keeps
+# its active-control warnings in RAM only, so while the Tester program is on Home Assistant follows the heating
+# status it already receives (no read, no MQTT topic of its own) and keeps, per entry, in
+# .storage/open_thermostat.active_control: when the E32 took over, from when Home Assistant watched it, each warning
+# kind's count and last moment, how long the status was not seen, and the proof of hot water pausing the E32's heat
+# request and the heating resuming. "Share result" adds it as the share's "active_control" part.
+
+WATCHED = ("boiler_no_response", "foreign_controller", "measurement_lost", "transmit_failed")  # = ActiveHeatGuard's
+DHW_KINDS = ("tapping", "hot_water", "charging")  # burner.activity: hot water asked (keep_warm is no tap)
+WATCH_STORE = f"{DOMAIN}.active_control"
+WATCH_STORE_VERSION = 1
+WATCH_BOOK = f"{DOMAIN}_active_control"
+WATCH_INTERVAL_S = 60
+GAP_S = 300            # longer without the E32's heating status counts as not watched
+SAVE_EVERY_S = 600     # the "last seen" moment is written at most this often; an evidence change at once
+SAVE_DELAY_S = 10
+MAX_PAUSE_S = 4 * 3600
+MAX_AGE_S = 400 * 86400
+
+
+def _iso(when):
+    return when.isoformat() if when is not None else None
+
+
+def _when(value):
+    when = dt_util.parse_datetime(value) if type(value) is str else None
+    return when if when is not None and when.tzinfo is not None else None
+
+
+def _minute(value):
+    when = _when(value)
+    return when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%MZ") if when is not None else None
+
+
+def _new_log(since, now):
+    return {"since": _iso(since), "watched_since": _iso(now), "until": None, "seen_at": _iso(now), "unwatched_s": 0,
+            "warnings": {kind: {"count": 0, "last_at": None} for kind in WATCHED}, "current": [],
+            "dhw_during_heat": None}
+
+
+def _stored_log(log):
+    """A log as this version writes it, or None (anything else starts afresh at the next takeover)."""
+    log = _dict(log)
+    warnings = _dict(log.get("warnings"))
+    dhw = log.get("dhw_during_heat")
+    if (_when(log.get("since")) is None or _when(log.get("watched_since")) is None or _when(log.get("seen_at")) is None
+            or (log.get("until") is not None and _when(log.get("until")) is None)
+            or _int(log.get("unwatched_s")) is None or set(warnings) != set(WATCHED)
+            or any(_int(_dict(w).get("count")) is None for w in warnings.values())
+            or type(log.get("current")) is not list
+            or (dhw is not None and _int(_dict(dhw).get("count"), 1) is None)):
+        return None
+    return log
+
+
+class ActiveControlLog:
+    """What Home Assistant saw of the E32's active control (pure: the watch and the tests drive it).
+
+    A period starts when the plan is in active mode and the E32 holds the owner's confirmation (it controls the
+    boiler). Its "since" is the confirmation's moment when the E32 knows it (confirmed in this E32 run), else the
+    first look; the warnings count from "watched_since", the first look. The period ends when the plan leaves active
+    mode, and the next takeover starts a new one. A lost confirmation (another controller on the bus, a firmware
+    update) does not end it: that is what the warnings record.
+    """
+
+    def __init__(self, log=None):
+        self.log = _stored_log(log)
+        self._pause = None    # (since, kind): hot water interrupted the E32's heat request
+        self._heated = False  # the boiler heated on the current heat request
+
+    def observe(self, status, now):
+        """One look at the E32's heating status (None while it is not fresh); True when the evidence changed."""
+        if type(status) is not dict:
+            self._pause, self._heated = None, False
+            return False
+        mode, active = status.get("mode"), _dict(status.get("active"))
+        log, changed = self.log, False
+        if log is None or log["until"] is not None:
+            confirmation = active.get("confirmation")
+            if mode != "active" or type(confirmation) is not dict:
+                return False
+            age = _int(confirmation.get("age_s"), 0, MAX_AGE_S) if confirmation.get("restored") is False else None
+            log = self.log = _new_log(now - timedelta(seconds=age) if age is not None else now, now)
+            self._pause, self._heated, changed = None, False, True
+        else:
+            seen = _when(log["seen_at"])
+            gap = int((now - seen).total_seconds()) if seen is not None else 0
+            if gap > GAP_S:
+                log["unwatched_s"] += gap
+                changed = True
+            log["seen_at"] = _iso(now)
+            if type(mode) is str and mode != "active":
+                log["until"], log["current"] = _iso(now), []
+                self._pause, self._heated = None, False
+                return True
+        warnings = active.get("warnings") if mode == "active" else None
+        current = [kind for kind in WATCHED if type(warnings) is list and kind in warnings]
+        for kind in current:
+            if kind not in log["current"]:
+                log["warnings"][kind] = {"count": log["warnings"][kind]["count"] + 1, "last_at": _iso(now)}
+                changed = True
+        if current != log["current"]:
+            log["current"], changed = current, True
+        return self._hot_water(status, active, now) or changed
+
+    def _hot_water(self, status, active, now):
+        """Hot water during the E32's heat request: the boiler heated, made hot water, and heated again."""
+        command = _dict(active.get("command"))
+        heat = (status.get("mode") == "active" and active.get("state") == "active" and command.get("send") is True
+                and _int(command.get("flow_c"), 1, 255) is not None)
+        activity = _dict(status.get("burner")).get("activity")
+        if not heat:
+            self._pause, self._heated = None, False
+            return False
+        if activity == "heating":
+            pause, self._pause, self._heated = self._pause, None, True
+            seconds = int((now - pause[0]).total_seconds()) if pause is not None else -1
+            if not 0 <= seconds <= MAX_PAUSE_S:
+                return False
+            count = (self.log["dhw_during_heat"] or {}).get("count", 0)
+            self.log["dhw_during_heat"] = {"count": count + 1, "last_at": _iso(now), "last_pause_s": seconds,
+                                           "kind": pause[1]}
+            return True
+        if activity in DHW_KINDS and self._heated and self._pause is None:
+            self._pause = (now, activity)
+        return False
+
+
+def active_control_part(log, now):
+    """The share's "active_control"; None when Home Assistant never saw the E32 take over while the program was on."""
+    log = _stored_log(log)
+    if log is None:
+        return None
+    watched, until = _when(log["watched_since"]), _when(log["until"])
+    dhw = log["dhw_during_heat"]
+    return {
+        "since": _minute(log["since"]), "watched_since": _minute(log["watched_since"]), "until": _minute(log["until"]),
+        "days_active": max(0, int(((until or now) - watched).total_seconds()) // 86400),
+        "unwatched_min": log["unwatched_s"] // 60,
+        "warnings": {kind: {"count": log["warnings"][kind]["count"],
+                            "last_at": _minute(_dict(log["warnings"][kind]).get("last_at"))} for kind in WATCHED},
+        "dhw_during_heat": None if dhw is None else {
+            "count": dhw["count"], "last_at": _minute(dhw.get("last_at")),
+            "last_pause_s": _int(dhw.get("last_pause_s"), 0, MAX_PAUSE_S) or 0,
+            "kind": dhw.get("kind") if dhw.get("kind") in DHW_KINDS else OTHER},
+    }
+
+
+class _Book:
+    """The one store of every entry's log; at load, the logs of entries no longer in Home Assistant go."""
+
+    def __init__(self, hass):
+        from homeassistant.helpers.storage import Store
+        self.hass = hass
+        self.store = Store(hass, WATCH_STORE_VERSION, WATCH_STORE)
+        self.data = None
+        self.lock = asyncio.Lock()
+
+    def write(self):
+        if self.data:
+            self.store.async_delay_save(lambda: {"entries": copy.deepcopy(self.data)}, SAVE_DELAY_S)
+        else:
+            self.hass.async_create_task(self.store.async_remove())
+
+
+async def async_book(hass):
+    """The loaded book (one per Home Assistant)."""
+    book = hass.data.get(WATCH_BOOK)
+    if book is None:
+        book = hass.data[WATCH_BOOK] = _Book(hass)
+    async with book.lock:
+        if book.data is None:
+            raw = _dict(_dict(await book.store.async_load()).get("entries"))
+            known = {e.entry_id for e in hass.config_entries.async_entries(DOMAIN)}
+            book.data = {k: v for k, v in raw.items() if k in known and _stored_log(v) is not None}
+            if raw and book.data != raw:
+                book.write()
+    return book
+
+
+async def async_forget_active_control(hass, entry_id):
+    """The entry's log goes (the Tester program switched off, or the entry removed)."""
+    book = await async_book(hass)
+    if book.data.pop(entry_id, None) is not None:
+        book.write()
+
+
+class ActiveControlWatch:
+    """While the Tester program is on: each hub change, and once a minute for the gaps, into the entry's log."""
+
+    def __init__(self, hass, entry, hub_getter, clock=None):
+        self.hass, self.entry, self._hub = hass, entry, hub_getter
+        self._clock = clock or dt_util.utcnow
+        self.log = None
+        self._book = None
+        self._unsub = []
+        self._unlisten = None
+        self._listening = None
+        self._saved_at = None
+
+    @property
+    def running(self):
+        return bool(self._unsub)
+
+    @callback
+    def start(self):
+        if self._unsub:
+            return
+        from homeassistant.helpers.event import async_track_time_interval
+        self._unsub.append(async_track_time_interval(self.hass, self._tick, timedelta(seconds=WATCH_INTERVAL_S)))
+        self.hass.async_create_task(self._async_load())
+
+    async def _async_load(self):
+        book = await async_book(self.hass)
+        if not self._unsub:
+            return
+        self._book, self.log, self._saved_at = book, ActiveControlLog(book.data.get(self.entry.entry_id)), None
+        self._tick()
+
+    @callback
+    def stop(self, forget=False):
+        """Stop following; forget: the entry's log goes too (the Tester program switched off)."""
+        for undo in self._unsub:
+            undo()
+        self._unsub = []
+        if self._unlisten is not None:
+            self._unlisten()
+        self._unlisten = self._listening = None
+        if forget:
+            self.log = None
+            self.hass.async_create_task(async_forget_active_control(self.hass, self.entry.entry_id))
+        elif self.log is not None and self.log.log is not None:
+            self._save(self._clock())
+
+    @callback
+    def _tick(self, _now=None):
+        hub = self._hub()
+        if hub is not self._listening:
+            if self._unlisten is not None:
+                self._unlisten()
+            self._unlisten = hub.add_listener(self.observe) if hub is not None else None
+            self._listening = hub
+        self.observe()
+
+    @callback
+    def observe(self):
+        if self.log is None or not self._unsub:
+            return
+        hub = self._hub()
+        now = self._clock()
+        changed = self.log.observe(hub.status if hub is not None and hub.fresh else None, now)
+        if self.log.log is not None and (changed or self._saved_at is None
+                                         or (now - self._saved_at).total_seconds() >= SAVE_EVERY_S):
+            self._save(now)
+
+    def _save(self, now):
+        if self._book is None:
+            return
+        self._book.data[self.entry.entry_id] = self.log.log
+        self._book.write()
+        self._saved_at = now
+
+
+def build_share(raw, *, integration, created, recording, active_control=None):
+    """The boiler-share 1 document from the E32's answers (raw: path -> parsed JSON or None), the recording part and
+    the active-control part (active_control_part; None without one)."""
     version = _dict(raw.get("/status/version"))
     match, row, current = _match(raw.get("/boiler/match"))
     devices = _devices(raw.get("/status/ems/devices"))
@@ -341,6 +584,7 @@ def build_share(raw, *, integration, created, recording):
         "telegrams": _telegrams(raw.get("/status/ems/devices")),
         "probe": _probe(raw.get("/boiler/plus-probe")),
         "recording": recording,
+        "active_control": active_control,
     }
 
 
@@ -386,6 +630,10 @@ def notification(share, links, lang):
              t["versions"].format(e32=share["software"]["e32"] or "?", integration=share["software"]["integration"] or "?"),
              t["telegrams"].format(types=len(share["telegrams"]["boiler"])), t["fields"],
              t["probe"].format(outcome=t.get("outcome." + last["outcome"], t["outcome.other"])) if last else t["no_probe"]]
+    active = share.get("active_control")
+    if active:
+        lines.append(t["active"].format(
+            days=active["days_active"], warnings=sum(w["count"] for w in active["warnings"].values())))
     if rec["file"]:
         lines.append(t["recording"].format(minutes=max(1, rec["seconds"] // 60) if rec["seconds"] else 0,
                                            frames=f"{rec['frames']:,}".replace(",", "." if lang != "en" else ",")))
@@ -464,10 +712,15 @@ def notify(hass, entry, share, links):
 
 @callback
 def sync_issue(hass, entry, state):
-    """A Repairs notice while the Tester program is on and this E32 cannot record ("unavailable" or no route)."""
+    """A Repairs notice while the Tester program is on and this E32 cannot record (no room in its memory).
+
+    1.4.2 (T-24): firmware that cannot record yet ("not_supported") is a fact, not a fault: the tester program's
+    screen says it ("This E32 firmware cannot make a bus recording yet ..."), no Repairs item (its old key is in
+    issue_sync.RETIRED, which removes one an older version raised at setup).
+    """
     from homeassistant.helpers import issue_registry as ir
-    for key in (ISSUE_UNAVAILABLE, ISSUE_UPDATE):
-        wanted = (state == "unavailable" and key == ISSUE_UNAVAILABLE) or (state == "not_supported" and key == ISSUE_UPDATE)
+    for key in (ISSUE_UNAVAILABLE,):
+        wanted = state == "unavailable"
         issue = f"{key}_{entry.entry_id}"
         if wanted and tester_on(entry):
             ir.async_create_issue(hass, DOMAIN, issue, is_fixable=False, is_persistent=False,
@@ -536,8 +789,10 @@ async def async_share(hass, entry, link, *, today=None):
     created = (today or dt_util.now().date()).isoformat()
     version = await hass.async_add_executor_job(integration_version)
     state = status.get("state") if status.get("state") in ("not_supported", "failed") else None
+    book = await async_book(hass)
     share = build_share(raw, integration=version, created=created,
-                        recording=recording_part(status, file="pending", data=data, state=state))
+                        recording=recording_part(status, file="pending", data=data, state=state),
+                        active_control=active_control_part(book.data.get(entry.entry_id), dt_util.utcnow()))
     share, links = await async_write_share(hass, share, data)
     notify(hass, entry, share, links)
     sync_issue(hass, entry, share["recording"]["state"])
@@ -547,8 +802,10 @@ async def async_share(hass, entry, link, *, today=None):
 class TesterMonitor:
     """While the Tester program is on: the recording's status once at start, then once a minute while it records."""
 
-    def __init__(self, hass, entry, link_getter):
+    def __init__(self, hass, entry, link_getter, hub_getter=None):
         self.hass, self.entry, self._link = hass, entry, link_getter
+        # The active-control evidence (ActiveControlWatch) while the program is on; None without a hub getter.
+        self.watch = ActiveControlWatch(hass, entry, hub_getter) if hub_getter is not None else None
         self._cancel = None
         self.status = None
         self._full_notified = None  # the start (seconds - uptime) a "30 minutes" notification was shown for
@@ -557,13 +814,20 @@ class TesterMonitor:
         self.stop(clear=False)
         if tester_on(self.entry):
             self._schedule(delay)
+            if self.watch is not None:
+                self.watch.start()
+        elif self.watch is not None:
+            self.watch.stop(forget=True)  # switched off while Home Assistant was not running: its log goes
 
     def stop(self, clear=True):
+        """clear: the program was switched off (its Repairs notice and its active-control log go)."""
         if self._cancel is not None:
             self._cancel()
             self._cancel = None
         if clear:
             sync_issue(self.hass, self.entry, None)
+            if self.watch is not None:
+                self.watch.stop(forget=True)
 
     def _schedule(self, delay):
         from homeassistant.helpers.event import async_call_later
@@ -650,11 +914,13 @@ def tester_only_update(state, entry):
 def setup_tester(hass, entry, state):
     """The entry's monitor (hass.data[DOMAIN][entry][STATE_KEY]); returns its stop for the entry's cleanup."""
     from .e32_system import link_for
-    monitor = TesterMonitor(hass, entry, lambda: link_for(hass, entry))
+    monitor = TesterMonitor(hass, entry, lambda: link_for(hass, entry), lambda: state.get("heating_hub"))
     state[STATE_KEY] = monitor
     monitor.start()
 
     def stop():
         monitor.stop(clear=False)
+        if monitor.watch is not None:
+            monitor.watch.stop()
         state.pop(STATE_KEY, None)
     return stop

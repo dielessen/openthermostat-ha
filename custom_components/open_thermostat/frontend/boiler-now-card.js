@@ -28,15 +28,16 @@ const TEXT = {title: 'The boiler now', no_data: 'No data from the boiler', boile
  asked_sent: 'asked {flow} °C, sent {sent} °C',
  would_ask: 'E32 would ask {flow} °C', no_request: 'no request', ceiling: 'at most {flow} °C', back: 'Water back',
  difference: 'difference {n} °C', power: 'Burner power', power_off: 'burner off', power_low: 'low fire, calm', power_mid: 'medium fire',
- power_full: 'full fire', starts: 'Starts in the last hour', calm: 'calm', often: 'switching on and off too often', today: 'today {n}',
+ power_full: 'full fire', power_above: 'hot water can go above 100 %', starts: 'Starts in the last hour', calm: 'calm', often: 'switching on and off too often', today: 'today {n}',
  no_e32: 'No data from the E32', resting: 'Resting'};
 const DASH = '—';  // a figure not known yet: the same in every language
 const NBSP = ' ';  // a no-break space between a figure and its unit
 // What the boiler does (boiler_activity, heating_link.BOILER_ACTIVITIES): the band's tone and icon, as on the house card.
-const KIND = {heating: 'heat', tapping: 'water', hot_water: 'water', keep_warm: 'keep', charging: 'keep', idle: 'rest'};
-const ICON = {heat: 'mdi:fire', water: 'mdi:faucet', keep: 'mdi:water-thermometer', rest: 'mdi:water-boiler',
+// A tank's charge is its own kind (1.4.2): "Charging the tank" in the band, the hot water's colour.
+const KIND = {heating: 'heat', tapping: 'water', hot_water: 'water', keep_warm: 'keep', charging: 'charge', idle: 'rest'};
+const ICON = {heat: 'mdi:fire', water: 'mdi:faucet', keep: 'mdi:water-thermometer', charge: 'mdi:water-thermometer', rest: 'mdi:water-boiler',
  error: 'mdi:alert-circle-outline', none: 'mdi:water-boiler-off'};
-const ACTIVITY_EN = {idle: 'Idle', heating: 'Heating', tapping: 'Tapping', keep_warm: 'Keeping warm', charging: 'Heating the hot water tank',
+const ACTIVITY_EN = {idle: 'Idle', heating: 'Heating', tapping: 'Tapping', keep_warm: 'Keeping warm', charging: 'Charging the tank',
  hot_water: 'Hot water'};
 // A display code that is a fault of the boiler (display_codes.FAULTS): the band turns red and says what to do.
 const FAULTS = new Set(['blocking', 'locking', 'fault']);
@@ -81,7 +82,7 @@ ha-card{display:block;overflow:hidden;border-radius:var(--ot-radius);color:var(-
 ha-card.dark{--fire:var(--heat)}
 p{margin:0}
 .wrap{container:now/inline-size}
-.tone-heat{--band:var(--band-heat)}.tone-water,.tone-keep{--band:var(--band-water)}.tone-rest,.tone-none{--band:var(--band-rest)}
+.tone-heat{--band:var(--band-heat)}.tone-water,.tone-keep,.tone-charge{--band:var(--band-water)}.tone-rest,.tone-none{--band:var(--band-rest)}
 .tone-error{--band:var(--band-error)}
 .status{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 16px;background:var(--band);color:#fff}
 .main{display:flex;align-items:center;gap:10px;flex:1 1 0;min-width:min(100%,200px)}
@@ -308,7 +309,7 @@ class OpenThermostatBoilerNow extends HTMLElement {
   const water = this.st(c.hot_water), activity = this.st(c.activity);
   let serving;
   if (c.hot_water) serving = known(water) ? water.state === 'on' : null;
-  else if (c.activity) serving = known(activity) && KIND[activity.state] ? ['water', 'keep'].includes(KIND[activity.state]) : null;
+  else if (c.activity) serving = known(activity) && KIND[activity.state] ? ['water', 'keep', 'charge'].includes(KIND[activity.state]) : null;
   if (serving !== undefined) parts.push(['dhw', serving === null ? null : serving ? 'on' : 'off',
    this.t('dhw', {state: serving === null ? DASH : this.t(serving ? 'yes' : 'no')})]);
   if (!parts.length) return null;
@@ -383,8 +384,11 @@ class OpenThermostatBoilerNow extends HTMLElement {
    list.push(this.figure('return', c.return, this.t('back'), backWhole === null ? null : this.number(backWhole), this.unit(c.return), [difference]));
   }
   if (c.modulation) {
-   const power = this.value(c.modulation), pct = power === null ? null : Math.max(0, Math.min(100, Math.round(power)));
-   const band = pct === null ? null : pct === 0 ? 'power_off' : pct < 40 ? 'power_low' : pct < 80 ? 'power_mid' : 'power_full';
+   // The boiler's own figure, up to 140 % while some boilers heat hot water (a share of the heating power, 1.4.2,
+   // review R142 F1): the number says it, the arc stays full, and the line under it says why once.
+   const power = this.value(c.modulation), pct = power === null ? null : Math.max(0, Math.min(250, Math.round(power)));
+   const band = pct === null ? null : pct === 0 ? 'power_off' : pct < 40 ? 'power_low' : pct < 80 ? 'power_mid'
+    : pct <= 100 ? 'power_full' : 'power_above';
    list.push(this.figure('power', c.modulation, this.t('power'), pct === null ? null : this.number(pct), '%',
     [band && this.t(band)], arc(pct || 0)));
   }
@@ -439,7 +443,14 @@ const ensureDefined = (name, cls) => {
  if (document.readyState !== 'complete') window.addEventListener('load', check, {once: true});
  for (const ms of [0, 250, 1000, 3000, 10000]) setTimeout(check, ms);
  window.addEventListener('location-changed', check);
- setInterval(check, 500);
+ // A HACS card may replace window.customElements later (the owner's HA, 31 Oct 2026: an intermittent
+ // "Configuration error" on the week view): a cheap check every 0.5 s puts the element back in the registry in
+ // use, and Home Assistant's error card then rebuilds the card. 1.4.2 (P22): only for the first 30 s, when the other
+ // cards load; after that a navigation (location-changed) or the page coming back into view checks again, so no
+ // timer runs for ever on a wall tablet.
+ const timer = setInterval(check, 500);
+ setTimeout(() => clearInterval(timer), 30000);
+ document.addEventListener('visibilitychange', check);
  return check;
 };
 ensureDefined('openthermostat-boiler-now', OpenThermostatBoilerNow);

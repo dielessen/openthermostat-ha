@@ -15,7 +15,7 @@ The model never stays stale (1.3):
 - a new E32 version updates every room device (firmware_update.E32FirmwareUpdate._sync_device_version);
 - a room entity added again (a restart) gives the same model (RoomEntity.device_info).
 
-The model is written in Home Assistant's language (English, Dutch or Polish); a model written in another language
+The model is written in Home Assistant's language (English or Dutch); a model written in another language
 is replaced at the next check. Only this entry's own room devices are changed, and only their model and software
 version: a user's own name or area is never touched.
 """
@@ -36,8 +36,6 @@ TEXT = {
            "floor": "Room on the E32: floor heating"},
     "nl": {"room": "Ruimte op de E32", "radiator": "Ruimte op de E32: radiatoren",
            "floor": "Ruimte op de E32: vloerverwarming"},
-    "pl": {"room": "Pomieszczenie w E32", "radiator": "Pomieszczenie w E32: grzejniki",
-           "floor": "Pomieszczenie w E32: ogrzewanie podłogowe"},
 }
 
 

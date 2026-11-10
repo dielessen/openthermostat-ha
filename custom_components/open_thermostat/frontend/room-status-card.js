@@ -8,12 +8,15 @@
    - one line "what it does now": the reason's sentence (its short word where the sentence would only repeat the figures
      above it), then the week program's step ("Comfort until 22:30, then Night 18.0 °C");
    - the next reset time in one muted line ("Resets at 22:00 to 14 °C", the room thermostat's next_reset);
+   - 1.4.2: a room that is Off until a moment says when and what it returns to ("Off until 14:00, then on again" / "then
+     heating along again"); a room on Heat along only keeps its label while a boost or a manual change runs ("Heat along
+     only" beside "Boost until 21:00", the Reason sensor's room_state); an end on another day carries its day;
    - labels only for deviations: Smart warm-up off (or on) for this room against the house switch, a radiator valve
      with a problem; the valves' opening as a quiet line; the text button "Settings" at the bottom right, which opens
      this room in the dashboard's settings view (<settings_path>#room/<id>). The rest of the card opens the Reason
      sensor's history.
    Words: the integration's translations (strings.json entity.sensor.room_reason) where they exist, so every viewer
-   reads them in their own Home Assistant language; the card's own EN/NL/PL table (TEXT) for its new words, and English
+   reads them in their own Home Assistant language; the card's own EN/NL table (TEXT) for its new words, and English
    last resorts for every reason key (LINE, CHIP), so a raw key never shows; an unknown key says so in a plain sentence.
    Icons: Material Design Icons as inline SVG (no ha-icon). Times: the shared clock below (Home Assistant's locale,
    time format and time zone). Tokens: CONTRACT-1.4.1 §8 on the host; dark from hass.themes.darkMode, else the
@@ -24,7 +27,8 @@ const CHIP = {off: 'Off', window_open: 'Paused', window_pending: 'Pausing soon',
  boiler_pause: 'Waiting', warm_up: 'Warming up', away_return: 'Warming up', holiday: 'Holiday', away: 'Away', room_away: 'Away',
  house_away: 'Away', boost: 'Boost', temporary: 'Temporary', follow: 'Heats along', heating: 'Heating', wants_heat: 'Wants heat', warm_enough: 'At temperature', summer: 'Summer'};
 // The sentence of each variant (state_attributes.line): the English last resort, key for key as strings.json.
-const LINE = {off: 'Frost protection only (room off)', window_open: 'Paused: a window or door is open',
+const LINE = {off: 'Frost protection only (room off)', off_until: 'Off until {until}, then on again',
+ off_until_follow: 'Off until {until}, then heating along again', window_open: 'Paused: a window or door is open',
  window_open_contact: 'Paused: {contact} open since {since}', window_open_window: 'Paused: a window is open',
  window_open_door: 'Paused: a door is open', window_pending: 'A window or door is open: the room pauses soon',
  window_pending_contact: '{contact} open: the room pauses soon',
@@ -52,22 +56,18 @@ const PROGRAM = {comfort: 'Comfort', eco: 'Eco', night: 'Night', holiday: 'Holid
 // Sentences that only repeat the figures beside them ("Heating: 20.6 → 22.5 °C"): the reason's short word instead.
 const RESTATED = new Set(['heating', 'wants_heat', 'warm_enough']);
 const FALLBACK = {temperature: 'Now', setpoint: 'Target', valve_position: 'Radiator valves open'};
-// The card's own words (1.4.1), EN/NL/PL: the room states as the room's settings say them (selector e32_room_state, Polish
-// "Wyłączone" as the glossary), Summer as the summer mode design §5, the deviation labels, the summer and unknown lines.
+// The card's own words (1.4.1), EN/NL: the room states as the room's settings say them (selector e32_room_state),
+// Summer as the summer mode design §5, the deviation labels, the summer and unknown lines.
 const TEXT = {
  en: {on: 'On', follow: 'Heat along only', off: 'Off', summer: 'Summer', smart_off: 'Smart warm-up off', smart_on: 'Smart warm-up on',
   summer_line: 'Summer mode: the heating stays off until you switch this off; hot water and frost protection stay.', unknown: 'The E32 reports something this card does not know yet',
   unavailable: 'Unavailable', missing: 'Entity not available: {entity}'},
  nl: {on: 'Aan', follow: 'Alleen meeverwarmen', off: 'Uit', summer: 'Zomer', smart_off: 'Slim opwarmen uit', smart_on: 'Slim opwarmen aan',
   summer_line: 'Zomerstand: de verwarming staat uit tot je dit uitzet; warm water en vorstbeveiliging blijven.', unknown: 'De E32 meldt iets wat deze kaart nog niet kent',
-  unavailable: 'Niet beschikbaar', missing: 'Entiteit niet beschikbaar: {entity}'},
- pl: {on: 'Włączone', follow: 'Grzeje tylko razem z innymi', off: 'Wyłączone', summer: 'Lato', smart_off: 'Inteligentne nagrzewanie wyłączone',
-  smart_on: 'Inteligentne nagrzewanie włączone', summer_line: 'Tryb letni: ogrzewanie pozostaje wyłączone, dopóki tego nie wyłączysz; ciepła woda i ochrona przed mrozem działają.',
-  unknown: 'E32 zgłasza coś, czego ta karta jeszcze nie zna', unavailable: 'Niedostępny', missing: 'Encja niedostępna: {entity}'}};
+  unavailable: 'Niet beschikbaar', missing: 'Entiteit niet beschikbaar: {entity}'}};
 // The next reset time's line: [a temperature, a state, On, Heat along only, Off], as the room's settings say them.
 const RESET = {en: ['Resets at {time} to {value}', 'At {time} to {value}', 'On', 'Heat along only', 'Off'],
- nl: ['Om {time} terug naar {value}', 'Om {time} naar {value}', 'Aan', 'Alleen meeverwarmen', 'Uit'],
- pl: ['Godzina powrotu {time}: {value}', 'Godzina powrotu {time}: {value}', 'Włączone', 'Grzeje tylko razem z innymi', 'Wyłączone']};
+ nl: ['Om {time} terug naar {value}', 'Om {time} naar {value}', 'Aan', 'Alleen meeverwarmen', 'Uit']};
 // The status label of each room state: its tone (CONTRACT §8: orange heats, amber heats along, grey rest/off/summer) and icon.
 const STATE = {on: ['heat', 'fire'], follow: ['along', 'fire-circle'], off: ['rest', 'power'], summer: ['rest', 'white-balance-sunny']};
 // The heating type (the room's emitter in its settings): radiator, floor heating; a room without one: a thermostat.
@@ -135,7 +135,7 @@ transition:background-color var(--ot-motion)}
 @container room (max-width:300px){.body,.foot{margin-left:0}}`;
 
 const locale = hass => hass?.locale?.language || hass?.language || 'en';
-const lang = hass => /^(nl|pl)\b/.exec(locale(hass))?.[1] || 'en';
+const lang = hass => /^nl\b/.test(locale(hass)) ? 'nl' : 'en';
 const darkOf = hass => {
  if (typeof hass?.themes?.darkMode === 'boolean') return hass.themes.darkMode;
  try { return window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { return false; }
@@ -185,9 +185,9 @@ const clockMoment = (hass, value, now = Date.now()) => {
  if (days === 0) return time;
  if (Math.abs(days) === 1) {
   try {
-   const word = new Intl.RelativeTimeFormat(clockLocale(hass), {numeric: 'auto'}).format(days, 'day');
-   // Polish "do"/"od"/"na" would need the genitive ("do jutra"): the time first keeps every sentence right ("do 06:30 jutro").
-   return /^pl\b/.test(clockLocale(hass)) ? time + ' ' + word : word + ' ' + time;
+   // "tomorrow" in the card's own language (English for a language it has no words for), as the sentence around it.
+   const word = new Intl.RelativeTimeFormat(lang(hass), {numeric: 'auto'}).format(days, 'day');
+   return word + ' ' + time;
   } catch (e) { /* older browser */ }
  }
  try { return new Date(ms).toLocaleString(clockLocale(hass), {weekday: 'short', day: 'numeric', month: 'short', ...clockOptions(hass)}); }
@@ -240,12 +240,13 @@ class OpenThermostatRoomStatus extends HTMLElement {
   try { const text = this._hass?.localize?.(KEY + key, values); return typeof text === 'string' ? text : ''; } catch (e) { return ''; }
  }
  // The room's state for its label: Summer while the house is in summer mode; else the room thermostat's (Off, Heat along
- // only as its preset, On); without a thermostat the reason's (off, follow, else on); null for a reason the card does
- // not know and no thermostat.
+ // only as its preset or, 1.4.2, while a boost holds that preset, the Reason sensor's room_state; On); without a
+ // thermostat the reason's (off, follow, else on); null for a reason the card does not know and no thermostat.
  roomState(st) {
   const states = this._hass?.states || {}, climate = states[this.climate()], c = climate?.attributes || {};
   if (st.state === 'summer' || c.reason === 'summer' || states[this._config.mode]?.state === 'summer') return 'summer';
-  if (climate && ['off', 'heat', 'auto'].includes(climate.state)) return climate.state === 'off' ? 'off' : c.preset_mode === 'heat_along' ? 'follow' : 'on';
+  const along = c.preset_mode === 'heat_along' || st.attributes?.room_state === 'follow';
+  if (climate && ['off', 'heat', 'auto'].includes(climate.state)) return climate.state === 'off' ? 'off' : along ? 'follow' : 'on';
   if (st.state === 'off' || st.state === 'follow') return st.state;
   return Object.hasOwn(CHIP, st.state) ? 'on' : null;
  }
@@ -389,7 +390,14 @@ const ensureDefined = (name, cls) => {
  if (document.readyState !== 'complete') window.addEventListener('load', check, {once: true});
  for (const ms of [0, 250, 1000, 3000, 10000]) setTimeout(check, ms);
  window.addEventListener('location-changed', check);
- setInterval(check, 500);
+ // A HACS card may replace window.customElements later (the owner's HA, 31 Oct 2026: an intermittent
+ // "Configuration error" on the week view): a cheap check every 0.5 s puts the element back in the registry in
+ // use, and Home Assistant's error card then rebuilds the card. 1.4.2 (P22): only for the first 30 s, when the other
+ // cards load; after that a navigation (location-changed) or the page coming back into view checks again, so no
+ // timer runs for ever on a wall tablet.
+ const timer = setInterval(check, 500);
+ setTimeout(() => clearInterval(timer), 30000);
+ document.addEventListener('visibilitychange', check);
  return check;
 };
 ensureDefined('openthermostat-room-status', OpenThermostatRoomStatus);

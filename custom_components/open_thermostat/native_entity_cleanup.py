@@ -524,6 +524,8 @@ def remove_room_devices(hass, entry, prefix, room_ids):
 ABSENT_ROOMS = "e32_absent_rooms"
 # A room leaves Home Assistant only once two successful plan reads at least this far apart miss it.
 ABSENT_CONFIRM_SECONDS = 60
+# hass.data key (1.4.2, HC-02): the "Through Home Assistant" valve choices were checked once in this run.
+PINS_CHECKED = "e32_valve_pins_checked"
 
 
 def absent_rooms(hass, entry):
@@ -540,7 +542,11 @@ def cleanup_removed_rooms(hass, entry, prefix, plan, now=None):
     removes anything either: the E32 serves exactly that when its stored plan
     cannot be read (and after a factory reset), so it proves nothing. Removing
     a room in Configure (e32_room_flow) removes its device at once, also the
-    last room's.
+    last room's. A removed room's options go with its device
+    (e32_room_flow.forget_room_options, 1.4.2); a plan read with rooms also
+    forgets the options of rooms that neither the plan nor a device has any
+    more (removed before 1.4.2), and once per run checks the valve choices.
+    Nothing is written when there is nothing to forget.
 
     Otherwise a room goes only when two consecutive successful plan reads at
     least ABSENT_CONFIRM_SECONDS apart both miss it (now: the clock time of this
@@ -577,6 +583,18 @@ def cleanup_removed_rooms(hass, entry, prefix, plan, now=None):
     removed = remove_room_devices(hass, entry, prefix, due)
     for room_id in due:
         absent.pop(room_id, None)
+    # 1.4.2 (HC-02): a room removed on the E32's own page leaves nothing behind in the options either, nor does one
+    # removed before (no device stands for it any more); the valve choices are checked once per run against the
+    # rooms that still exist (a room waiting for its confirming read still counts).
+    from .e32_room_flow import forget_rooms_options, option_rooms
+    options = getattr(entry, "options", None) or {}
+    devices = room_device_ids(hass, entry, prefix)
+    gone = option_rooms(options) - planned - devices
+    first = not state.get(PINS_CHECKED)
+    state[PINS_CHECKED] = True
+    if removed or gone or first:
+        forget_rooms_options(hass, entry, sorted({*removed, *gone}), prune=first,
+                             rooms=None if removed else planned | devices)
     returned = state.get(REMOVED_ROOMS, set()) & planned
     if returned:
         state[REMOVED_ROOMS] -= returned

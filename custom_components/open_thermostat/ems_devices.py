@@ -16,7 +16,7 @@ Adapter, reports product 206, which the reference calls "Ecomline Excellent".
 The boiler is named after the model the owner chose on the E32 Boiler page
 (``display_model`` in the retained fw/config/boiler_profile, the names of
 public/boilers/catalog-v1.json): "Nefit EcomLine HRC 22"; without a choice it is
-"Boiler" / "Ketel" / "Kocioł" (1.1.1, the owner's Q1: no bus address or product
+"Boiler" / "Ketel" (1.1.1, the owner's Q1: no bus address or product
 number in a name the owner reads every day; they are the model and model ID).
 This holds for every boiler product number, also one with a single reference
 name: 206 has one too and is still wrong. The device follows a later choice in

@@ -64,12 +64,8 @@ ROUTE_TEXT = {
            "kept": "niet gevonden in Home Assistant, blijft zoals hij was", "none": "Nog geen radiatorkranen.",
            "unknown": "model niet herkend", "gateway": "Shelly BLU TRV via de BLU Gateway",
            "loop": "kraan van een vloergroep", "keep_open": "blijft open als weg voor het water"},
-    "pl": {"direct": "działa bez Home Assistant", "ha": "przez Home Assistant",
-           "kept": "nie znaleziono w Home Assistant, pozostaje bez zmian", "none": "Brak zaworów grzejnikowych.",
-           "unknown": "model nierozpoznany", "gateway": "Shelly BLU TRV przez BLU Gateway",
-           "loop": "zawór pętli podłogowej", "keep_open": "pozostaje otwarty jako droga dla wody"},
 }
-ROUTE_HEADING = {"en": "Radiator valves:", "nl": "Radiatorkranen:", "pl": "Zawory grzejnikowe:"}
+ROUTE_HEADING = {"en": "Radiator valves:", "nl": "Radiatorkranen:"}
 MODEL_NAMES = {"bosch_bth_ra": "Bosch BTH-RA", "sonoff_trvzb": "Sonoff TRVZB", "sonoff_trv_zbt": "Sonoff TRV Gen2",
                "tuya_tv02": "Tuya TV02", "generic": "Zigbee2MQTT"}
 
@@ -266,6 +262,36 @@ def save_through_ha(hass, entry, entities):
     return True
 
 
+def kept_pins(pins, records, rooms=None):
+    """The "Through Home Assistant" choices that are still a valve of a room (1.4.2, HC-02): a pin is an entity stored
+    with model ha_climate in some room's valves (``records``: valve records, {"room"?, "name", "model"}; ``rooms``: only
+    the records of these room ids count, None: every record). A removed valve or room leaves no choice behind."""
+    present = {v.get("name") for v in records if type(v) is dict and v.get("model") == HA_MODEL
+               and (rooms is None or v.get("room") in rooms)}
+    return {pin for pin in pins if pin in present}
+
+
+async def async_prune_through_ha(hass, entry, rooms=None):
+    """Forget the pins of valves no room has any more (after a room was removed, and once by migration): one read of
+    the E32's valve record; nothing changes when it cannot be read. ``rooms``: the room ids the plan still has (a
+    valve record of a removed room does not count). True when the options changed."""
+    from homeassistant.exceptions import HomeAssistantError
+    from .e32_valves import valve_link
+    pins = through_ha_choices(entry)
+    link = valve_link(hass, entry) if pins else None
+    if link is None:
+        return False
+    try:
+        config, _gateway = await link.async_read_with_gateway()
+    except HomeAssistantError:
+        return False
+    if config is None:
+        return False
+    records = [{**v, "room": r["room"]} for r in config["rooms"] for v in r["valves"]]
+    kept = kept_pins(pins, records, rooms)
+    return kept != pins and save_through_ha(hass, entry, kept)
+
+
 def language_of(flow):
     language = ((getattr(flow, "context", None) or {}).get("language") or flow.hass.config.language or "en")[:2]
     return language if language in ROUTE_TEXT else "en"
@@ -303,3 +329,58 @@ def route_lines(hass, routes, language="en"):
         else:
             lines.append(f"- {shown}: {text['ha']}")
     return "\n".join(lines) or text["none"]
+
+
+# -- one role per valve (1.4.2) ---------------------------------------------------------------------------------------
+
+def valve_entities(hass, config, driven_only=False):
+    """{room id: [climate entity]} of the radiator valves in the E32's valve record (``decode_config``): a Home
+    Assistant valve by its entity ID, a Zigbee2MQTT valve by the entity of its friendly name; a BLU Gateway valve is
+    no climate entity here. ``driven_only``: only rooms whose valve control is on (the E32 drives those valves)."""
+    finder = RouteFinder(hass, (config or {}).get("base_topic"))
+    found = {}
+    for room in (config or {}).get("rooms") or []:
+        if driven_only and room.get("control") is not True:
+            continue
+        entities = [_valve_entity(finder, valve) for valve in room.get("valves") or []]
+        entities = [entity for entity in entities if entity]
+        if entities:
+            found[room["room"]] = entities
+    return found
+
+
+def _valve_entity(finder, valve):
+    if valve.get("model") == GATEWAY_MODEL:
+        return None
+    return valve["name"] if valve.get("model") == HA_MODEL else finder.index().get(valve["name"])
+
+
+def two_roles(room_id, setpoint_entity, routes, control, ctx=None, plan=None):
+    """The device that a save would make both a room's setting device and a radiator valve the E32 drives, or None.
+
+    One role per valve (1.4.2, plan 3.1): as the setting device its temperature is the user's wish (the room
+    follows, writes its target back, and the valve opens and closes on its own sensor with valve control off); as a
+    valve the E32 drives the same temperature is the E32's lever (the target, 8 °C in a pause or Off, the warm-up
+    target), no wish. Both at once would read the E32's own writes as knob turns.
+
+    ``room_id``: the room being saved ("" or None: a new one); ``setpoint_entity``: its setting device after the
+    save; ``routes`` and ``control``: its radiator valves (ValveRoute) and valve control after the save; ``ctx``:
+    the room form's valve context (e32_room_flow.valve_context: the other rooms' valves and their valve control);
+    ``plan``: the room plan (the other rooms' setting devices). The room form (Configure) and the settings panel
+    refuse such a save with the code ``device_two_roles`` on the field ``setpoint_entity``
+    (e32_room_flow.room_parts calls this for both).
+    """
+    mine = setpoint_entity if type(setpoint_entity) is str and setpoint_entity.startswith("climate.") else None
+    driven = {route.entity_id for route in routes or () if control and route.entity_id and not route.gateway}
+    if mine is not None and mine in driven:
+        return mine
+    if mine is not None and ctx is not None:
+        for room in (getattr(ctx, "config", None) or {}).get("rooms") or []:
+            if room.get("room") == room_id or room.get("control") is not True:
+                continue
+            if any(_valve_entity(ctx.finder, valve) == mine for valve in room.get("valves") or []):
+                return mine
+    for other in (plan or {}).get("rooms") or []:
+        if type(other) is dict and other.get("id") != room_id and other.get("setpoint_entity") in driven:
+            return other["setpoint_entity"]
+    return None

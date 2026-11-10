@@ -11,6 +11,10 @@
   password_change_required); reads keep working and the heating keeps running on
   its stored plan and MQTT inputs. ``false`` removes the issue; firmware that does
   not report the field leaves it alone.
+
+The password change signs in under the room-plan link's lock, through the
+integration's session gate like every other sign-in (controller_link.SessionGate,
+1.4.2: at most two E32 web sessions of Home Assistant at once).
 """
 from __future__ import annotations
 

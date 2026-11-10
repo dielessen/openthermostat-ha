@@ -1,31 +1,32 @@
-/* The settings panel of the OpenThermostat dashboard: the tab "Settings" / "Instellen" / "Ustawienia" (1.4; 1.4.1 phase 2).
+/* The settings panel of the OpenThermostat dashboard: the tab "Settings" / "Instellen" (1.4; 1.4.1 phase 2; 1.4.2).
    One web component that knows only `hass` and its route (after #: #overview, #<section>, #<section>/<item>, #room/<id>;
    pushState and popstate); backend settings.py. This core is the only module every Home Assistant page loads; when the
    tab opens it loads the component kit (openthermostat-settings-kit.js, window.OpenThermostatSettingsKit) and the section
    modules from the overview's `modules` list. The core draws the overview (seven entries; on a wide screen the
    installation at a glance beside them), the frame, the save bar, the read-only sentence, the "changed elsewhere" banner
-   and the fallback page; a section draws its screens with the kit. Texts: TEXTS, English key, Dutch and Polish values
-   (test/ha-settings-texts.test.cjs). How to build a section: HA-INSTELPANEEL-ONTWERP.nl.md chapter 10 and
-   HA-INSTELPANEEL-FASE2.nl.md chapter 4. */
-// The overview's seven entries: [route, title, icon]; "installation" is the section of that name once one is
-// registered, else Dashboard and name and Advanced on one page.
+   and the pages that say why a section cannot open: the E32 is not connected (the one way to Configure), a section
+   module did not load, or Home Assistant runs a newer OpenThermostat than this page (then no module loads; every
+   screen asks you to reload). A section draws its screens with the kit; spec.dirtyText(values, model) may word the
+   save bar's "You changed something." Texts: TEXTS, English key, Dutch values (test/ha-settings-texts.test.cjs). How to
+   build a section: HA-INSTELPANEEL-ONTWERP.nl.md chapter 10 and HA-INSTELPANEEL-FASE2.nl.md chapter 4. */
+// The overview's seven entries: [route, title, icon].
 const ENTRIES = [['rooms', 'Rooms', 'thermostat'], ['house', 'House', 'home'], ['heating', 'Heating and boiler', 'fire'], ['devices', 'Devices', 'devices'],
  ['notifications', 'Notifications', 'bell'], ['energy', 'Energy and outdoor temperature', 'flash'], ['installation', 'Installation', 'wrench']];
 const TITLES = {rooms: 'Rooms', house: 'House', heating: 'Heating and boiler', devices: 'Devices', notifications: 'Notifications',
- energy: 'Energy and outdoor temperature', general: 'Dashboard and name', advanced: 'Advanced', installation: 'Installation'};
+ energy: 'Energy and outdoor temperature', installation: 'Installation'};
+// Routes of earlier versions and where they lead now (1.4's Dashboard and name and Advanced are Installation's).
+const MOVED = {general: () => '#installation', advanced: item => '#installation' + (item ? '/' + encodeURIComponent(item) : '')};
 const WIDE = 960;
 const CONFIGURE = '/config/integrations/integration/open_thermostat';
 const TEXTS = {
  nl: {
   'Settings': 'Instellen',
   'Rooms': 'Ruimtes', 'House': 'Huis', 'Heating and boiler': 'Verwarming en ketel', 'Devices': 'Apparaten', 'Notifications': 'Meldingen',
-  'Energy and outdoor temperature': 'Energie en buitentemperatuur', 'Dashboard and name': 'Dashboard en naam', 'Advanced': 'Geavanceerd',
-  'Installation': 'Installatie',
+  'Energy and outdoor temperature': 'Energie en buitentemperatuur', 'Installation': 'Installatie',
   'Only an administrator of Home Assistant can change this.': 'Alleen een beheerder van Home Assistant kan dit wijzigen.',
   'Loading…': 'Laden…', 'Saving…': 'Opslaan…', 'Saved.': 'Opgeslagen.', 'You changed something.': 'Je hebt iets gewijzigd.',
   'Save': 'Opslaan', 'Undo': 'Ongedaan maken', 'Not saved': 'Niet opgeslagen',
   'Back to {page}': 'Terug naar {page}',
-  'You change this part in Configure for now.': 'Dit onderdeel wijzig je voorlopig in Configureren.',
   'Connect the E32 first: Configure → E32 connection.': 'Verbind eerst de E32: Configureren → E32-verbinding.',
   'Open Configure': 'Configureren openen',
   'Changed elsewhere': 'Elders gewijzigd',
@@ -44,59 +45,17 @@ const TEXTS = {
   'These settings could not be read ({code}). Reload the page.': 'Deze instellingen konden niet worden gelezen ({code}). Laad de pagina opnieuw.',
   'OpenThermostat was updated. Reload the page to use the new version.': 'OpenThermostat is bijgewerkt. Laad de pagina opnieuw om de nieuwe versie te gebruiken.',
   'The settings could not be loaded. Reload the page.': 'De instellingen konden niet worden geladen. Laad de pagina opnieuw.',
+  'Reload': 'Opnieuw laden',
   'At a glance': 'In één oogopslag', 'Boiler': 'Ketel', 'Smart warm-up': 'Slim opwarmen', 'Weather compensation': 'Weerafhankelijke regeling',
   'Holiday until {until}': 'Vakantie tot {until}', 'Next holiday: {from} – {until}': 'Volgende vakantie: {from} – {until}',
   'No holiday planned': 'Geen vakantie gepland', 'No rooms yet': 'Nog geen ruimtes',
-  // The section Dashboard and name: the words of Configure → Dashboard and name.
-  'The name of this installation in Home Assistant and whether it shows the OpenThermostat dashboard.': 'De naam van deze installatie in Home Assistant en of het OpenThermostat-dashboard getoond wordt.',
-  'Installation name': 'Naam installatie',
-  'A recognisable name in Home Assistant. Your devices and their history stay as they are.': 'Een herkenbare naam in Home Assistant. Je apparaten en hun geschiedenis blijven zoals ze zijn.',
-  'Show the OpenThermostat dashboard': 'OpenThermostat-dashboard tonen',
-  'The OpenThermostat dashboard: your rooms at a glance, the week planner and the boiler. Your own dashboards are preserved.': 'Het OpenThermostat-dashboard: je ruimtes in één oogopslag, de weekplanner en de ketel. Je bestaande dashboards blijven behouden.',
-  'Give a name of 1 to 80 characters.': 'Geef een naam van 1 tot 80 tekens.',
-  'Hide the OpenThermostat dashboard?': 'OpenThermostat-dashboard verbergen?',
-  'This tab goes with it. You can show the dashboard again in Configure → Dashboard and name.': 'Dit tabblad verdwijnt dan ook. Je kunt het dashboard weer tonen via Configureren → Dashboard en naam.',
-  'Hide the dashboard': 'Dashboard verbergen'},
- pl: {
-  'Settings': 'Ustawienia',
-  'Rooms': 'Pomieszczenia', 'House': 'Dom', 'Heating and boiler': 'Ogrzewanie i kocioł', 'Devices': 'Urządzenia', 'Notifications': 'Powiadomienia',
-  'Energy and outdoor temperature': 'Energia i temperatura zewnętrzna', 'Dashboard and name': 'Panel i nazwa', 'Advanced': 'Zaawansowane',
-  'Installation': 'Instalacja',
-  'Only an administrator of Home Assistant can change this.': 'Tylko administrator Home Assistant może to zmienić.',
-  'Loading…': 'Ładowanie…', 'Saving…': 'Zapisywanie…', 'Saved.': 'Zapisano.', 'You changed something.': 'Wprowadzono zmiany.',
-  'Save': 'Zapisz', 'Undo': 'Cofnij', 'Not saved': 'Niezapisane',
-  'Back to {page}': 'Wróć do: {page}',
-  'You change this part in Configure for now.': 'Tę część zmieniasz na razie w Konfiguruj.',
-  'Connect the E32 first: Configure → E32 connection.': 'Najpierw połącz E32: Konfiguruj → Połączenie z E32.',
-  'Open Configure': 'Otwórz Konfiguruj',
-  'Changed elsewhere': 'Zmieniono w innym miejscu',
-  'These settings were changed elsewhere while you were editing. What you changed is kept and marked; the rest now shows what is saved. Save again to keep your changes.': 'Te ustawienia zostały w międzyczasie zmienione w innym miejscu. Twoje zmiany zostają i są oznaczone; reszta pokazuje teraz to, co zapisano. Zapisz ponownie, aby zachować swoje zmiany.',
-  'Changed by you': 'Zmienione przez ciebie',
-  'Changed by you; elsewhere it is now {value}.': 'Zmienione przez ciebie; w innym miejscu jest teraz {value}.',
-  'On': 'Włączone', 'Off': 'Wyłączone', 'Heat along only': 'Grzeje tylko razem z innymi',
-  'The E32 could not be reached. Check the connection and try again.': 'Nie można połączyć się z E32. Sprawdź połączenie i spróbuj ponownie.',
-  'The change could not be confirmed. Reload the page to see what is saved.': 'Nie udało się potwierdzić zmiany. Wczytaj stronę ponownie, aby zobaczyć, co zapisano.',
-  'This installation is not available. Look under Settings → Devices & services → OpenThermostat.': 'Ta instalacja jest niedostępna. Sprawdź w Ustawienia → Urządzenia i usługi → OpenThermostat.',
-  'This page does not match the installed OpenThermostat. Reload the page.': 'Ta strona nie pasuje do zainstalowanego OpenThermostat. Wczytaj stronę ponownie.',
-  'The settings were changed elsewhere. Reload the page and try again.': 'Ustawienia zostały zmienione w innym miejscu. Wczytaj stronę ponownie i spróbuj jeszcze raz.',
-  'This version of Home Assistant cannot store this change. Update Home Assistant and try again.': 'Ta wersja Home Assistant nie może zapisać tej zmiany. Zaktualizuj Home Assistant i spróbuj ponownie.',
-  'This value cannot be saved. Check the fields and try again.': 'Nie można zapisać tej wartości. Sprawdź pola i spróbuj ponownie.',
-  'The change was not saved ({code}). Try again.': 'Zmiana nie została zapisana ({code}). Spróbuj ponownie.',
-  'These settings could not be read ({code}). Reload the page.': 'Nie udało się odczytać tych ustawień ({code}). Wczytaj stronę ponownie.',
-  'OpenThermostat was updated. Reload the page to use the new version.': 'OpenThermostat został zaktualizowany. Wczytaj stronę ponownie, aby użyć nowej wersji.',
-  'The settings could not be loaded. Reload the page.': 'Nie udało się wczytać ustawień. Wczytaj stronę ponownie.',
-  'At a glance': 'W skrócie', 'Boiler': 'Kocioł', 'Smart warm-up': 'Inteligentne nagrzewanie', 'Weather compensation': 'Kompensacja pogodowa',
-  'Holiday until {until}': 'Urlop do {until}', 'Next holiday: {from} – {until}': 'Następny urlop: {from} – {until}',
-  'No holiday planned': 'Brak zaplanowanego urlopu', 'No rooms yet': 'Brak jeszcze pomieszczeń',
-  'The name of this installation in Home Assistant and whether it shows the OpenThermostat dashboard.': 'Nazwa tej instalacji w Home Assistant i to, czy pokazywany jest panel OpenThermostat.',
-  'Installation name': 'Nazwa instalacji',
-  'A recognisable name in Home Assistant. Your devices and their history stay as they are.': 'Rozpoznawalna nazwa w Home Assistant. Twoje urządzenia i ich historia pozostają bez zmian.',
-  'Show the OpenThermostat dashboard': 'Pokaż panel OpenThermostat',
-  'The OpenThermostat dashboard: your rooms at a glance, the week planner and the boiler. Your own dashboards are preserved.': 'Panel OpenThermostat: Twoje pomieszczenia w skrócie, planer tygodniowy i kocioł. Twoje własne panele pozostają bez zmian.',
-  'Give a name of 1 to 80 characters.': 'Podaj nazwę o długości od 1 do 80 znaków.',
-  'Hide the OpenThermostat dashboard?': 'Ukryć panel OpenThermostat?',
-  'This tab goes with it. You can show the dashboard again in Configure → Dashboard and name.': 'Ta karta również zniknie. Panel możesz ponownie pokazać w Konfiguruj → Panel i nazwa.',
-  'Hide the dashboard': 'Ukryj panel'}};
+  // Rare refusals of a room-plan write that no section words itself (R142-HA-PANEL §1).
+  'The E32 did not accept these water temperature limits. Older E32 software accepts at most 60 °C; update the E32 to use a higher maximum.': 'De E32 accepteert deze grenzen van de watertemperatuur niet. Oudere E32-software accepteert hoogstens 60 °C; werk de E32 bij om een hoger maximum te gebruiken.',
+  'The week program of this room could not be read. Save it again under Week program, then save here.': 'Het weekprogramma van deze ruimte kon niet gelezen worden. Sla het opnieuw op bij Weekprogramma en sla daarna hier op.',
+  'A day of the week program has more than 6 switch times. Remove some under Week program, then save again.': 'Een dag van het weekprogramma heeft meer dan 6 schakeltijden. Verwijder er een paar bij Weekprogramma en sla daarna opnieuw op.',
+  'The E32 has no storage space left for the room plan. Remove a room you no longer use, or a few switch times from the week programs, and save again. Nothing was saved.': 'De E32 heeft geen opslagruimte meer voor het ruimteplan. Verwijder een ruimte die je niet meer gebruikt, of een paar schakeltijden uit de weekprogramma\'s, en sla opnieuw op. Er is niets opgeslagen.',
+  'A device can be the room\'s setting device or a radiator valve the E32 drives, not both. Choose one.': 'Een apparaat kan het instelapparaat van de ruimte zijn óf een kraan die de E32 aanstuurt, niet allebei. Kies er één.',
+  'This room is no longer on the E32.': 'Deze ruimte staat niet meer op de E32.'}};
 // The sentence of each error code the backend sends (settings.py); a section adds its own (spec.errors).
 const ERRORS = {
  e32_unreachable: 'The E32 could not be reached. Check the connection and try again.',
@@ -110,14 +69,22 @@ const ERRORS = {
  unauthorized: 'Only an administrator of Home Assistant can change this.',
  setup_changed: 'The settings were changed elsewhere. Reload the page and try again.',
  setup_platform_unsupported: 'This version of Home Assistant cannot store this change. Update Home Assistant and try again.',
- setup_invalid: 'This value cannot be saved. Check the fields and try again.'};
+ setup_invalid: 'This value cannot be saved. Check the fields and try again.',
+ e32_rejected_flow_limits: 'The E32 did not accept these water temperature limits. Older E32 software accepts at most 60 °C; update the E32 to use a higher maximum.',
+ e32_program_invalid: 'The week program of this room could not be read. Save it again under Week program, then save here.',
+ e32_program_too_many: 'A day of the week program has more than 6 switch times. Remove some under Week program, then save again.',
+ e32_storage_full: 'The E32 has no storage space left for the room plan. Remove a room you no longer use, or a few switch times from the week programs, and save again. Nothing was saved.',
+ // One role per valve (CONTRACT-1.4.2 §2, HA-SETDEV): the room screen's save and Configure's room step refuse it.
+ device_two_roles: 'A device can be the room\'s setting device or a radiator valve the E32 drives, not both. Choose one.',
+ // A room another screen names (Notifications → a room) that the E32 no longer has.
+ e32_room_missing: 'This room is no longer on the E32.'};
 const STATES = {active: ['On', 'heat', 'fire'], follow: ['Heat along only', 'along', 'thermometer'], inactive: ['Off', 'rest', 'close']};
 // What the boiler does (the boiler activity sensor), in the Boiler now card's words: the sensor's own state words through
-// Home Assistant ("Resting" for idle, as the card's band); this table [en, nl, pl] only when Home Assistant has none. A state
+// Home Assistant ("Resting" for idle, as the card's band); this table [en, nl] only when Home Assistant has none. A state
 // without a word here (unknown, unavailable, a newer one) shows nothing: never a raw state.
-const ACTIVITY = {idle: ['Resting', 'In rust', 'Spoczynek'], heating: ['Heating', 'Verwarmen', 'Ogrzewanie'], tapping: ['Tapping', 'Tappen', 'Pobór wody'],
- keep_warm: ['Keeping warm', 'Warmhouden', 'Podtrzymanie ciepła'], charging: ['Heating the hot water tank', 'Warmwatervoorraad opwarmen', 'Nagrzewanie zasobnika'],
- hot_water: ['Hot water', 'Warm water', 'Ciepła woda']};
+const ACTIVITY = {idle: ['Resting', 'In rust'], heating: ['Heating', 'Verwarmen'], tapping: ['Tapping', 'Tappen'],
+ keep_warm: ['Keeping warm', 'Warmhouden'], charging: ['Charging the tank', 'Vat opwarmen'],
+ hot_water: ['Hot water', 'Warm water']};
 const activityWord = (hass, st, lang) => {
  const own = st && Object.hasOwn(ACTIVITY, st.state) ? ACTIVITY[st.state] : null;
  if (!own) return '';
@@ -127,7 +94,7 @@ const activityWord = (hass, st, lang) => {
   if (!text || text === st.state) text = hass.localize?.('component.open_thermostat.entity.sensor.boiler_activity.'
    + (st.state === 'idle' ? 'state_attributes.card.state.resting' : 'state.' + st.state)) || '';
  } catch (e) { text = ''; }
- return typeof text === 'string' && text && text !== st.state ? text : own[['en', 'nl', 'pl'].indexOf(lang)] || own[0];
+ return typeof text === 'string' && text && text !== st.state ? text : own[lang === 'nl' ? 1 : 0];
 };
 
 /* ---- loading the kit and the sections ---------------------------------------------------------------------------- */
@@ -138,19 +105,22 @@ const load = url => {
  if (!imports.has(url)) imports.set(url, import(url).then(() => true, err => { console.error('OpenThermostat settings module', url, err); imports.delete(url); return false; }));
  return imports.get(url);
 };
-// The kit at the panel's own version (the overview names it too); the core's words and Dashboard and name join it.
+// The kit at the panel's own version (the overview names it too); the core's words join it. A kit address that failed
+// is not tried again (after a Home Assistant update the guessed one answers 404): the page says to reload instead.
 let kitReady = null;
+const kitFailed = new Set();
 const adopt = kit => {
  if (KIT) return;
- KIT = kit; kit.addTexts(TEXTS); defineGeneral(kit);
+ KIT = kit; kit.addTexts(TEXTS);
  kit.onSection(name => { for (const host of hosts) host._sectionDefined(name); });
 };
 const kitFrom = url => {
  if (KIT) return Promise.resolve(KIT);
+ if (kitFailed.has(url)) return Promise.resolve(null);
  kitReady = load(url).then(() => {
   const kit = window.OpenThermostatSettingsKit;
-  if (!(kit?.version >= 2)) { kitReady = null; for (const host of hosts) host._start(); return null; }
-  adopt(kit);
+  if (kit?.version >= 2) adopt(kit);
+  else { kitFailed.add(url); kitReady = null; }
   for (const host of hosts) host._start();
   return KIT;
  });
@@ -160,12 +130,16 @@ const KIT_GUESS = SELF.startsWith('/open_thermostat/openthermostat-settings-') ?
 const fill = (text, values = {}) => String(text).replace(/\{(\w+)\}/g, (all, k) => (k in values ? values[k] : all));
 const langOf = hass => {
  const l = String(hass?.locale?.language || hass?.language || 'en').slice(0, 2).toLowerCase();
- return l === 'nl' || l === 'pl' ? l : 'en';
+ return l === 'nl' ? 'nl' : 'en';
 };
 const say = (lang, key, values) => (KIT ? KIT.translate(lang, key, values) : fill((lang !== 'en' && TEXTS[lang]?.[key]) || key, values));
 const clone = v => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const routeOf = (section, item) => '#' + (section ? section + (item ? '/' + encodeURIComponent(item) : '') : 'overview');
+// Each part of an item on its own (#devices/sensor/a4c1…, not sensor%2Fa4c1…); the kit's parseRoute reads both.
+const routeOf = (section, item) => '#' + (section ? section + (item ? '/' + String(item).split('/').map(encodeURIComponent).join('/') : '') : 'overview');
+// Home Assistant runs another OpenThermostat than the one this page loaded (an update without a reload).
+const staleOf = overview => !!(overview?.module_url && SELF && SELF.startsWith('/open_thermostat/') && overview.module_url !== SELF);
+const reload = () => location.reload();
 // A websocket error ({code, translation_placeholders}); anything else is a fault of the page itself: logged, said plainly.
 const errorOf = err => {
  const code = err && (err.code || err.error?.code);
@@ -225,7 +199,7 @@ class OpenThermostatSettings extends HTMLElement {
  get lang() { return langOf(this._hass); }
  t(key, values) { return say(this.lang, key, values); }
  get admin() { return this._hass?.user?.is_admin !== false && this._overview?.admin !== false; }
- // The route; Dashboard and name and Advanced's list are the page Installation while no section "installation" exists.
+ // The route (an address of an earlier version, MOVED, is replaced when its page opens).
  _parse(hash) {
   let route = {section: null, item: null};
   if (KIT) route = KIT.parseRoute(hash);
@@ -233,10 +207,8 @@ class OpenThermostatSettings extends HTMLElement {
    const [head, ...rest] = String(hash || '').replace(/^#/, '').split('/');
    if (head && head !== 'overview' && /^[a-z_]+$/.test(head)) route = {section: head === 'room' ? 'rooms' : head, item: rest.join('/') || null};
   }
-  if (!this._ownInstallation() && (route.section === 'general' || (route.section === 'advanced' && !route.item))) return {section: 'installation', item: null};
   return route;
  }
- _ownInstallation() { return !!KIT?.sections.has('installation') && !!this._overview?.sections?.some(s => s.name === 'installation'); }
  _measure(width) {
   const wide = (width ?? this.getBoundingClientRect().width) >= WIDE;
   if (wide === this._wide) return;
@@ -249,7 +221,7 @@ class OpenThermostatSettings extends HTMLElement {
   if (!KIT) {
    this._boot();
    if (!this._overview && !this._booting) { this._booting = true; this._loadOverview(); }
-   if (!kitReady && KIT_GUESS) kitFrom(KIT_GUESS);
+   if (!kitReady && KIT_GUESS && !this._stale) kitFrom(KIT_GUESS);
    return;
   }
   this._route = this._parse(location.hash);
@@ -260,20 +232,24 @@ class OpenThermostatSettings extends HTMLElement {
   this._booting = false;
   this._openPage();
  }
- // Before the kit arrives: quiet placeholders in the shape of the overview (or an error that says what to do).
+ // Before the kit arrives: quiet placeholders in the shape of the overview, or what to do (reload) with a button.
  _boot() {
   const box = document.createElement('div');
   box.className = 'boot'; box.setAttribute('role', 'status'); box.setAttribute('aria-label', this.t('Loading…'));
-  if (this._overviewError && !kitReady) box.append(Object.assign(document.createElement('p'), {textContent: this.t('The settings could not be loaded. Reload the page.')}));
-  else box.innerHTML = '<p class="boot-title"></p>' + '<div class="boot-bone"></div>'.repeat(4);
+  const say = this._stale ? 'OpenThermostat was updated. Reload the page to use the new version.'
+   : (this._overviewError || this._overview) && !kitReady && kitFailed.size ? 'The settings could not be loaded. Reload the page.'
+    : this._overviewError && !kitReady ? 'The settings could not be loaded. Reload the page.' : null;
+  if (say) {
+   const button = Object.assign(document.createElement('button'), {type: 'button', className: 'boot-reload', textContent: this.t('Reload')});
+   button.dataset.reload = ''; button.addEventListener('click', reload);
+   box.append(Object.assign(document.createElement('p'), {textContent: this.t(say)}), button);
+  } else box.innerHTML = '<p class="boot-title"></p>' + '<div class="boot-bone"></div>'.repeat(4);
   const style = document.createElement('style'); style.textContent = BOOT;
   this.shadowRoot.replaceChildren(style, box);
  }
  _sectionDefined(name) {
   const p = this._page;
-  if (!p) return;
-  if ((p.section === name || (p.section === 'installation' && name === 'installation')) && ['fallback', 'waiting'].includes(p.status)) this._openPage();
-  else if (p.composite && name === 'advanced' && !p.extra) this._openPage();
+  if (p && p.section === name && ['unloaded', 'waiting'].includes(p.status) && !this._stale) this._openPage();
  }
  // Navigation inside the panel: a route (#general) pushed on the history, or (popstate) the one the browser went to.
  async _go(hash, push = true) {
@@ -307,22 +283,24 @@ class OpenThermostatSettings extends HTMLElement {
    const result = await this._ws({type: 'open_thermostat/settings/overview', language: this.lang});
    if (generation !== this._generation) return;
    this._overview = result; this._overviewError = null;
-   this._loadModules(result.modules);
+   // A newer OpenThermostat in Home Assistant than this page: no module of it is loaded into this older core (P3).
+   if (staleOf(result)) { this._stale = true; this._settled = true; }
+   else this._loadModules(result.modules);
   } catch (err) {
    if (generation !== this._generation) return;
    this._overviewError = errorOf(err).code;
    this._settled = true;
    if (!KIT) { if (!kitReady) this._boot(); return; }
   }
-  if (!KIT) return;
+  if (!KIT) { if (this._stale || !kitReady) this._boot(); return; }
   this._renderList();
   if (!this._page) this._renderPage();
-  if (['fallback', 'waiting'].includes(this._page?.status) || (this._route.section === 'installation' && this._page?.section !== 'installation' && this._ownInstallation())) this._openPage();
+  if (['fallback', 'unloaded', 'waiting'].includes(this._page?.status) || (this._stale && this._page && this._page.status !== 'stale')) this._openPage();
  }
  // The kit first (when the guess from this module's own address did not bring it), then every section in parallel.
  _loadModules(list = []) {
   const kit = list.find(m => m?.name === 'kit');
-  if (!KIT && kit?.url && kit.url !== KIT_GUESS) kitFrom(kit.url);
+  if (!KIT && kit?.url && (kit.url !== KIT_GUESS || (!kitReady && !kitFailed.has(kit.url)))) kitFrom(kit.url);
   const all = list.filter(m => m?.name !== 'kit' && typeof m?.url === 'string').map(m => load(m.url));
   Promise.allSettled(all).then(() => { this._settled = true; if (KIT && this._page?.status === 'waiting') this._openPage(); });
  }
@@ -330,33 +308,33 @@ class OpenThermostatSettings extends HTMLElement {
   const p = this._page;
   if (p?.status === 'ready' && this._dirty()) this._drafts.set(p.key, {values: clone(p.values), original: clone(p.original), token: p.token});
  }
+ // A page's status: loading, ready, error; waiting (its module is still on its way); fallback (the E32 is not
+ // connected: the one way to Configure); unloaded (its module did not load, or the backend has no editor for it);
+ // stale (Home Assistant runs a newer OpenThermostat: reload).
  async _openPage() {
-  let {section} = this._route;
-  const {item} = this._route;
+  const {section, item} = this._route;
   clearTimeout(this._savedTimer);
   if (!section) { this._page = null; this._renderPage(); this._renderList(); return; }
-  const composite = section === 'installation' && !this._ownInstallation();
-  if (composite) section = 'general';
-  const key = (composite ? 'installation' : section) + '/' + (item ?? ''), spec = KIT.sections.get(section);
+  const key = section + '/' + (item ?? ''), spec = KIT.sections.get(section);
   const info = this._overview?.sections?.find(s => s.name === section);
-  // A section that moved a screen elsewhere (the House's contacts are on the room screen now) says where it went.
-  const moved = spec?.redirect?.(item);
+  // An address of an earlier version, or a screen a section moved elsewhere (the House's contacts are on the room
+  // screen now), goes where it is now.
+  const moved = MOVED[section]?.(item) || spec?.redirect?.(item);
   if (moved) { try { history.replaceState(history.state, '', moved); } catch (e) { /* no history */ } this._route = this._parse(moved); this._openPage(); return; }
-  if (!spec && !this._settled && !composite) { this._page = {key, section, item, status: 'waiting'}; this._renderPage(); return; }
-  if (!spec || (info && (!info.editable || !info.available))) { this._page = {key, section, item, status: 'fallback'}; this._renderPage(); return; }
-  const page = this._page = {key, section, item, spec, composite, status: 'loading', errors: {}, conflicts: new Set()};
+  const status = this._stale ? 'stale' : info && !info.available ? 'fallback' : !spec && !this._settled ? 'waiting'
+   : !spec || (info && !info.editable) ? 'unloaded' : null;
+  if (status) { this._page = {key, section, item, status}; this._renderPage(); this._renderList(); return; }
+  const page = this._page = {key, section, item, spec, status: 'loading', errors: {}, conflicts: new Set()};
   this._renderPage(); this._renderList();
   try {
-   const [result, extra] = await Promise.all([this._ws({type: 'open_thermostat/settings/get', section, item}),
-    composite && KIT.sections.has('advanced') ? this._ws({type: 'open_thermostat/settings/get', section: 'advanced'}).catch(() => null) : null]);
+   const result = await this._ws({type: 'open_thermostat/settings/get', section, item});
    if (this._page !== page) return;
-   page.extra = extra;
    this._ready(page, result, this._drafts.get(key));
    this._drafts.delete(key);
   } catch (err) {
    if (this._page !== page) return;
    const {code, data} = errorOf(err);
-   if (code === 'unknown_section') { page.status = 'fallback'; } else { page.status = 'error'; page.baseError = code; page.basePlaceholders = data.placeholders; }
+   page.status = 'error'; page.baseError = code; page.basePlaceholders = data.placeholders;
   }
   this._renderPage(); this._renderList();
  }
@@ -397,7 +375,7 @@ class OpenThermostatSettings extends HTMLElement {
   if (v === true) return this.t('On');
   if (v === false) return this.t('Off');
   if (Array.isArray(v)) return v.join(', ');
-  return typeof v === 'number' ? v.toLocaleString(this.lang) : String(v ?? '');
+  return typeof v === 'number' ? KIT.number(v, this._hass, 2) : String(v ?? '');
  }
  _undo() {
   const p = this._page;
@@ -437,10 +415,11 @@ class OpenThermostatSettings extends HTMLElement {
     p.banner = true;
    } else if (code === 'changed_elsewhere') {
     this._keepDraft(); this._openPage(); return false;
-   } else if (data.field && data.field !== 'base' && p.fields?.[data.field]) {
-    p.errors[data.field] = this._error(code, data.placeholders);
    } else {
-    p.baseError = code; p.basePlaceholders = data.placeholders;
+    // A refusal after a part of the save was stored (settings.py): the screen as it is now, your other changes kept.
+    if (data.model && data.token) this._ready(p, {model: data.model, token: data.token}, {values: clone(p.values), original: clone(p.original), token: data.token});
+    if (data.field && data.field !== 'base' && p.fields?.[data.field]) p.errors[data.field] = this._error(code, data.placeholders);
+    else { p.baseError = code; p.basePlaceholders = data.placeholders; }
    }
    this._renderPage();
    const first = Object.keys(p.errors)[0];
@@ -472,6 +451,8 @@ class OpenThermostatSettings extends HTMLElement {
    kit: KIT, t: (k, v) => this.t(k, v),
    paths: {settings, configure: this._overview?.configure_path || CONFIGURE},
    navigate: hash => this._go(hash), open: path => this._navigate(path),
+   // Read this screen again (1.4.2), without a history entry; your unsaved changes stay as a draft over the fresh model.
+   reload: () => { if (self._page !== p) return; self._keepDraft(); self._openPage(); },
    // A field bound to values[key]: its edits mark it and show the save bar; disabled for a non-administrator.
    field(kind, key, o = {}) {
     const f = (typeof kind === 'function' ? kind : KIT.fields[kind])({...o, key, hass: self._hass, value: p.values[key], disabled: readOnly || o.disabled,
@@ -521,10 +502,6 @@ class OpenThermostatSettings extends HTMLElement {
  _summary(name) {
   const o = this._overview, by = new Map((o?.sections || []).map(s => [s.name, s]));
   if (!o) return {lines: [], available: true};
-  if (name === 'installation' && !by.has('installation')) {
-   const general = by.get('general'), advanced = by.get('advanced');
-   return {lines: [...(general?.summary || []), ...(advanced?.summary || [])], available: true};
-  }
   const s = by.get(name);
   if (!s) return null;
   return {lines: s.available ? s.summary : [this._reasonText(s.reason), ...s.summary].filter(Boolean), available: s.available};
@@ -547,8 +524,7 @@ class OpenThermostatSettings extends HTMLElement {
   const parts = [h('header', {class: 'head'}, h('h1', {class: 'title', text: this.t('Settings')}))];
   if (!this.admin) parts.push(notice(this.t('Only an administrator of Home Assistant can change this.'), 'info'));
   if (this._overviewError) parts.push(notice(this._errorText(this._overviewError), 'error'));
-  if (o?.module_url && SELF && SELF.startsWith('/open_thermostat/') && o.module_url !== SELF)
-   parts.push(notice(this.t('OpenThermostat was updated. Reload the page to use the new version.'), 'warning'));
+  if (this._stale) parts.push(this._reloadNotice('OpenThermostat was updated. Reload the page to use the new version.', 'warning'));
   const list = h('div', {class: 'card list entries'});
   for (const [name, title, icon] of ENTRIES) {
    const s = this._summary(name);
@@ -570,10 +546,13 @@ class OpenThermostatSettings extends HTMLElement {
  _reasonText(reason) {
   return reason === 'connect_e32' ? this.t('Connect the E32 first: Configure → E32 connection.') : '';
  }
+ _reloadNotice(text, tone) {
+  return KIT.notice(this.t(text), tone, KIT.button(this.t('Reload'), reload, 'outlined', {'data-reload': ''}));
+ }
  _errorText(code) { return ERRORS[code] ? this.t(ERRORS[code]) : this.t('The change was not saved ({code}). Try again.', {code}); }
  // The installation at a glance (wide screen, nothing open): the rooms, the boiler, what is on, the next holiday.
  _glance() {
-  const {h, roomCard, card, row} = KIT, g = this._overview?.glance, hass = this._hass, lang = this.lang;
+  const {h, roomCard, card, row} = KIT, g = this._overview?.glance, hass = this._hass;
   if (!this._overview) return h('div', {class: 'glance'}, KIT.skeleton('cards', 4));
   if (!g) return h('div', {class: 'glance'});
   const go = route => e => { e.preventDefault(); this._go(route); };
@@ -583,9 +562,10 @@ class OpenThermostatSettings extends HTMLElement {
     const c = s?.states?.[r.entities?.climate], sensor = s?.states?.[r.entities?.temperature];
     const now = numberOf(c?.attributes?.current_temperature) ?? numberOf(sensor?.state), target = numberOf(c?.attributes?.temperature);
     const [word, tone, icon] = STATES[r.state] || STATES.active;
+    const unit = c?.attributes?.temperature_unit || s?.config?.unit_system?.temperature || '°C';
     el.replaceChildren(roomCard({name: r.name, compact: true, emitter: r.emitter === 'floor' ? 'floor' : 'radiator', route, onClick: go(route),
-     temperature: now == null ? null : now.toLocaleString(lang, {minimumFractionDigits: 1, maximumFractionDigits: 1}), unit: c?.attributes?.temperature_unit || '°C',
-     target: target != null && r.state !== 'inactive' ? '→ ' + KIT.degrees(target, '°C', lang) : null, state: {text: this.t(word), tone, icon}}));
+     temperature: now == null ? null : KIT.number(now, s, 1, 1), unit,
+     target: target != null && r.state !== 'inactive' ? '→ ' + KIT.degrees(target, unit, s) : null, state: {text: this.t(word), tone, icon}}));
    };
    el._live(hass);
    return el;
@@ -621,27 +601,32 @@ class OpenThermostatSettings extends HTMLElement {
   }
   const spec = p.spec || KIT.sections.get(p.section), info = this._overview?.sections?.find(s => s.name === p.section);
   const per = v => (typeof v === 'function' ? v(p.model || {}, p.item) : v);  // a section's title or subtitle per (model, item)
-  const underInstallation = p.composite || ((p.section === 'advanced' || p.section === 'general') && !this._ownInstallation());
-  const title = p.composite ? this.t('Installation') : this.t(per(spec?.title) || TITLES[p.section] || p.section);
+  const title = this.t(per(spec?.title) || TITLES[p.section] || p.section);
   const up = p.item != null && spec?.parent?.(p.item);
   const parent = up ? {route: up.route, label: this.t(up.label)}
-   : p.item != null ? (underInstallation ? {route: '#installation', label: this.t('Installation')} : {route: routeOf(p.section), label: this.t(TITLES[p.section] || p.section)})
+   : p.item != null ? {route: routeOf(p.section), label: this.t(TITLES[p.section] || p.section)}
     : this._wide ? null : {route: routeOf(null), label: this.t('Settings')};
   const back = parent && {route: parent.route, label: this.t('Back to {page}', {page: parent.label}),
    onClick: e => { e.preventDefault(); this._go(parent.route); }};
   const {el, body} = frame({title: p.item != null && p.model?.name ? p.model.name : title,
-   subtitle: !p.composite && per(spec?.subtitle) ? this.t(per(spec.subtitle)) : null, back});
-  el.dataset.page = p.composite ? 'installation' : p.section;
+   subtitle: per(spec?.subtitle) ? this.t(per(spec.subtitle)) : null, back});
+  el.dataset.page = p.section;
   if (p.status !== 'ready') el.dataset.status = p.status;
-  if (p.status === 'fallback') {
+  if (p.status === 'stale') {
+   body.append(this._reloadNotice('OpenThermostat was updated. Reload the page to use the new version.', 'warning'));
+  } else if (p.status === 'fallback' || p.status === 'unloaded') {
    if (info?.summary?.length) body.append(h('div', {class: 'card lines'}, ...info.summary.map(line => h('p', {text: KIT.together(line)}))));
-   const reason = info && !info.available ? this._reasonText(info.reason) : '';
-   body.append(notice(reason || this.t('You change this part in Configure for now.'), 'info',
+   // Configure only for the E32 connection (the one setting that lives there); anything else: reload.
+   if (p.status === 'fallback' && info?.reason === 'connect_e32') body.append(notice(this._reasonText(info.reason), 'info',
     button(this.t('Open Configure'), () => this._navigate(this._overview?.configure_path || CONFIGURE), 'outlined', {'data-configure': ''})));
+   else body.append(this._reloadNotice('The settings could not be loaded. Reload the page.', 'info'));
   } else if (p.status === 'loading' || p.status === 'waiting') {
    body.append(h('div', {class: 'loading', role: 'status', 'aria-label': this.t('Loading…')}, KIT.skeleton(spec?.skeleton || 'rows', 3)));
   } else if (p.status === 'error') {
-   body.append(notice(ERRORS[p.baseError] || spec?.errors?.[p.baseError] ? this._error(p.baseError, p.basePlaceholders) : this.t('These settings could not be read ({code}). Reload the page.', {code: p.baseError}), 'error'));
+   // A sentence that says to reload the page gets the button for it.
+   const english = spec?.errors?.[p.baseError] || ERRORS[p.baseError] || 'These settings could not be read ({code}). Reload the page.';
+   const text = english === 'These settings could not be read ({code}). Reload the page.' ? this.t(english, {code: p.baseError}) : this._error(p.baseError, p.basePlaceholders);
+   body.append(KIT.notice(text, 'error', english.includes('Reload the page') ? button(this.t('Reload'), reload, 'outlined', {'data-reload': ''}) : null));
   } else {
    // On a wide screen the list beside it says it already, at the top of the panel.
    if (!this.admin && !this._wide) body.append(notice(this.t('Only an administrator of Home Assistant can change this.'), 'info'));
@@ -652,13 +637,7 @@ class OpenThermostatSettings extends HTMLElement {
    p.fields = {};
    const content = spec.render(this._ctx(p));
    // A section that draws its own cards (spec.cards) stands on the page; the others get the one form card of 1.4.
-   if (p.composite) body.append(KIT.card({title: this.t('Dashboard and name'), cls: 'card form', data: {group: 'general'}}, content));
-   else body.append(spec.cards ? content : h('div', {class: 'card form'}, content));
-   const adv = p.composite && p.extra?.model && KIT.sections.get('advanced');
-   if (adv) {
-    const q = {...p, section: 'advanced', item: null, spec: adv, model: p.extra.model, values: clone(p.extra.model), fields: {}, errors: {}};
-    body.append(KIT.card({title: this.t('Advanced'), cls: 'card form', data: {group: 'advanced'}}, adv.render(this._ctx(q))));
-   }
+   body.append(spec.cards ? content : h('div', {class: 'card form'}, content));
   }
   const bar = h('div', {class: 'savebar', 'data-state': 'idle'}, h('p', {class: 'status', 'aria-live': 'polite', role: 'status'}),
    h('div', {class: 'actions'}, button(this.t('Undo'), () => this._undo(), 'text', {'data-undo': ''}),
@@ -672,34 +651,21 @@ class OpenThermostatSettings extends HTMLElement {
   if (!bar) return;
   const state = !p || p.status !== 'ready' ? 'idle' : p.saving ? 'saving' : this._dirty() && this.admin ? 'dirty' : p.saved ? 'saved' : 'idle';
   bar.dataset.state = state;
-  bar.querySelector('.status').textContent = {dirty: this.t('You changed something.'), saving: this.t('Saving…'), saved: this.t('Saved.')}[state] || '';
+  // A section may word what is unsaved itself (spec.dirtyText(values, model) -> an English key of its catalogue, or null).
+  let own = null;
+  if (state === 'dirty') { try { own = p.spec?.dirtyText?.(clone(p.values), p.model) || null; } catch (e) { own = null; } }
+  bar.querySelector('.status').textContent = {dirty: this.t(own || 'You changed something.'), saving: this.t('Saving…'), saved: this.t('Saved.')}[state] || '';
   for (const b of bar.querySelectorAll('button')) b.disabled = state !== 'dirty';
  }
-}
-
-/* ---- Dashboard and name (settings.py read_general / save_general), on the page Installation ------------------- */
-function defineGeneral(kit) {
- kit.defineSection('general', {
-  title: 'Dashboard and name',
-  subtitle: 'The name of this installation in Home Assistant and whether it shows the OpenThermostat dashboard.',
-  errors: {invalid_name: 'Give a name of 1 to 80 characters.'},
-  render: ctx => kit.h('div', {class: 'fields'},
-   ctx.field('text', 'name', {label: ctx.t('Installation name'), maxlength: 80, required: true,
-    help: ctx.t('A recognisable name in Home Assistant. Your devices and their history stay as they are.')}),
-   ctx.field('toggle', 'create_dashboard', {label: ctx.t('Show the OpenThermostat dashboard'),
-    help: ctx.t('The OpenThermostat dashboard: your rooms at a glance, the week planner and the boiler. Your own dashboards are preserved.')})),
-  // Switching the dashboard off removes this tab too: asked first.
-  confirm: (values, model, ctx) => (model.create_dashboard && values.create_dashboard === false
-   ? {title: ctx.t('Hide the OpenThermostat dashboard?'), text: ctx.t('This tab goes with it. You can show the dashboard again in Configure → Dashboard and name.'),
-      confirm: ctx.t('Hide the dashboard'), danger: true} : null)
- });
 }
 
 /* ---- style: the kit's tokens and components come first; the core adds its frame, rows, notices, save bar, dialog,
    the overview and the glance ---- */
 const BOOT = `:host{display:block}.boot{max-width:960px;margin:0 auto;padding:24px 16px;display:grid;gap:12px}
 .boot-title{height:26px;width:160px;border-radius:8px;background:var(--divider-color,rgba(0,0,0,.12))}
-.boot-bone{height:72px;border-radius:12px;background:var(--card-background-color,#fff);border:1px solid var(--divider-color,rgba(0,0,0,.12))}`;
+.boot-bone{height:72px;border-radius:12px;background:var(--card-background-color,#fff);border:1px solid var(--divider-color,rgba(0,0,0,.12))}
+.boot-reload{justify-self:start;min-height:44px;padding:8px 18px;border-radius:12px;border:1px solid var(--primary-color,#03a9f4);background:none;
+color:var(--primary-color,#03a9f4);font:inherit;font-weight:500;cursor:pointer}`;
 const STYLE = `
 .shell{display:block;max-width:960px;margin:0 auto;padding:var(--ot-s4)}
 .shell.wide{display:grid;grid-template-columns:minmax(260px,320px) minmax(0,960px);gap:var(--ot-s5);align-items:start;padding:var(--ot-s5);max-width:1340px}
@@ -761,7 +727,10 @@ const ensureDefined = (name, cls) => {
  if (document.readyState !== 'complete') window.addEventListener('load', check, {once: true});
  for (const ms of [0, 250, 1000, 3000, 10000]) setTimeout(check, ms);
  window.addEventListener('location-changed', check);
- setInterval(check, 500);
+ document.addEventListener('visibilitychange', check);
+ // The first 30 seconds, while Home Assistant's own elements settle; then only on navigation and when the page shows again.
+ const every = setInterval(check, 500);
+ setTimeout(() => clearInterval(every), 30000);
  return check;
 };
 // A kit already on the page (loaded before this module) is adopted at once.

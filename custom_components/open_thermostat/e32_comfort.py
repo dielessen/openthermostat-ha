@@ -10,13 +10,16 @@ without Home Assistant. This module adds, on top of that plan (E32 beta.19,
   (stored per room since E32 beta.23, see room_levels; inferred for older
   firmware). "Away" is the house mode only, not a room preset. E32 1.3's room state "Heat along only" is a preset
   too (1.4, issue #10: ``heat_along``, offered while the E32 knows the state): choosing it sets the room's state,
-  as the room's Heating select does; a temperature, the Heat mode or another preset takes the room out of it to On
-  (Auto keeps it: Heat along only is on). "Off" makes the room inactive in the room plan; a new
-  target becomes an override "until the next switch point" of the room's week
-  program (or for the configured time when the room has no program); a room
-  with only a fixed target changes that target in the plan.
+  as the room's Heating select does. "Off" makes the room inactive in the room plan.
+- 1.4.2 (docs/engineering/GEDRAGSREGELS-TEMPERATUUR-EN-STAND.nl.md §3.1, §3.2): a temperature never changes the
+  room's state. Only Off, switching on from Off (Auto, Heat or turn on), the preset Heat along only and the preset
+  none from Heat along only (back to On) choose a state. A new temperature (also the presets comfort, eco and night,
+  and Heat while nothing holds the room) is one manual change: with a week program until its next switch time,
+  without one the room's temperature without a week program (also on a room that is Off, which stays Off; with a
+  program an Off room refuses it). An E32 that announces room.manual.v1 decides that itself (one command
+  ``override: manual``); for an older one Home Assistant makes the same split (async_manual_change).
 - the actions ``set_room_override`` / ``clear_room_override`` (boost, "2 h at
-  21 °C", until the next switch point) and ``set_away`` / ``clear_away`` (a
+  21 °C", until the next switch time; never on a room that is Off) and ``set_away`` / ``clear_away`` (a
   lower temperature for the whole house, optionally until a date). The E32
   ends every override itself, also after a restart, and returns the room to
   its week program; a dated away ends early enough to be warm again on time.
@@ -70,6 +73,7 @@ from contextlib import asynccontextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 from functools import partial
 import json
+import math
 import time
 
 from homeassistant.components.climate import ClimateEntity
@@ -86,6 +90,8 @@ from .const import DOMAIN
 from .heating_link import RoomEntity, add_options, heating_hub, number, track_entities
 from .native_form import remember_shown, shown_value
 from .room_levels import room_levels
+from .e32_setting_device import (MANUAL_FEATURE, async_routine_room_change, half_up, has_program,  # noqa: F401
+                                 manual_unknown, off_until_over)
 
 CONF_COMFORT = "comfort_settings"
 DEFAULTS = {"presence_entity": None, "presence_entities": [], "away_delay_min": 15,
@@ -97,13 +103,21 @@ DEFAULTS = {"presence_entity": None, "presence_entities": [], "away_delay_min": 
             "door_delay_s": 300, "door_delays": {},
             # {room id: [entity ids]}: every contact of the room (windows and doors, as before 1.0.1, so an
             # older version still finds them all, as windows); doors: those of them that are doors.
-            "override_minutes": 120, "contacts": {}, "doors": {},
+            "contacts": {}, "doors": {},
             # Persons per room (beta.23): {room id: [person entity ids]}; a room without uses the house.
             "room_persons": {}}
 TEMPERATURE_LIMITS = (5.0, 30.0)
 AWAY_LIMITS = (5.0, 25.0)
 DELAY_LIMITS = (0, 1800)       # the E32's own bound (RoomOverrides::maxContactDelayS)
-MINUTES_LIMITS = (1, 1440)     # the E32's own bound (RoomOverrides::maxMinutes)
+# 1.4.2: the comfort settings Home Assistant no longer keeps (the house setting "Length of a manual change" went:
+# a manual change lasts until the next switch time, or 120 minutes without a clock). drop_retired_options removes
+# them from the entry once and sets RETIRED_MARKER (no entry version change; HA 1.4.1 after a downgrade uses 120).
+RETIRED_OPTIONS = ("override_minutes",)
+RETIRED_MARKER = "comfort_override_minutes_dropped"
+# 1.4.2 (CONTRACT-1.4.2 §1): the minutes of a manual change without a clock (the firmware's own value) or of the
+# action's timed change without a duration. The E32's one command for a manual change is room.manual.v1
+# (MANUAL_FEATURE); the helpers for it are the setting device's (e32_setting_device), one rule for both.
+MANUAL_MINUTES = 120
 AWAY_DELAY_LIMITS = (0, 240)   # minutes everyone must be away before the house counts as away
 MAX_PRESENCE = 16
 MAX_CONTACTS = 8
@@ -153,8 +167,7 @@ def comfort_options(entry):
     for key, (low, high) in (("comfort_c", TEMPERATURE_LIMITS), ("eco_c", TEMPERATURE_LIMITS)):
         if number(raw.get(key), low, high) is not None:
             out[key] = float(raw[key])
-    for key, (low, high) in (("contact_delay_s", DELAY_LIMITS), ("door_delay_s", DELAY_LIMITS),
-                             ("override_minutes", MINUTES_LIMITS)):
+    for key, (low, high) in (("contact_delay_s", DELAY_LIMITS), ("door_delay_s", DELAY_LIMITS)):
         if type(raw.get(key)) is int and low <= raw[key] <= high:
             out[key] = raw[key]
     for key in ("contact_delays", "door_delays"):
@@ -206,7 +219,7 @@ def validate_presence(hass, user_input, current):
 
 
 def validate_settings(hass, user_input, current):
-    """The comfort settings from the options form (preset temperatures, delay, duration)."""
+    """The comfort settings from the options form (preset temperatures, the pauses after a window or door)."""
     out = dict(current)
     for field, key, limits in (("comfort_temperature", "comfort_c", TEMPERATURE_LIMITS),
                                ("eco_temperature", "eco_c", TEMPERATURE_LIMITS)):
@@ -215,8 +228,7 @@ def validate_settings(hass, user_input, current):
             raise ComfortError(field, "temperature_invalid")
         out[key] = round(value * 2) / 2
     for field, key, limits in (("contact_delay", "contact_delay_s", DELAY_LIMITS),
-                               ("door_delay", "door_delay_s", DELAY_LIMITS),
-                               ("override_minutes", "override_minutes", MINUTES_LIMITS)):
+                               ("door_delay", "door_delay_s", DELAY_LIMITS)):
         value = number(user_input.get(field, out[key]), *limits)
         if value is None or value != int(value):
             raise ComfortError(field, "whole_number_invalid")
@@ -381,9 +393,10 @@ def contact_selector(**extra):
 
 
 @callback
-def save_comfort(hass, entry, settings):
-    """Store the comfort settings without a reload and follow them at once."""
-    options = {**entry.options, CONF_COMFORT: settings}
+def save_comfort(hass, entry, settings, extra=None):
+    """Store the comfort settings without a reload and follow them at once (extra: other entry options to set
+    with them, as {key: value})."""
+    options = {**entry.options, CONF_COMFORT: settings, **(extra or {})}
     if options == dict(entry.options):
         return False
     state = hass.data.get(DOMAIN, {}).get(entry.entry_id)
@@ -394,6 +407,19 @@ def save_comfort(hass, entry, settings):
     if state is not None and (forwarder := state.get("comfort_forwarder")) is not None:
         forwarder.reconfigure()
     return True
+
+
+@callback
+def drop_retired_options(hass, entry):
+    """1.4.2: remove the comfort settings Home Assistant no longer keeps (RETIRED_OPTIONS, the length of a manual
+    change) from the entry's options, without a reload, and mark the entry (RETIRED_MARKER). Runs at every set-up
+    and does nothing once they are gone; an older version that wrote one back after a downgrade loses it again.
+    True when the options changed."""
+    raw = (getattr(entry, "options", None) or {}).get(CONF_COMFORT)
+    if type(raw) is not dict or not set(RETIRED_OPTIONS) & set(raw):
+        return False
+    kept = {key: value for key, value in raw.items() if key not in RETIRED_OPTIONS}
+    return save_comfort(hass, entry, kept, {RETIRED_MARKER: True})
 
 
 def settings_schema(vol, settings):
@@ -409,7 +435,6 @@ def settings_schema(vol, settings):
         # Doors (1.0.1): usually longer, so walking through a door does not pause the room.
         vol.Required("door_delay", default=settings["door_delay_s"] / 60): box(
             DELAY_LIMITS[0] / 60, DELAY_LIMITS[1] / 60, 0.5, "min"),
-        vol.Required("override_minutes", default=settings["override_minutes"]): box(*MINUTES_LIMITS, 1, "min"),
     })
 
 
@@ -467,8 +492,7 @@ async def async_save_presence(hass, entry, house, user_input, shown_away):
 
 def save_room_defaults(hass, entry, user_input):
     """Store the room defaults (Configure → House → Room defaults): the temperatures of a room without a week
-    program, the pause after a window or door opens (minutes in the form, seconds stored) and the length of a
-    manual change. Raises ComfortError."""
+    program and the pause after a window or door opens (minutes in the form, seconds stored). Raises ComfortError."""
     for field in ("contact_delay", "door_delay"):
         minutes = user_input.get(field)
         if type(minutes) in (int, float) and type(minutes) is not bool:  # the form shows minutes
@@ -924,6 +948,111 @@ def away_command(on, temperature=None, until=None, now=None):
     return command
 
 
+# -- a manual change (1.4.2) ---------------------------------------------------------
+
+
+def off_until_ended(plan_room, status_room, now=None):
+    """E32 1.4.1: "Off until" has passed and the E32 runs the room again, but the plan still says Off, so that
+    firmware refuses a manual change (room_inactive) until the plan is written (e32_setting_device.off_until_over)."""
+    return off_until_over(plan_room if type(plan_room) is dict else None,
+                          status_room if type(status_room) is dict else None, now or time.time())
+
+
+def manual_supported(link):
+    """True when the E32 that answered the plan Home Assistant last read knows the command ``override: manual``
+    (room.manual.v1). Read at the moment of every change, never kept: after a firmware update or a downgrade the
+    plan is read again (HA-REREAD), so the answer follows the firmware that runs now."""
+    return MANUAL_FEATURE in (getattr(link, "features", None) or ())
+
+
+async def async_heal_off_until(link, room_id, status_room):
+    """E32 1.4.1: write the end of a passed "Off until" into the plan (routine) before a manual change; nothing for
+    an E32 that announces room.manual.v1 (it writes it itself and takes the change). True when it wrote."""
+    from .room_plan import on_state, set_state
+    plan = link.room(room_id) if link is not None else None
+    if manual_supported(link) or not off_until_ended(plan, status_room):
+        return False
+    await async_routine_room_change(link, room_id, set_state(on_state(plan)))
+    return True
+
+
+def manual_command(room_id, temperature, by="ha"):
+    """{"room", "override": "manual", "temperature", "by"} (room.manual.v1): the E32 decides what it becomes."""
+    return {"room": room_id, "override": "manual", "temperature": round(float(temperature), 2), "by": by}
+
+
+def _answer(applied, temperature, until=None, minutes=None):
+    return {"applied": applied, "temperature": temperature,
+            "until": until if type(until) is int and until > 0 else None,
+            "minutes": minutes if type(minutes) is int and minutes > 0 else None}
+
+
+def _room_until(answer, room_id):
+    """The end of the room's change in the E32's answer (its comfort state), else None."""
+    rooms = answer.get("rooms") if type(answer) is dict else None
+    for room in rooms if type(rooms) is list else []:
+        if type(room) is dict and room.get("id") == room_id:
+            return room.get("until")
+    return None
+
+
+async def async_manual_change(link, room_id, temperature, *, running=None, status_room=None, by="ha"):
+    """One manual change of a room's temperature (design §3.1); the room's state never changes.
+
+    With room.manual.v1 the E32 decides (one command): until the next switch time with a week program, the room's
+    temperature without a week program without one (also on a room that is Off), 120 minutes without a clock. For
+    an older E32, or one that answers invalid_override (a downgrade not yet read again), Home Assistant makes the
+    same split: ``next``; without a clock (or when the E32 says the room has no program) ``timed`` MANUAL_MINUTES;
+    without a program a routine plan write of the temperature without a week program, which also ends a running
+    override (``running``: the room's override now) and is skipped when the value is already set; a passed "Off
+    until" written first (async_heal_off_until; ``status_room``: the room as the E32 reports it). Several requests
+    share one E32 sign-in. A room that is Off and has a week program is refused by the E32 (comfort_room_off).
+
+    Returns {"applied": "next" | "timed" | "fixed", "temperature", "until" (unix) | None, "minutes" | None}, or None
+    when a newer change of the same room superseded it. Raises ServiceValidationError / HomeAssistantError.
+    """
+    from .room_plan import set_fallback
+    value = half_up(temperature)
+    if manual_supported(link):
+        try:
+            answer = await async_comfort_command(link, manual_command(room_id, value, by))
+        except ServiceValidationError as err:
+            if not manual_unknown(err):
+                raise
+        else:
+            if answer is None:
+                return None
+            applied = answer.get("applied") if answer.get("applied") in ("next", "timed", "fixed") else None
+            shown = number(answer.get("temperature"), 5, 35)
+            return _answer(applied, shown if shown is not None else value, answer.get("until"), answer.get("minutes"))
+    plan = link.room(room_id) or {}
+    program = has_program(plan)
+    heal = off_until_ended(plan, status_room)
+    end_override = not program and running in OVERRIDES
+    session = getattr(link, "async_session", None) if heal or end_override else None
+    async with session() if session is not None else nullcontext():
+        if heal:
+            await async_heal_off_until(link, room_id, status_room)
+        if not program:
+            centi = int(round(value * 100))
+            if plan.get("fallback_centi_c") != centi:
+                stored = await async_routine_room_change(link, room_id, set_fallback(centi), ("fallback", room_id))
+                if stored is None:
+                    return None  # a newer temperature for this room replaced this one
+            if end_override:
+                await async_comfort_command(link, override_command(room_id, "none"))
+            return _answer("fixed", value)
+        try:
+            answer = await async_comfort_command(link, override_command(room_id, "next", value))
+        except ServiceValidationError as err:
+            if err.translation_key not in ("comfort_no_clock", "comfort_no_schedule"):
+                raise
+        else:
+            return None if answer is None else _answer("next", value, _room_until(answer, room_id))
+        answer = await async_comfort_command(link, override_command(room_id, "timed", value, MANUAL_MINUTES))
+        return None if answer is None else _answer("timed", value, _room_until(answer, room_id), MANUAL_MINUTES)
+
+
 # -- the climate entity --------------------------------------------------------------
 
 
@@ -977,6 +1106,11 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
     In summer (the house mode Summer, E32 1.4.1) every room is off (hvac_mode off, attribute ``reason`` "summer"): a
     temperature, a mode, a preset, an override or away is refused with "Summer mode is on: switch it off first." and
     nothing is sent to the E32.
+
+    1.4.2: a temperature never changes the room's state (async_manual_change); while the room is Off it shows the
+    temperature it keeps (its week program now, else its temperature without a week program, from the plan). The
+    attributes ``applied`` ("next": until the next switch time, "timed": for a time, "fixed": it became the room's
+    temperature without a week program) and ``until`` say what a manual change does.
     """
 
     _attr_name = None  # the room device's name
@@ -992,6 +1126,7 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         self._attach_room(hub, room, "thermostat")
         self.entry = entry
         self._pending = None  # (°C, None while its write runs, else monotonic time it was sent)
+        self._answer = None   # the E32's answer to the last manual change from here, with "at" (monotonic)
 
     # -- state ---------------------------------------------------------------------
     @property
@@ -1035,9 +1170,25 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
     def current_temperature(self):
         return number((self.room or {}).get("temperature"), -40, 85)
 
+    def _stored_target(self):
+        """While the room is Off (the E32 reports no target for it): the temperature it keeps, from the plan: its week
+        program now, else its temperature without a week program."""
+        plan = self.plan_room
+        if type(plan) is not dict:
+            return None
+        if has_program(plan):
+            from .room_overview import e32_zone, program_target_now
+            zone = e32_zone(self.hass, self.entry) if self.hass is not None else dt_util.get_default_time_zone()
+            value = program_target_now(plan, datetime.now(timezone.utc), zone)
+            if value is not None:
+                return value
+        centi = plan.get("fallback_centi_c")
+        return number(centi / 100, 5, 35) if type(centi) is int else None
+
     @property
     def target_temperature(self):
-        reported = number((self.room or {}).get("setpoint"), 5, 35)
+        reported = (self._stored_target() if self._off()
+                    else number((self.room or {}).get("setpoint"), 5, 35))
         if self._pending is not None:
             value, sent = self._pending
             if sent is None or ((reported is None or abs(reported - value) >= 0.05)
@@ -1089,11 +1240,11 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
 
     @property
     def preset_mode(self):
-        if self._state() == "follow":  # 1.4: the room state Heat along only, whatever holds its target
-            return PRESET_HEAT_ALONG
         comfort = self.comfort
-        if comfort.get("override") == "boost":
+        if comfort.get("override") == "boost":  # 1.4.2: also on Heat along only, while it runs
             return PRESET_BOOST
+        if self._state() == "follow":  # 1.4: the room state Heat along only, whatever else holds its target
+            return PRESET_HEAT_ALONG
         if comfort.get("override") in OVERRIDES:
             target = number(comfort.get("target_c"), 5, 35)
             levels = program_levels(self.plan_room, comfort_options(self.entry))
@@ -1115,7 +1266,9 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
                 # 1.4.1: why the thermostat is off although the room is on: "summer" (the house mode Summer), else None.
                 "reason": "summer" if self._summer() else None,
                 "window": comfort.get("window"), "override": comfort.get("override"),
-                "until": _iso(comfort.get("until")), "waiting_for_clock": comfort.get("waiting_for_clock") is True,
+                # 1.4.2: what the last manual change did (next, timed, fixed) and until when.
+                **self._applied(comfort),
+                "waiting_for_clock": comfort.get("waiting_for_clock") is True,
                 "setpoint_source": room.get("setpoint_source"),
                 "away": away.get("on") is True, "away_source": away.get("source"),
                 "away_until": _iso(away.get("until")),
@@ -1133,6 +1286,25 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
                 "smart_warm_up": self._smart_warm_up(),
                 # The room's setting device: which one, what was written and taken, the last failure.
                 **setting_device_attributes(self.hass, self.entry, self.room_id, self.plan_room)}
+
+    def _applied(self, comfort):
+        """{"applied", "until"}: the running change as the E32 reports it ("next" or "timed" with its end); else, for a
+        minute after a manual change from here, the E32's answer (until the telemetry reports it), and "fixed" while
+        the room without a week program keeps the temperature that change gave it. None otherwise."""
+        override, until = comfort.get("override"), _iso(comfort.get("until"))
+        if override in ("next", "timed"):
+            return {"applied": override, "until": until}
+        answer = self._answer
+        if answer is None or override == "boost":
+            return {"applied": None, "until": until}
+        fresh = time.monotonic() - answer["at"] < PENDING_SECONDS
+        if answer["applied"] in ("next", "timed") and fresh:
+            return {"applied": answer["applied"], "until": until or _iso(answer.get("until"))}
+        plan = self.plan_room
+        if (answer["applied"] == "fixed" and not has_program(plan)
+                and (fresh or (plan or {}).get("fallback_centi_c") == int(round(answer["temperature"] * 100)))):
+            return {"applied": "fixed", "until": None}
+        return {"applied": None, "until": until}
 
     @staticmethod
     def _next_reset(room):
@@ -1219,69 +1391,70 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
     def _inactive(self):
         return (self.room or {}).get("state") == "inactive" or (self.plan_room or {}).get("state") == "inactive"
 
-    async def _ensure_active(self, leave_heat_along=False):
-        """Switch the room on when it is off; leave_heat_along (1.4, issue #10: a temperature, the Heat mode or a
-        preset): to On, also from Heat along only and from Off that would return to it."""
-        from .room_plan import on_state, set_state
-        if self._inactive():
-            # E32 1.3: a room switched off from Heat along only goes back to it when it is just switched on.
-            await self._change_plan(set_state("active" if leave_heat_along else on_state(self.plan_room)))
-        elif leave_heat_along and self._state() == "follow":
-            await self._change_plan(set_state("active"))
+    def _off(self):
+        """Off as a choice of the room's state: the E32 reports it Off, or our plan write (newer than the report)
+        switched it off; not an "Off until" that has passed while the E32 already runs the room again (E32 1.4.1)."""
+        return self._inactive() and not off_until_ended(self.plan_room, self.room)
 
-    def _one_sign_in(self, leave_heat_along=False):
-        """R4-27: switching a room on (or out of Heat along only) and its new target share one E32 sign-in
-        (RoomPlanLink.async_session)."""
-        switching = self._inactive() or (leave_heat_along and self._state() == "follow")
-        session = getattr(self.link, "async_session", None) if switching else None
+    def _one_sign_in(self, needed):
+        """R4-27, HC-09: the requests of one action share one E32 sign-in (RoomPlanLink.async_session) when it makes
+        more than one; a single request signs in as before (a newer one for the same room still supersedes it)."""
+        session = getattr(self.link, "async_session", None) if needed else None
         return session() if session is not None else nullcontext()
 
-    async def async_hold(self, temperature):
-        """A new target: until the next switch point, else for the configured time, else the plan's fixed target."""
-        plan = self.plan_room or {}
-        schedule = plan.get("schedule")
-        has_program = (type(schedule) is list and any(day for day in schedule)) or bool(plan.get("week"))
-        if not has_program and not plan.get("setpoint_entity"):
-            from .room_plan import set_fallback
-            await self._change_plan(set_fallback(int(round(temperature * 2)) * 50), ("fallback", self.room_id))
-            if self.comfort.get("override") in OVERRIDES:
-                await self._command(override_command(self.room_id, "none"))
-            return
-        if has_program:
-            try:
-                return await self._command(override_command(self.room_id, "next", temperature))
-            except ServiceValidationError as err:
-                if err.translation_key not in ("comfort_no_clock", "comfort_no_schedule"):
-                    raise
-        minutes = comfort_options(self.entry)["override_minutes"]
-        return await self._command(override_command(self.room_id, "timed", temperature, minutes))
+    def _heal_needed(self):
+        """E32 1.4.1: a passed "Off until" still in the plan (async_heal_off_until writes it first)."""
+        return not manual_supported(self.link) and off_until_ended(self.plan_room, self.room)
+
+    async def _manual(self, temperature):
+        """One manual change (async_manual_change); remembers the E32's answer for the attributes."""
+        answer = await async_manual_change(self.link, self.room_id, temperature,
+                                           running=self.comfort.get("override"), status_room=self.room)
+        if answer is not None:
+            self._answer = {**answer, "at": time.monotonic()}
+        if self.hass is not None and self.entity_id:
+            self.async_write_ha_state()
+        return answer
 
     async def async_set_temperature(self, **kwargs):
+        """1.4.2: a temperature never changes the room's state. A mode sent with it (cards send "heat" while
+        dragging) is ignored, except Off."""
         self._refuse_in_summer()
         temperature = kwargs.get("temperature")
         if temperature is None:
             return
         if kwargs.get("hvac_mode") == HVACMode.OFF:
             return await self.async_set_hvac_mode(HVACMode.OFF)
-        async with self._target_pending(float(temperature)), self._one_sign_in(True):
-            await self._ensure_active(leave_heat_along=True)
-            await self.async_hold(float(temperature))
+        value = half_up(temperature)
+        async with self._target_pending(value):
+            await self._manual(value)
 
     async def async_set_hvac_mode(self, hvac_mode):
-        from .room_plan import set_state
+        from .room_plan import on_state, set_state
         self._refuse_in_summer()
+        running = self.comfort.get("override") in OVERRIDES
         if hvac_mode == HVACMode.OFF:
             await self._change_plan(set_state("inactive"))
         elif hvac_mode == HVACMode.AUTO:
-            await self._ensure_active()
-            if self.comfort.get("override") in OVERRIDES:
-                await self._command(override_command(self.room_id, "none"))
+            # Back to the week program; from Off to the state it had (On, or Heat along only, 1.3).
+            off, heal = self._off(), self._heal_needed()
+            async with self._one_sign_in((off or heal) and running):
+                if off:
+                    await self._change_plan(set_state(on_state(self.plan_room)))
+                elif heal:
+                    await async_heal_off_until(self.link, self.room_id, self.room)
+                if running:
+                    await self._command(override_command(self.room_id, "none"))
         elif hvac_mode == HVACMode.HEAT:
-            # Off: back to what it was (1.3); Heat along only: Heat means On (1.4).
-            await self._ensure_active(leave_heat_along=not self._inactive())
+            # Off: back to the state it had, no temperature. Otherwise the target it has now as a manual change, when
+            # nothing holds the room; Heat along only stays Heat along only (1.4.2).
+            if self._off():
+                await self._change_plan(set_state(on_state(self.plan_room)))
+                return
             target = self.target_temperature
-            if self.comfort.get("override") not in OVERRIDES and target is not None:
-                await self.async_hold(target)
+            if not running and target is not None:
+                async with self._target_pending(half_up(target)):
+                    await self._manual(target)
         else:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="room_state_invalid")
 
@@ -1292,48 +1465,63 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         await self.async_set_hvac_mode(HVACMode.OFF)
 
     async def async_set_preset_mode(self, preset_mode):
+        from .room_plan import set_state
         self._refuse_in_summer()
         if preset_mode == PRESET_HEAT_ALONG and preset_mode in self.preset_modes:
             # The same plan write as the room's Heating select (also from Off); its target stays as it is.
-            from .room_plan import set_state
             await self._change_plan(set_state("follow"))
         elif preset_mode == PRESET_BOOST:
-            await self._ensure_active(leave_heat_along=True)
-            await self._command(override_command(self.room_id, "boost"))
+            # The room's maximum for an hour; the state stays (on Heat along only: valves open, no heat request).
+            # The E32 refuses it on a room that is Off.
+            heal = self._heal_needed()
+            async with self._one_sign_in(heal):
+                if heal:
+                    await async_heal_off_until(self.link, self.room_id, self.room)
+                await self._command(override_command(self.room_id, "boost"))
         elif preset_mode in LEVEL_PRESETS:
-            levels = program_levels(self.plan_room, comfort_options(self.entry))
-            async with self._target_pending(levels[LEVEL_PRESETS[preset_mode]]), self._one_sign_in(True):
-                await self._ensure_active(leave_heat_along=True)
-                await self.async_hold(levels[LEVEL_PRESETS[preset_mode]])
+            # The level of the room's week planner as a manual change, like a temperature.
+            level = program_levels(self.plan_room, comfort_options(self.entry))[LEVEL_PRESETS[preset_mode]]
+            async with self._target_pending(half_up(level)):
+                await self._manual(level)
         elif preset_mode == PRESET_NONE:
             # Back to the week program; the house mode (away, holiday) is its own select (e32_house.py). From Heat
-            # along only: On (1.4); a room that is off stays off.
-            if self._state() == "follow":
-                from .room_plan import set_state
-                await self._change_plan(set_state("active"))
-            if self.comfort.get("override") in OVERRIDES:
-                await self._command(override_command(self.room_id, "none"))
+            # along only: On (1.4, V7: the thermostat's one way back to On); a room that is off stays off.
+            running, follow = self.comfort.get("override") in OVERRIDES, self._state() == "follow"
+            async with self._one_sign_in(running and follow):
+                if running:
+                    await self._command(override_command(self.room_id, "none"))
+                if follow:
+                    await self._change_plan(set_state("active"))
         else:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="room_state_invalid")
 
     # -- actions (services.yaml) --------------------------------------------------
     async def async_set_room_override(self, mode, temperature=None, duration_minutes=None):
+        """The action "Temporary temperature for a room": only the room's target changes, never its state (1.4.2: the
+        E32 refuses it on a room that is Off). until_next needs a week program; timed without a duration: 120 min."""
         self._refuse_in_summer()
         if mode not in ("boost", "timed", "until_next"):
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="room_state_invalid")
-        await self._ensure_active()
+        if mode != "boost":
+            if temperature is None:
+                temperature = self.target_temperature
+            if temperature is None or not self.min_temp <= float(temperature) <= self.max_temp:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="room_setpoint_outside_limits",
+                    translation_placeholders={"minimum": f"{self.min_temp:g}", "maximum": f"{self.max_temp:g}"})
+            if mode == "until_next" and not has_program(self.plan_room):
+                raise ServiceValidationError(translation_domain=DOMAIN, translation_key="comfort_no_schedule")
         if mode == "boost":
-            return await self._command(override_command(self.room_id, "boost", None, duration_minutes))
-        if temperature is None:
-            temperature = self.target_temperature
-        if temperature is None or not self.min_temp <= float(temperature) <= self.max_temp:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN, translation_key="room_setpoint_outside_limits",
-                translation_placeholders={"minimum": f"{self.min_temp:g}", "maximum": f"{self.max_temp:g}"})
-        if mode == "until_next":
-            return await self._command(override_command(self.room_id, "next", temperature))
-        minutes = duration_minutes or comfort_options(self.entry)["override_minutes"]
-        return await self._command(override_command(self.room_id, "timed", temperature, minutes))
+            command = override_command(self.room_id, "boost", None, duration_minutes)
+        elif mode == "until_next":
+            command = override_command(self.room_id, "next", temperature)
+        else:
+            command = override_command(self.room_id, "timed", temperature, duration_minutes or MANUAL_MINUTES)
+        heal = self._heal_needed()
+        async with self._one_sign_in(heal):
+            if heal:
+                await async_heal_off_until(self.link, self.room_id, self.room)
+            return await self._command(command)
 
     async def async_clear_room_override(self):
         await self._command(override_command(self.room_id, "none"))
@@ -1372,7 +1560,8 @@ def register_services(platform):
 
 
 def _wanted(hub, entry):
-    for room_id, room in hub.rooms.items():
+    # 1.4.2 (HC-03): also the rooms known while the E32 is offline (heating_link.HeatingHub.known_rooms).
+    for room_id, room in hub.known_rooms.items():
         yield room_id, lambda room=room: E32RoomClimate(hub, room, entry)
 
 
@@ -1381,6 +1570,7 @@ async def async_setup_e32_climates(hass, entry, async_add_entities):
     from .product import is_product
     if not is_product(entry):
         return
+    drop_retired_options(hass, entry)  # 1.4.2: the length of a manual change is gone (once, without a reload)
     hub = heating_hub(hass, entry)
     if hub.plan is None:
         return  # no stored controller connection: nothing can be written

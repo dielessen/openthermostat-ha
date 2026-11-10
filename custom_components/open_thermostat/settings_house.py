@@ -6,13 +6,16 @@ One section ``house`` with sub-screens (the item):
 - None: the four parts with what is set now;
 - ``presence``: who lives here, away after, the temperature when nobody is home (Configure → House → Presence);
 - ``defaults``: the room defaults (comfort and night without a week program, the pauses after a window or door
-  opens, the length of a manual change; Configure → House → Room defaults);
+  opens; Configure → House → Room defaults; 1.4.2: the length of a manual change is gone);
 - ``mode``: the house mode now and, on an E32 that plans holidays (house.holidays.v1), the planned holidays and the
   temperature on holiday (Configure → House → House mode and holiday).
 
 1.4.1: a room's window and door contacts (and their pause delays) are on the room's own screen (settings_rooms.py,
 the key ``contacts`` of a room's model); the House keeps only the defaults a room follows (``defaults``: contact_delay and
 door_delay). The items ``contacts`` and ``contacts/<room id>`` of 1.4 answer ``unknown_section``.
+
+1.4.2 (P4): every model of a screen carries ``screen`` ("presence", "defaults", "mode"; the overview none), and the
+house module recognises a screen by it, never by one of its fields.
 
 The models come from the config entry and what the hub holds; only the screen ``mode`` reads the E32 (every
 planned holiday: its status names the next two), as the options step does. Each save uses the options steps' own
@@ -36,7 +39,7 @@ from .options_house_heating import (HolidayInputError, async_change_planned_holi
 from .settings import SettingsError, _hub, register_section
 
 PARTS = ("presence", "defaults", "mode")
-DEFAULT_FIELDS = ("comfort_temperature", "eco_temperature", "contact_delay", "door_delay", "override_minutes")
+DEFAULT_FIELDS = ("comfort_temperature", "eco_temperature", "contact_delay", "door_delay")
 
 
 def _house(hass, entry):
@@ -68,15 +71,14 @@ def _holiday_error(err, field):
 def presence_model(hass, entry, house):
     current = comfort_options(entry)
     away = number(house.away.get("target_c"), *AWAY_LIMITS) if house is not None else None
-    return {"presence_entities": list(current["presence_entities"]), "away_delay": current["away_delay_min"],
-            "away_temperature": away, "has_away": house is not None}
+    return {"screen": "presence", "presence_entities": list(current["presence_entities"]),
+            "away_delay": current["away_delay_min"], "away_temperature": away, "has_away": house is not None}
 
 
 def defaults_model(entry):
     current = comfort_options(entry)
-    return {"comfort_temperature": current["comfort_c"], "eco_temperature": current["eco_c"],
-            "contact_delay": current["contact_delay_s"] / 60, "door_delay": current["door_delay_s"] / 60,
-            "override_minutes": current["override_minutes"]}
+    return {"screen": "defaults", "comfort_temperature": current["comfort_c"], "eco_temperature": current["eco_c"],
+            "contact_delay": current["contact_delay_s"] / 60, "door_delay": current["door_delay_s"] / 60}
 
 
 async def _mode_state(house):
@@ -84,7 +86,7 @@ async def _mode_state(house):
     away = house.away
     mode = house_mode(away)
     until = away.get("until") if mode == "holiday" else None
-    model = {"house_mode": mode, "modes": house_modes(away),
+    model = {"screen": "mode", "house_mode": mode, "modes": house_modes(away),
              "holiday_until": _local(until) if type(until) is int and until > 0 else "",
              "planning": supports_holidays(away)}
     periods = []
@@ -127,7 +129,7 @@ async def read_house(hass, entry, item):
     if part == "defaults":
         return defaults_model(entry)
     if house is None:  # the E32 reports no house status yet (or its firmware has none): the screen says so
-        return {"house_mode": None, "unavailable": True}
+        return {"screen": "mode", "house_mode": None, "unavailable": True}
     return (await _mode_state(house))[0]
 
 

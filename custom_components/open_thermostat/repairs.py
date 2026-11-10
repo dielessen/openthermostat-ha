@@ -113,9 +113,6 @@ async def async_create_fix_flow(hass, issue_id, data):
     from .boiler_capabilities import ISSUE as OTHER_BOILER_ISSUE, OtherBoilerRepairFlow
     if issue_id.startswith(OTHER_BOILER_ISSUE + "_"):  # a different boiler: confirm it on the E32 (E4)
         return OtherBoilerRepairFlow(issue_id, data)
-    from .heating_plan import PLAN_READY_ISSUE, PlanReadyRepairFlow
-    if issue_id.startswith(PLAN_READY_ISSUE + "_"):  # the E32 is ready to plan the heating: the owner confirms once
-        return PlanReadyRepairFlow(issue_id, data)
     from .e32_system import TIME_ZONE_ISSUE, TimeZoneRepairFlow
     if issue_id.startswith(TIME_ZONE_ISSUE + "_"):  # the E32 takes Home Assistant's time zone
         return TimeZoneRepairFlow(issue_id, data)

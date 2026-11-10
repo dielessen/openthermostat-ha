@@ -28,6 +28,14 @@ E32 1.4.1: in the house mode Summer a room that is on says "Summer" (reason
 ``summer``, the room's ``setpoint_source`` "summer" or the house ``mode``
 "summer"): the heating stays off, frost protection stays. A room that is off
 still says so first.
+
+1.4.2 (design §3.4): a room that is Off until a moment says when and what it
+returns to: "Off until 14:00, then on again" / "then heating along again" (the
+sentences ``off_until`` / ``off_until_follow`` from the plan's inactive_until and
+follow_when_on); the sensor carries ``after`` (what the room returns to when it
+is switched on, "active" or "follow", from the plan) and ``room_state`` (the
+room's state as the E32 reports it), so the card labels a room on Heat along only
+also while a boost or a manual change runs ("Heat along only · Boost until 21:00").
 """
 from __future__ import annotations
 
@@ -41,10 +49,10 @@ from homeassistant.core import callback
 from .heating_link import RoomEntity, number
 
 # The room status card's module (served and loaded with the week planner's, week_planner.card_modules).
-CARD_URL = "/open_thermostat/room-status-card-1.4.1.js"
+CARD_URL = "/open_thermostat/room-status-card-1.4.2.js"
 # The Overview's house card (E32 rc.5, frontend/house-card.js): what the boiler does now, today in figures, the day
 # so far and, in a house with one room switched on, that room. The seventh card module, versioned like the others.
-HOUSE_CARD_URL = "/open_thermostat/house-card-1.4.1.js"
+HOUSE_CARD_URL = "/open_thermostat/house-card-1.4.2.js"
 HOUSE_CARD_TYPE = "custom:openthermostat-house"
 # Yesterday's headline figures on the Learning view, large as on the house card (the same module, house-card.js).
 YESTERDAY_CARD_TYPE = "custom:openthermostat-yesterday"
@@ -56,7 +64,8 @@ REASONS = ["off", "summer", "window_open", "window_pending", "no_measurement", "
            "follow", "heating", "wants_heat", "warm_enough"]
 # The sentence of each variant (strings.json state_attributes.line) and the values it uses.
 LINES = {
-    "off": (), "summer": (), "window_open": (), "window_open_contact": ("contact", "since"),
+    # 1.4.2: Off until a moment, then back to On or to Heat along only (design §3.4).
+    "off": (), "off_until": ("until",), "off_until_follow": ("until",), "summer": (), "window_open": (), "window_open_contact": ("contact", "since"),
     "window_pending": (), "window_pending_contact": ("contact",), "no_measurement": (),
     # E32 1.0.1 names the kind that pauses the room (comfort.opening) when no open contact can be named.
     "window_open_window": (), "window_open_door": (), "window_pending_window": (), "window_pending_door": (),
@@ -74,11 +83,11 @@ PRESENCE = ["room_home", "room_away", "house_home", "house_away"]
 # The Boiler view's "Now" card (E32 rc.5, frontend/boiler-now-card.js): what the boiler does now in a band of its
 # colour with its display code in words, the water to the heating and back, the burner power and its starts as large
 # figures. The eighth card module, versioned like the others.
-BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.4.1.js"
+BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.4.2.js"
 BOILER_NOW_CARD_TYPE = "custom:openthermostat-boiler-now"
 # 1.4.1 (CONTRACT-1.4.1 §9): the house banner at the top of every dashboard view (frontend/openthermostat-house-banner.js):
 # empty unless the house is in summer mode, then the summer sentence and "Switch summer mode off". The ninth card module.
-HOUSE_BANNER_URL = "/open_thermostat/openthermostat-house-banner-1.4.1.js"
+HOUSE_BANNER_URL = "/open_thermostat/openthermostat-house-banner-1.4.2.js"
 HOUSE_BANNER_TYPE = "custom:openthermostat-house-banner"
 
 
@@ -134,14 +143,26 @@ def warmup_rise(room, now, zone):
     return at.astimezone(timezone.utc)
 
 
-def room_reason(room, status=None, contact=None, warmup=None, rise=None):
+def after_off(plan_room):
+    """What a room that is Off returns to when it is switched on (or its "Off until" ends): "follow" (Heat along
+    only, E32 1.3's follow_when_on) or "active"; None without a plan room."""
+    if type(plan_room) is not dict:
+        return None
+    from .room_plan import on_state
+    return on_state(plan_room)
+
+
+def room_reason(room, status=None, contact=None, warmup=None, rise=None, plan_room=None, now=None):
     """Why the room heats or not: a RoomReason, or None without a room.
 
     room: one room of the E32 status; status: the house (mode, request, away,
     burner); contact: the OpenContact HA sees open in this room (only used
     while the E32 itself reports the window open or pending; of the kind the
     E32 names, see RoomReasonSensor._contact); rise: E32 1.3, the moment the
-    room warms up for while it has Smart warm-up's coming target (warmup_rise).
+    room warms up for while it has Smart warm-up's coming target (warmup_rise);
+    plan_room (1.4.2): the room in the plan, for an Off room's end and what it
+    returns to (the E32's room report leaves inactive_until out); now: an aware
+    datetime (default: now).
     """
     if type(room) is not dict:
         return None
@@ -156,7 +177,13 @@ def room_reason(room, status=None, contact=None, warmup=None, rise=None):
         return RoomReason(key, line, {name: values.get(name) for name in LINES[line]})
 
     if room.get("state") == "inactive":
-        return reason("off")  # the E32's frost protection still covers it
+        # The E32's frost protection still covers it; Off until a moment says when and what it returns to (1.4.2).
+        plan = _dict(plan_room)
+        until = _utc(plan.get("inactive_until", room.get("inactive_until")))
+        if until is not None and until > (now or datetime.now(timezone.utc)):
+            follow = after_off(plan) == "follow" if plan else room.get("follow_when_on") is True
+            return reason("off", "off_until_follow" if follow else "off_until", until=until)
+        return reason("off")
     if room.get("setpoint_source") == "summer" or _dict(status.get("away")).get("mode") == "summer":
         return reason("summer")  # E32 1.4.1: summer wins over programs, changes, away and open windows
     window, kind = comfort.get("window"), opening(room)
@@ -287,6 +314,18 @@ def _program_now(week, marks, local):
     return None
 
 
+def program_target_now(plan_room, now, zone):
+    """The temperature (°C) the room's week program gives at ``now`` in the E32's time zone ``zone``, or None (no
+    program, not well-formed, or no aware time). For a room that is Off: what it keeps for when it is on."""
+    week = _schedule(plan_room)
+    if week is None or not isinstance(now, datetime) or now.tzinfo is None:
+        return None
+    local = now.astimezone(zone)
+    marks = [[None] * len(day) for day in week]
+    found = _program_now(week, marks, local)
+    return found[1] / 100 if found else None
+
+
 def program_step(plan_room, now, zone, room=None, away=None):
     """The room's week program now and its next step, for the room status card ("Comfort until 22:30, then Night
     18.0 °C"); None while the program does not set the room's target.
@@ -388,7 +427,8 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
     _attr_icon = "mdi:comment-question-outline"
     # The card's live values; the history keeps the reason itself (the room's own sensors keep the rest).
     _unrecorded_attributes = frozenset({"values", "temperature", "setpoint", "presence", "window", "opening",
-                                        "valve_position", "valve_problem", "program", "comfort_mode", "comfort_until"})
+                                        "valve_position", "valve_problem", "program", "comfort_mode", "comfort_until",
+                                        "after", "room_state"})
 
     def __init__(self, hub, room):
         self._attach_room(hub, room, "reason")
@@ -397,10 +437,13 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
     def _entry(self):
         return getattr(getattr(self, "platform", None), "config_entry", None)
 
+    def _plan_room(self):
+        plan = getattr(self.hub, "plan", None)
+        return plan.room(self.room_id) if plan is not None else None
+
     def _program(self, now=None):
         """The week program now and its next step (program_step), or None."""
-        plan = getattr(self.hub, "plan", None)
-        plan_room = plan.room(self.room_id) if plan is not None else None
+        plan_room = self._plan_room()
         if plan_room is None or self.hass is None:
             return None
         status = self.hub.status if type(self.hub.status) is dict else {}
@@ -462,7 +505,7 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
             rise = warmup_rise(room, datetime.now(timezone.utc), zone)
         else:
             rise = None
-        return room_reason(room, self.hub.status, contact, start, rise)
+        return room_reason(room, self.hub.status, contact, start, rise, self._plan_room())
 
     @property
     def native_value(self):
@@ -496,4 +539,8 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
                 "comfort_until": _iso(_utc(_dict(room.get("comfort")).get("until"))),
                 # E32 1.4 (#8): Smart warm-up as this room has it ("on" / "off": its own choice or the house switch);
                 # None on older firmware (the card then follows the house switch).
-                "smart_warm_up": room.get("smart_warm_up") if room.get("smart_warm_up") in ("on", "off") else None}
+                "smart_warm_up": room.get("smart_warm_up") if room.get("smart_warm_up") in ("on", "off") else None,
+                # 1.4.2: what the room returns to when it is switched on ("active", "follow"; from the plan) and its
+                # state now, so the card says "Heat along only" also while a boost runs.
+                "after": after_off(self._plan_room()),
+                "room_state": room.get("state") if room.get("state") in ("active", "follow", "inactive") else None}

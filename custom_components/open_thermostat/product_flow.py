@@ -553,7 +553,7 @@ class ProductOptionsFlow(MenuNavigation, NotificationOptionsSteps, HouseHeatingS
         connection = state.get("v1_connection")
         client = getattr(connection, "client", None)
         verified = bool(getattr(client, "graph_status", {}).get("readback_verified", False))
-        # The texts in the user's language (English, Dutch or Polish: strings.json, R4-24).
+        # The texts in the user's language (English or Dutch: strings.json, R4-24).
         from .options_navigation import async_flow_texts
         words = await async_flow_texts(self.hass, "configuration_status_text")
         connection_text = words["confirmed" if verified else "unconfirmed"]

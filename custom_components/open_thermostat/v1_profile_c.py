@@ -20,21 +20,16 @@ from .native_binding import native_binding_identity as _dispatch_binding
 
 ACTION_TIMEOUT_SECONDS = 10.0
 
-# (Dutch, English, Polish)
+# (Dutch, English)
 MODE_MESSAGES = {
     "local_schedule_active": ("De TV02 meldt een eigen weekprogramma. Dat kan het kamerdoel overschrijven.",
-                              "The TV02 reports automatic scheduling, which can override the room target.",
-                              "TV02 zgłasza własny program tygodniowy, który może zastąpić temperaturę docelową "
-                              "pomieszczenia."),
+                              "The TV02 reports automatic scheduling, which can override the room target."),
     "holiday_mode_active": ("De TV02 meldt een vakantieprogramma. Dat kan het kamerdoel overschrijven.",
-                            "The TV02 reports a holiday program, which can override the room target.",
-                            "TV02 zgłasza program urlopowy, który może zastąpić temperaturę docelową pomieszczenia."),
+                            "The TV02 reports a holiday program, which can override the room target."),
     "heating_disabled": ("De TV02 meldt verwarming uit; de software schakelt de kraan niet automatisch in.",
-                         "The TV02 reports heating off; software will not turn the valve on automatically.",
-                         "TV02 zgłasza wyłączone ogrzewanie; oprogramowanie nie włączy zaworu samo."),
+                         "The TV02 reports heating off; software will not turn the valve on automatically."),
     "operating_mode_unknown": ("De bedrijfsmodus van de TV02 is niet bevestigd. Controleer de kraan en laad opnieuw.",
-                               "The TV02 operating mode is unconfirmed. Check the valve, then reload.",
-                               "Tryb pracy TV02 nie jest potwierdzony. Sprawdź zawór, a potem załaduj ponownie."),
+                               "The TV02 operating mode is unconfirmed. Check the valve, then reload."),
 }
 
 

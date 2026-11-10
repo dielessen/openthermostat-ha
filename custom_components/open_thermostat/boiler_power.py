@@ -31,8 +31,6 @@ BASIS = {
            "product": "known for this boiler type", "default": "a default value: check the type plate"},
     "nl": {"gas_meter": "gemeten met je gasmeter", "boiler": "gemeld door de ketel",
            "product": "bekend voor dit keteltype", "default": "een standaardwaarde: controleer het typeplaatje"},
-    "pl": {"gas_meter": "zmierzona licznikiem gazu", "boiler": "zgłoszona przez kocioł",
-           "product": "znana dla tego typu kotła", "default": "wartość domyślna: sprawdź tabliczkę znamionową"},
 }
 
 
@@ -83,7 +81,8 @@ def basis(source, language, model=None):
     return f"{phrase}: {model}" if source == "product" and model else phrase
 
 
-# The boiler device's fallback name (device.ems_boiler) in every language: no boiler type.
+# The boiler device's fallback name (device.ems_boiler) in every language: no boiler type. "kocioł" is the name a
+# release before 1.4.2 gave it in Polish; a device registry may still hold it.
 GENERIC_BOILER_NAMES = frozenset({"boiler", "ketel", "kocioł"})
 
 

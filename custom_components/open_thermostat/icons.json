@@ -340,6 +340,12 @@
           "no_return": "mdi:thermometer-off",
           "not_driving": "mdi:water-boiler-off"
         }
+      },
+      "batteries_low": {
+        "default": "mdi:battery-alert-variant-outline",
+        "state": {
+          "0": "mdi:battery-outline"
+        }
       }
     },
     "switch": {

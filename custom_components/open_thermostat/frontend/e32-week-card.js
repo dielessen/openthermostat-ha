@@ -6,7 +6,7 @@
    panel. One save writes the program, the reset times and Smart warm-up of the room (e32_week.py).
    setConfig({entry_id, room_id, embedded: true}) (the settings panel's room screen, CONTRACT-1.4.1 §4): one room, no
    room tabs, no title, a compact save row, and the event openthermostat-week-dirty ({dirty}) on every change. */
-const EDITOR = '/open_thermostat/week-editor-1.4.1.js';
+const EDITOR = '/open_thermostat/week-editor-1.4.2.js';
 const TEXT = {
  en: {title: 'Week program', loading: 'Loading…', reading: 'Reading the week programs from the E32…', intro: 'The E32 follows this program on its own, also when Home Assistant is offline.',
   follows: 'This room follows {entity} while Home Assistant gives a target temperature; the week program applies when it gives none.',
@@ -91,67 +91,7 @@ const TEXT = {
    setup_error: 'OpenThermostat kon niet starten. Open Instellingen → Apparaten en diensten → OpenThermostat om te zien waarom en laad daarna deze pagina opnieuw.',
    invalid_resets: 'Elk terugzetmoment heeft een tijd, minstens één dag en een temperatuur in hele of halve graden nodig.', too_many_resets: 'Hoogstens vier terugzetmomenten per ruimte.',
    resets_outside_limits: 'De temperatuur van een terugzetmoment ligt buiten de temperatuurgrenzen van de ruimte.', resets_same_moment: 'Op die dag en dat tijdstip staat al een terugzetmoment.',
-   gave_up: 'De E32 antwoordt al enkele minuten niet. Controleer of hij aan staat en verbonden is en kies dan Opnieuw laden.'}},
- pl: {title: 'Program tygodniowy', loading: 'Ładowanie…', reading: 'Odczyt programów tygodniowych z E32…', intro: 'E32 sam realizuje ten program, także gdy Home Assistant jest offline.',
-  follows: 'To pomieszczenie stosuje {entity}, gdy Home Assistant podaje temperaturę docelową; gdy jej nie podaje, obowiązuje program tygodniowy.',
-  save: 'Zapisz w E32', saving: 'Zapisywanie…', discard: 'Odrzuć zmiany', remove: 'Usuń program tygodniowy', reload: 'Wczytaj ponownie', unsaved: 'Niezapisane zmiany',
-  reloadConfirm: 'Wczytać ponownie i odrzucić niezapisane zmiany?',
-  waiting: 'Czekanie na E32…', retrying: 'Ponowna próba…',
-  outdated: 'OpenThermostat został zaktualizowany. Wczytaj stronę ponownie (Ctrl+F5), aby użyć nowej wersji tej karty.',
-  saved: 'Zapisano w E32.', removedNote: 'Bez programu tygodniowego pomieszczenie utrzymuje stałą temperaturę {value}.', rooms: 'Pomieszczenia',
-  none: 'Brak pomieszczeń. Dodaj je na panelu OpenThermostat w Ustawienia → Pomieszczenia.',
-  resetMark: 'Godzina powrotu {time}: {value}', states: {active: 'Włączone', follow: 'Grzeje tylko razem z innymi', inactive: 'Wyłączone'},
-  stateShort: {active: 'wł.', follow: 'razem', inactive: 'wył.'},
-  resetNote: 'Godzina powrotu: o tej godzinie kończy się każda ręczna zmiana i pomieszczenie przyjmuje tę wartość; E32 nie dąży do niej z wyprzedzeniem.',
-  resets: 'Godziny powrotu', add: 'Godzina powrotu', addLabel: 'Dodaj godzinę powrotu', resetsNone: 'Brak godzin powrotu.', full: 'Najwyżej cztery godziny powrotu na pomieszczenie.',
-  resetN: 'Godzina powrotu {n}', editN: 'Zmień godzinę powrotu {n}', removeN: 'Usuń godzinę powrotu {n}',
-  time: 'Godzina', days: 'Dni', value: 'Wartość', temperature: 'Temperatura', everyDay: 'Codziennie', workdays: 'Dni robocze',
-  earlier: '15 minut wcześniej', later: '15 minut później', warmer: 'O pół stopnia cieplej', cooler: 'O pół stopnia chłodniej', removeReset: 'Usuń', done: 'Gotowe',
-  valueHelp: {temperature: 'Pomieszczenie przyjmuje tę temperaturę do następnego punktu przełączenia.', active: 'Pomieszczenie może prosić o ciepło.',
-   follow: 'Pomieszczenie zachowuje swoją temperaturę docelową, a zawory grzejnikowe otwierają się dla niej, ale nigdy nie prosi o ciepło; nagrzewa się, gdy kocioł grzeje dla innych pomieszczeń.',
-   inactive: 'Pomieszczenie nie prosi o ciepło.'},
-  badTime: 'Wpisz godzinę, na przykład {example}.', pickDay: 'Wybierz co najmniej jeden dzień.', sameMoment: 'Na ten dzień i tę godzinę jest już ustawiona godzina powrotu.',
-  dayShort: ['pon', 'wt', 'śr', 'czw', 'pt', 'sob', 'nd'], dayNames: ['poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota', 'niedziela'],
-  textTitle: 'Godziny powrotu', textHelp: 'Jedna w linii, na przykład: mon-fri 22:00 14 lub daily 23:00 heat along', textApply: 'Zastosuj godziny powrotu',
-  textBad: 'Nie można odczytać linii {line}: {text}', textOutside: 'Linia {line}: temperatura jest poza limitami temperatury pomieszczenia.',
-  textSame: 'Linia {line}: na ten dzień i tę godzinę jest już ustawiona godzina powrotu.', textApplied: 'Zastosowano godziny powrotu.',
-  smart: 'Inteligentne nagrzewanie', smartChoices: {house: 'Jak cały dom', on: 'Włączone', off: 'Wyłączone'},
-  smartHelp: {house: 'Zgodnie z inteligentnym nagrzewaniem domu (Ogrzewanie i kocioł).', on: 'To pomieszczenie jest ciepłe w swoich punktach przełączenia.', off: 'To pomieszczenie zaczyna grzać dopiero w swoich punktach przełączenia.'},
-  errors: {plan_changed: 'Plan pomieszczeń został zmieniony gdzie indziej. Wczytaj ponownie, aby zobaczyć aktualny program; Twoje zmiany nie zostały zapisane.',
-   week_changed: 'Ten program tygodniowy został zmieniony gdzie indziej. Wczytaj ponownie, aby zobaczyć aktualny program; Twoje zmiany nie zostały zapisane.',
-   plan_too_large: 'Plan jest za duży dla E32: użyj mniej punktów przełączenia lub pomieszczeń.', storage_full: 'Pamięć E32 jest pełna. Usuń punkty przełączenia lub pomieszczenie i zapisz ponownie.',
-   save_unconfirmed: 'E32 nie potwierdził zapisu. Wczytaj ponownie i sprawdź program.', room_missing: 'To pomieszczenie już nie istnieje w E32. Wczytaj ponownie.',
-   password_changed: 'Hasło E32 zostało zmienione. Połącz E32 ponownie w ustawieniach integracji.', unreachable: 'E32 jest nieosiągalny. Sprawdź połączenie i spróbuj ponownie.',
-   invalid_schedule: 'Najwyżej 6 punktów przełączenia na dzień, każdy o innej godzinie.', invalid_schedule_limits: 'Każda temperatura musi mieścić się między minimum a maksimum pomieszczenia.',
-   unavailable: 'Plan pomieszczeń E32 nie jest dostępny dla tej instalacji.', unauthorized: 'Tylko administratorzy Home Assistant mogą zmieniać programy tygodniowe.',
-   rejected: 'E32 odrzucił program. Wczytaj ponownie i spróbuj jeszcze raz.', editor: 'Nie udało się wczytać planera tygodniowego. Po aktualizacji OpenThermostat wczytaj stronę ponownie (Ctrl+F5).',
-   not_ready: 'OpenThermostat jeszcze się uruchamia albo E32 nie jest jeszcze połączony. Ta karta sama spróbuje ponownie.',
-   disabled: 'Ta instalacja OpenThermostat jest wyłączona. Włącz ją w Ustawienia → Urządzenia i usługi → OpenThermostat.',
-   unknown_command: 'Ta strona nie pasuje do zainstalowanego OpenThermostat. Po aktualizacji OpenThermostat wczytaj stronę ponownie (Ctrl+F5); jeśli to nie pomoże, uruchom ponownie Home Assistant.',
-   session_capacity: 'E32 ma zbyt wiele otwartych logowań (na przykład własną stronę w innych przeglądarkach). Ta karta wkrótce spróbuje ponownie.',
-   try_again_later: 'Zbyt wiele prób logowania do E32. Ta karta wkrótce spróbuje ponownie.',
-   setup_error: 'Nie udało się uruchomić OpenThermostat. Otwórz Ustawienia → Urządzenia i usługi → OpenThermostat, aby zobaczyć dlaczego, a potem wczytaj tę stronę ponownie.',
-   invalid_resets: 'Każda godzina powrotu wymaga godziny, co najmniej jednego dnia i temperatury w pełnych lub połówkowych stopniach.', too_many_resets: 'Najwyżej cztery godziny powrotu na pomieszczenie.',
-   resets_outside_limits: 'Temperatura godziny powrotu jest poza limitami temperatury pomieszczenia.', resets_same_moment: 'Na ten dzień i tę godzinę jest już ustawiona godzina powrotu.',
-   gave_up: 'E32 nie odpowiada od kilku minut. Sprawdź, czy jest włączony i połączony, a potem wybierz Wczytaj ponownie.'}}};
-// The planner in Polish (week-editor.js has English and Dutch, as the E32 pages; it takes this table as `text`).
-// The program text keeps the English day names and decimal point, as the options flow reads and writes it.
-const PLANNER_PL = {days: ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'], short: ['pon', 'wt', 'śr', 'czw', 'pt', 'sob', 'nd'],
-  text: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], names: {comfort: 'Komfort', eco: 'Eko', night: 'Noc'}, levels: 'Poziomy temperatury',
-  warmer: '{level} cieplej', cooler: '{level} chłodniej', custom: 'Własna temperatura', template: 'Zacznij od szablonu', choose: 'Wybierz…',
-  templates: {work: 'Dni robocze i weekend', home: 'Praca z domu', daily: 'Codziennie tak samo'}, undo: 'Cofnij',
-  applied: 'Zastosowano: {name}. Cofnij przywraca poprzedni program.', hint: 'Dotknij bloku, aby go zmienić, przeciągnij linię, aby przesunąć godzinę.',
-  empty: 'Brak programu: wybierz szablon, aby zacząć.', copyDay: '{day}: kopiuj', copyTo: '{day}: kopiuj do', workdays: 'Dni robocze', weekend: 'Weekend', all: 'Wszystkie dni',
-  copy: 'Kopiuj', cancel: 'Anuluj', pickDay: 'Wybierz co najmniej jeden dzień.', copied: 'Skopiowano: {day}.', block: '{day} {from}–{to}', inherited: 'trwa od poprzedniego dnia',
-  level: 'Poziom', starts: 'Od godziny', earlier: '15 minut wcześniej', later: '15 minut później', split: 'Podziel blok', remove: 'Usuń punkt przełączenia',
-  prev: 'Poprzedni blok', next: 'Następny blok', close: 'Gotowe', full: 'Najwyżej 6 punktów przełączenia na dzień.', short15: 'Ten blok jest za krótki, by go podzielić.',
-  warmerNight: 'Noc jest teraz cieplejsza niż Komfort. To dozwolone; sprawdź, czy tego chcesz.', copyShort: 'Kopiuj…',
-  blocks: 'Bloki: {day}', limits: 'Utrzymuj temperatury między {min} a {max}.', preview: 'Podgląd tygodnia',
-  advanced: 'Zaawansowane: edytuj jako tekst', textHelp: 'Jedna linia na grupę dni, na przykład: mon-fri: 06:30 20.5; 22:30 18', apply: 'Zastosuj tekst',
-  bad: 'Nie można odczytać linii {line}: {text}', outside: 'Linia {line}: temperatury muszą mieścić się między {min} a {max}.', many: 'Linia {line}: najwyżej 6 punktów przełączenia na dzień.',
-  textApplied: 'Zastosowano tekst.', inF: 'Temperatury w °F.',
-  warmUp: 'Inteligentne nagrzewanie jest włączone: pomieszczenie jest ciepłe o ustawionych godzinach.',
-  warmUpOff: 'Inteligentne nagrzewanie jest wyłączone: grzanie zaczyna się dopiero o ustawionej godzinie.'};
+   gave_up: 'De E32 antwoordt al enkele minuten niet. Controleer of hij aan staat en verbonden is en kies dan Opnieuw laden.'}}};
 // The planner's Dutch (week-editor.js T.nl, verbatim but for the two hint lines, one short line each in the HA card:
 // the editor takes a host's table over English, so a table it gets must be whole; test/week-editor.test.cjs checks it).
 const PLANNER_NL = {days: ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'], short: ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'],
@@ -163,7 +103,7 @@ const PLANNER_NL = {days: ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijd
   copy: 'Kopiëren', cancel: 'Annuleren', pickDay: 'Kies minstens één dag.', copied: '{day} gekopieerd.', block: '{day} {from}–{to}', inherited: 'loopt door van de dag ervoor',
   level: 'Niveau', starts: 'Begint om', earlier: '15 minuten eerder', later: '15 minuten later', split: 'Blok splitsen', remove: 'Schakeltijd verwijderen',
   prev: 'Vorig blok', next: 'Volgend blok', close: 'Klaar', full: 'Maximaal 6 schakeltijden per dag.', short15: 'Dit blok is te kort om te splitsen.',
-  warmerNight: 'Nacht is nu warmer dan Comfort. Dat mag; controleer of het is wat je wilt.', copyShort: 'Kopieer…',
+  warmerNight: 'Nacht is nu warmer dan Comfort. Dat mag; controleer of het is wat je wilt.', copyShort: 'Kopiëren…',
   blocks: 'Blokken op {day}', limits: 'Houd temperaturen tussen {min} en {max}.', preview: 'Voorbeeld van de week',
   advanced: 'Geavanceerd: als tekst bewerken', textHelp: 'Eén regel per groep dagen, bijvoorbeeld: ma-vr: 06:30 20,5; 22:30 18', apply: 'Tekst toepassen',
   bad: 'Regel {line} is niet te lezen: {text}', outside: 'Regel {line}: temperaturen moeten tussen {min} en {max} liggen.', many: 'Regel {line}: maximaal 6 schakeltijden per dag.',
@@ -172,9 +112,9 @@ const PLANNER_NL = {days: ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijd
   warmUpOff: 'Slim opwarmen staat uit: verwarmen begint pas op de tijd die je instelt.'};
 // English: the editor's own, but for the two hint lines (one short line each; the warm-up hint names Smart warm-up).
 const PLANNER_EN = {hint: 'Tap a block to change it, drag a line to move a time.', warmUp: 'Smart warm-up is on: the room is warm at the times you set.'};
-const PLANNER = {en: PLANNER_EN, nl: PLANNER_NL, pl: PLANNER_PL};
+const PLANNER = {en: PLANNER_EN, nl: PLANNER_NL};
 // The reset times as text, as the room form reads and writes them (e32_room_flow.format_resets / parse_resets):
-// English or Dutch day and state words (Polish uses the English ones), the temperature in the user's unit.
+// English or Dutch day and state words, the temperature in the user's unit.
 const RESET_WORDS = {en: {days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], every: 'daily', states: {active: 'on', follow: 'heat along', inactive: 'off'}},
  nl: {days: ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'], every: 'dag', states: {active: 'aan', follow: 'meeverwarmen', inactive: 'uit'}}};
 const TEXT_DAYS = {};
@@ -272,8 +212,8 @@ const LOOK = `.wpe{gap:16px;font-size:var(--ot-text-m)}.wpe button,.wpe select,.
 .wpe-panel{border-color:var(--wl);padding:16px;gap:12px}.wpe-msg{border-left-color:var(--ot-accent)}
 .wpe-chart{font-size:var(--ot-text-s);opacity:.85}.wpe-chart svg{height:80px}.wpe-chart line[stroke-width="3"]{stroke-width:2}
 .wpe details{border-width:1px 0 0;border-radius:0;padding:0}.wpe summary{color:var(--wm);font-weight:500}`;
-// English, Dutch or Polish by the Home Assistant language (English otherwise).
-const language = hass => (/^(nl|pl)\b/i.exec(hass?.locale?.language || hass?.language || '')?.[1] || 'en').toLowerCase();
+// English or Dutch by the Home Assistant language (English otherwise).
+const language = hass => (/^nl\b/i.test(hass?.locale?.language || hass?.language || '') ? 'nl' : 'en');
 const fill = (s, v) => s.replace(/\{(\w+)\}/g, (a, k) => k in v ? v[k] : a);
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 const program = week => week && week.some(d => d.length) ? week : null;
@@ -838,10 +778,14 @@ const ensureDefined = (name, cls) => {
  if (document.readyState !== 'complete') window.addEventListener('load', check, {once: true});
  for (const ms of [0, 250, 1000, 3000, 10000]) setTimeout(check, ms);
  window.addEventListener('location-changed', check);
- // A HACS card may replace window.customElements at any moment (the owner's HA, 31 Oct 2026: an
- // intermittent "Configuration error" on the week view). A cheap check every 0.5 s puts the element
- // back in the registry in use; Home Assistant's error card then rebuilds the card by itself.
- setInterval(check, 500);
+ // A HACS card may replace window.customElements later (the owner's HA, 31 Oct 2026: an intermittent
+ // "Configuration error" on the week view): a cheap check every 0.5 s puts the element back in the registry in
+ // use, and Home Assistant's error card then rebuilds the card. 1.4.2 (P22): only for the first 30 s, when the other
+ // cards load; after that a navigation (location-changed) or the page coming back into view checks again, so no
+ // timer runs for ever on a wall tablet.
+ const timer = setInterval(check, 500);
+ setTimeout(() => clearInterval(timer), 30000);
+ document.addEventListener('visibilitychange', check);
  return check;
 };
 ensureDefined('openthermostat-e32-week', OpenThermostatE32Week);

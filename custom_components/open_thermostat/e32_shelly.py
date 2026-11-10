@@ -78,8 +78,7 @@ ISSUES = (*FAULT_ISSUES.values(), TOO_HOT_ISSUE, PROBE_ISSUE)
 
 # Names in a Repairs sentence (placeholders are not translated): the circuit's device and the probe roles.
 CIRCUIT_NAMES = {"en": {"floor": "Floor circuit", "radiators": "Radiator circuit"},
-                 "nl": {"floor": "Vloercircuit", "radiators": "Radiatorcircuit"},
-                 "pl": {"floor": "Obieg podłogowy", "radiators": "Obieg grzejnikowy"}}
+                 "nl": {"floor": "Vloercircuit", "radiators": "Radiatorcircuit"}}
 PROBE_NAMES = {
     "en": {"floor_supply": "Floor supply", "floor_return": "Floor return",
            **{f"loop_return_{n}": f"Floor loop {n} return" for n in range(1, 9)},
@@ -87,9 +86,6 @@ PROBE_NAMES = {
     "nl": {"floor_supply": "Aanvoer vloer", "floor_return": "Retour vloer",
            **{f"loop_return_{n}": f"Retour vloergroep {n}" for n in range(1, 9)},
            **{f"other_{n}": f"Extra sonde {n}" for n in range(1, 5)}},
-    "pl": {"floor_supply": "Zasilanie podłogi", "floor_return": "Powrót podłogi",
-           **{f"loop_return_{n}": f"Powrót pętli podłogowej {n}" for n in range(1, 9)},
-           **{f"other_{n}": f"Dodatkowa sonda {n}" for n in range(1, 5)}},
 }
 
 

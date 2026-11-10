@@ -26,8 +26,7 @@ FAULTS = frozenset({"blocking", "locking", "fault"})
 # case, a code listed here without a service number reads as unconfirmed (the rows themselves stay as they are).
 UNCONFIRMED_WITHOUT_CAUSE = frozenset({"0P"})
 UNCONFIRMED = ("Code {code} (meaning not confirmed for this boiler)",
-               "Code {code} (betekenis voor deze ketel niet bevestigd)",
-               "Kod {code} (znaczenie dla tego kotła niepotwierdzone)")
+               "Code {code} (betekenis voor deze ketel niet bevestigd)")
 CODE = re.compile(r"[-=0-9A-Za-z]{1,2}")
 # A text code field and the number field that goes with it (boiler_fields.py names).
 CODE_FIELDS = {"display_code": "service_number",
@@ -36,7 +35,7 @@ CODE_FIELDS = {"display_code": "service_number",
 
 
 def language_index(language):
-    """English, Dutch or Polish; English for any other Home Assistant language."""
+    """English or Dutch; English for any other Home Assistant language."""
     base = str(language or "en").lower().replace("_", "-").split("-")[0]
     return LANGUAGES.index(base) if base in LANGUAGES else 0
 

@@ -6,9 +6,11 @@ from homeassistant.const import __version__ as HA_VERSION
 
 PRODUCT_CONFIG = "product_configuration"
 PRODUCT_VERSION = 1
-# The Home Assistant releases this integration version is tested on (CI and the
-# release evidence in scripts/package_ha_release.py read this tuple).
-SUPPORTED_HA_VERSIONS = ("2026.10.2", "2026.10.3", "2026.10.4", "2026.11.0")
+# The Home Assistant releases this integration version is tested on, the whole
+# suite on each: the one source of the CI Core matrix and the local check
+# (scripts/ha_cores.py) and of the release evidence (scripts/package_ha_release.py).
+# MINIMUM_HA_VERSION below is tested too, without the two provenance tests.
+SUPPORTED_HA_VERSIONS = ("2026.10.4", "2026.11.0", "2026.11.1")
 # The oldest Home Assistant that works: its schema library (probatio 0.13, which
 # every form uses) and the config entry save routine below match the tested
 # releases from 2026.10.0 on. Newer releases are accepted while that save

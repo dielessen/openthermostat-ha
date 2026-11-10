@@ -26,16 +26,16 @@ their rise, 180 for a room not warm within 3 hours. Every field is optional; wha
 shown as a raw code.
 
 The sentences are the E32 House page's (house.html stateText / whyText / reasonText and its last morning line), in
-English and in its Dutch (ui-messages-house.js), so the page and Home Assistant say the same; Polish is this
-module's. While the E32 does not plan, the reason reads "If the E32 planned the heating: ...", as on the page.
+English and in its Dutch (ui-messages-house.js), so the page and Home Assistant say the same. While the E32 does not plan, the reason reads "If the E32 planned the heating: ...", as on the page.
 
 What Home Assistant adds, all on the E32 device:
 
 - the sensor "Heating plan": state = the next planned start; attributes: the planner's state and its plain line,
   the next blocks (and one line each), the expected arrival, the confidence, the reason sentence, the last morning
   and the morning check ("This morning: 6 minutes early.", with the last seven mornings in minutes);
-- when the E32 reports ``ready``: a Repairs item (an invitation, not a fault) whose one step confirms, and the
-  button "Let the E32 plan the heating", which exists only in that state. Both POST ``/config/heating/plan``
+- when the E32 reports ``ready``: the button "Let the E32 plan the heating", which exists only in that state, also
+  on the dashboard's Learning view under Today's plan (1.4.2: no Repairs item any more, an invitation is no fault;
+  issue_sync.RETIRED removes one an older version left). It POSTs ``/config/heating/plan``
   {"mode": "planning"} (controller_link.async_plan_mode, over the stored connection; the E32 answers 409
   plan_not_ready unless it is ready). The E32 never plans by itself; after a demotion it reports ``checking``
   again and the invitation returns once it is ready;
@@ -52,11 +52,10 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from homeassistant.components.button import ButtonEntity
-from homeassistant.components.repairs import RepairsFlow
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import entity_registry as er, issue_registry as ir
+from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
 from .heating_link import HubEntity, decode_document
@@ -71,9 +70,7 @@ PURPOSES = ("warmup", "hold", "preheat", "learn")
 REASON_KEYS = ("warmup", "preheat", "learn", "hold", "coast")  # "none": nothing planned, no sentence
 CONFIDENCES = ("fair", "good", "high")
 PLAN_MODES = ("checking", "planning")  # POST /config/heating/plan {"mode"} (SL-B3 item 3)
-PLAN_READY_ISSUE = "plan_ready"
 PLAN_GRACE_S = 15 * 60  # online this long without a plan: the firmware has no planner (the sensor goes)
-CONFIRM_HOLD_S = 10 * 60  # after a confirmation the invitation waits this long for the E32's new state
 UTC_LIMITS = (1e9, 4.2e9)
 MINUTE_LIMITS = (-1440 * 3, 1440 * 3)
 
@@ -164,49 +161,6 @@ TEXT = {
         "confidence": "Zekerheid: {word}.",
         "confidence.fair": "redelijk", "confidence.good": "goed", "confidence.high": "hoog",
         "your_home": "je huis",
-    },
-    "pl": {
-        "state.collecting": "E32 sam zaplanuje ogrzewanie, gdy zaufa modelowi pomieszczenia {room} i pozna Twój "
-                            "kocioł. Do tego czasu grzeje jak teraz.",
-        "state.checking": "E32 porównuje swoje plany z tym, co dzieje się naprawdę: {d} z {dd} dni, {m} z {mm} "
-                          "poranków przewidzianych z dokładnością do 20 minut. W ogrzewaniu jeszcze nic się nie "
-                          "zmienia.",
-        "state.ready": "Prognozy E32 są dobre od tygodnia. Może teraz planować ogrzewanie: ciepło na czas, przy "
-                       "mniejszej liczbie uruchomień palnika. Ty decydujesz.",
-        "state.planning": "E32 planuje ogrzewanie.",
-        "state.demoted": "W niektóre dni plan nie był wystarczająco dobry, więc E32 grzeje jak wcześniej i przez "
-                         "tydzień ponownie sprawdza swoje plany ({d} z {dd} dni). Potem zapyta Cię ponownie.",
-        "state.paused": "E32 planuje ogrzewanie, ale teraz chwilowo grzeje jak wcześniej: {why}.",
-        "why.model": "ponownie sprawdza model pomieszczenia", "why.plant": "ponownie sprawdza kocioł",
-        "why.outdoor": "brak temperatury zewnętrznej", "why.stale": "nie ma aktualnego planu",
-        "why.clock": "nie ma aktualnego planu", "why.memory": "nie ma aktualnego planu",
-        "why.guard": "w pomieszczeniu było zimniej, niż planowano",
-        "reason.warmup": "Zaczyna o {start} z wodą {flow} °C, aby w pomieszczeniu {room} było {target} °C o {time}.",
-        "reason.alt": "Z wodą {alt_flow} °C musiałby zacząć około {alt_start}, a kocioł uruchomiłby się około "
-                      "{alt_starts} razy.",
-        "reason.learn": "Tym razem próbuje wody {flow} °C, aby poznać, jak szybko nagrzewa się pomieszczenie {room}; "
-                        "zaczyna o {start}, więc o {time} w pomieszczeniu {room} i tak będzie {target} °C.",
-        "reason.preheat": "Zaczyna o {start} z wodą {flow} °C, aby w pomieszczeniu {room} było {target} °C, gdy "
-                          "wrócisz o {time}.",
-        "reason.hold": "Utrzymuje łagodne ciepło w pomieszczeniu {room} wodą {flow} °C, aby o {time} było {target} °C: "
-                       "taniej niż pozwolić mu wystygnąć i znów je nagrzać.",
-        "reason.coast": "W pomieszczeniu {room} pozostanie wystarczająco ciepło: przed {time} nie trzeba nagrzewać.",
-        "if_planned": "Gdyby E32 planował ogrzewanie: {plan}",
-        "last_plan": "Ostatnio plan zacząłby o {plan}; E32 zaczął o {e32}.",
-        "last_e32": "Ostatnio E32 zaczął o {e32}.",
-        "last_warm": "Pomieszczenie {room} było ciepłe o {arrived}.",
-        "last_cold": "Pomieszczenie {room} nie nagrzało się w ciągu 3 godzin.",
-        "morning_today": "Dziś rano: {how}.", "morning_yesterday": "Wczoraj rano: {how}.",
-        "morning_date": "Dnia {date}: {how}.",
-        "morning_early": "ciepło {n} za wcześnie", "morning_late": "ciepło {n} za późno",
-        "morning_on_time": "ciepło na czas", "morning_cold": "nie nagrzało się w ciągu 3 godzin",
-        "block": "{from}–{until}: woda {flow} °C", "tomorrow": "jutro {time}",
-        "purpose.warmup": "nagrzewanie", "purpose.hold": "utrzymanie ciepła", "purpose.preheat": "nagrzewanie na powrót",
-        "purpose.learn": "nauka",
-        "arrival": "Pomieszczenie {room} powinno być ciepłe o {time}.",
-        "confidence": "Pewność: {word}.",
-        "confidence.fair": "umiarkowana", "confidence.good": "dobra", "confidence.high": "wysoka",
-        "your_home": "Twój dom",
     },
 }
 
@@ -569,78 +523,7 @@ async def async_confirm_planning(hass, entry, hub):
     mode = answer.get("mode") if type(answer) is dict else None
     if mode not in (None, "planning"):
         raise HomeAssistantError(translation_domain=DOMAIN, translation_key="plan_confirm_unconfirmed")
-    hub.plan_confirmed_at = hub.clock()
-    ir.async_delete_issue(hass, DOMAIN, issue_id(entry))
     return answer
-
-
-# -- the invitation (Repairs) -----------------------------------------------------------------------------------
-
-
-def issue_id(entry):
-    return f"{PLAN_READY_ISSUE}_{entry.entry_id}"
-
-
-def _room_name(hass, entry, hub):
-    from .insight import room_names
-    from .learned_overview import language
-    plan = hub.heating_plan or {}
-    names = room_names(hub, hass, entry.entry_id)
-    room = plan.get("room") or lead_room(hub)
-    return names.get(room) or room or TEXT[language(hass)]["your_home"]
-
-
-@callback
-def update_issue(hass, entry, hub):
-    """The invitation while the E32 is ready for the confirmation; gone in any other state (kept while silent)."""
-    if not hub.fresh:
-        return
-    key = issue_id(entry)
-    registry = ir.async_get(hass)
-    confirmed = getattr(hub, "plan_confirmed_at", None)
-    held = confirmed is not None and 0 <= hub.clock() - confirmed < CONFIRM_HOLD_S
-    if not plan_ready(hub) or held:
-        if registry.async_get_issue(DOMAIN, key) is not None:
-            ir.async_delete_issue(hass, DOMAIN, key)
-        if not plan_ready(hub):
-            hub.plan_confirmed_at = None
-        return
-    room = _room_name(hass, entry, hub)
-    existing = registry.async_get_issue(DOMAIN, key)
-    if existing is None or (existing.translation_placeholders or {}).get("room") != room:
-        ir.async_create_issue(hass, DOMAIN, key, is_fixable=True, is_persistent=False,
-                              severity=ir.IssueSeverity.WARNING, translation_key=PLAN_READY_ISSUE,
-                              translation_placeholders={"room": room}, data={"entry_id": entry.entry_id})
-
-
-class PlanReadyRepairFlow(RepairsFlow):
-    """One step: confirm that the E32 may plan the heating from now on."""
-
-    def __init__(self, issue, data):
-        self._issue, self._data = issue, data
-
-    async def async_step_init(self, user_input=None):
-        # Home Assistant opens a repair with data={"issue_id": ...} as this step's input: never a submitted form.
-        return await self.async_step_plan_ready()
-
-    async def async_step_plan_ready(self, user_input=None):
-        entry = self.hass.config_entries.async_get_entry(self._data.get("entry_id"))
-        hub = self.hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("heating_hub") if entry else None
-        if hub is None or hub.plan is None:
-            return self.async_abort(reason="e32_rooms_unavailable")
-        room = _room_name(self.hass, entry, hub)
-        if hub.fresh and not plan_ready(hub):
-            ir.async_delete_issue(self.hass, DOMAIN, self._issue)
-            return self.async_abort(reason="plan_confirm_done")
-        if user_input is None:
-            return self.async_show_form(step_id="plan_ready", description_placeholders={"room": room})
-        try:
-            await async_confirm_planning(self.hass, entry, hub)
-        except HomeAssistantError as err:
-            _LOGGER.debug("OpenThermostat: the E32 did not take the plan confirmation: %s", err)
-            return self.async_show_form(step_id="plan_ready", description_placeholders={"room": room},
-                                        errors={"base": "plan_confirm_failed"})
-        return self.async_create_entry(data={})
 
 
 # -- set-up and tidying -----------------------------------------------------------------------------------------
@@ -668,12 +551,13 @@ def remove_stale(hass, entry, hub, fresh_since):
 
 
 def wanted_sensors(hub):
-    if hub.heating_plan is not None:
+    from .heating_link import kept_while_unknown  # 1.4.2 (HC-03): also while the E32's status is not known
+    if hub.heating_plan is not None or kept_while_unknown(hub, "hub_heating_plan"):
         yield ("heating_plan",), lambda: HeatingPlanSensor(hub)
 
 
 def watch(hass, entry, hub):
-    """Once per entry: the invitation and the tidying follow the hub. Returns the unsubscribe."""
+    """Once per entry: the tidying follows the hub. Returns the unsubscribe."""
     fresh_since = None
 
     @callback
@@ -683,7 +567,6 @@ def watch(hass, entry, hub):
             fresh_since = hub.clock()
         elif not hub.fresh:
             fresh_since = None
-        update_issue(hass, entry, hub)
         remove_stale(hass, entry, hub, fresh_since)
 
     remove = hub.add_listener(changed)

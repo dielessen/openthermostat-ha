@@ -6,6 +6,8 @@ an arbitrary REST proxy, credential store, source qualifier or MQTT writer.
 from __future__ import annotations
 
 import asyncio
+from collections import deque
+import contextlib
 from copy import deepcopy
 from dataclasses import dataclass, field
 import ipaddress
@@ -15,6 +17,7 @@ import re
 import secrets
 import socket
 from urllib.parse import urlsplit
+import weakref
 
 import aiohttp
 from aiohttp.abc import AbstractResolver
@@ -29,10 +32,81 @@ LOGOUT_TIMEOUT_S = 8
 # A sign-out the E32 did not confirm is logged as a warning at most this often (then at debug level).
 LOGOUT_WARNING_S = 600
 _logout_warned = None  # the event-loop time of the last such warning
+# 1.4.2 (HA-SESSIONS, plan 3.16, review HC-10): every E32 sign-in of this integration passes one gate per E32
+# address (SessionGate), whoever signs in: the room-plan link, the firmware entity (its version read and the
+# install with its confirmation), the daily backup and a restore, the password repair and the setup flows. At most
+# SESSION_GATE_LIMIT of them hold an E32 web session at once, from the sign-in until the sign-out is done (or
+# given up after LOGOUT_TIMEOUT_S): the E32 has only 4, and a browser on the E32's own pages keeps at least two.
+SESSION_GATE_LIMIT = 2
+# How long a sign-in waits for the gate; then it fails as if the E32 itself were full (controller_session_capacity):
+# a write waits and tries again (SESSION_WAITS), a read is tried again later, like a full E32.
+SESSION_GATE_WAIT_S = 30
 
 
 class ControllerLinkError(ValueError):
     """A bounded public error code, never a response/URL/credential exception."""
+
+
+class SessionGate:
+    """At most ``limit`` E32 web sessions of this Home Assistant at once, for one E32 (HA-SESSIONS, HC-10).
+
+    ControllerClient takes a place before POST /auth/login and gives it back when its sign-out is done (or failed),
+    so a sign-out still on its way counts too. Waiters are served in order. ``most``: the highest number of places
+    held at once (diagnostics and tests).
+    """
+
+    def __init__(self, limit=None):
+        self.limit, self.held, self.most = SESSION_GATE_LIMIT if limit is None else limit, 0, 0
+        self._waiters = deque()
+
+    def _take(self):
+        self.held += 1
+        self.most = max(self.most, self.held)
+
+    async def acquire(self, wait=None):
+        """One place; ControllerLinkError("controller_session_capacity") after ``wait`` s (SESSION_GATE_WAIT_S)."""
+        if self.held < self.limit and not self._waiters:
+            self._take()
+            return
+        waiter = asyncio.get_running_loop().create_future()
+        self._waiters.append(waiter)
+        try:
+            async with asyncio.timeout(SESSION_GATE_WAIT_S if wait is None else wait):
+                await waiter
+        except BaseException as err:
+            if waiter.done() and not waiter.cancelled():
+                self.release()  # the place came together with the timeout or a cancel: hand it on
+            else:
+                waiter.cancel()
+                with contextlib.suppress(ValueError):
+                    self._waiters.remove(waiter)
+            if isinstance(err, TimeoutError):
+                _LOGGER.debug("Home Assistant already holds %s E32 web sessions; this sign-in waits for later",
+                              self.limit)
+                raise ControllerLinkError("controller_session_capacity") from None
+            raise
+
+    def release(self):
+        """Give a place back: to the first waiter still waiting, else free."""
+        while self._waiters:
+            waiter = self._waiters.popleft()
+            if not waiter.done():
+                waiter.set_result(None)  # the place passes on: held stays the same
+                return
+        self.held = max(0, self.held - 1)
+
+
+# {event loop: {E32 address: SessionGate}}: one gate per E32 for the whole Home Assistant (every entry and flow).
+_GATES = weakref.WeakKeyDictionary()
+
+
+def session_gate(address):
+    """The gate of the E32 at ``address`` (a controller_address) in the running event loop."""
+    gates = _GATES.setdefault(asyncio.get_running_loop(), {})
+    gate = gates.get(address)
+    if gate is None:
+        gate = gates[address] = SessionGate()
+    return gate
 
 
 class ControllerLoginRejected(ControllerLinkError):
@@ -644,6 +718,8 @@ class ControllerClient:
         # From /auth/session after a login: True while the E32 still has its
         # factory password, False once changed, None on firmware that does not say.
         self.default_password = None
+        # The SessionGate whose place this client holds from its sign-in until its sign-out (HA-SESSIONS).
+        self._gate = None
 
     async def __aenter__(self):
         if self._session is not None and not self._session.closed:
@@ -801,8 +877,17 @@ class ControllerClient:
     async def async_login(self, password):
         if type(password) is not str or not 1 <= len(password) <= 128:
             raise ControllerLinkError("controller_auth_failed")
-        # Do not retain the supplied password in this object or an HA entry.
-        await self._request("POST", "/auth/login", form={"username": "admin", "password": password})
+        if self._gate is None:  # a second sign-in of the same client (after an E32 restart) keeps its place
+            gate = session_gate(self.address)
+            await gate.acquire()
+            self._gate = gate
+        try:
+            # Do not retain the supplied password in this object or an HA entry.
+            await self._request("POST", "/auth/login", form={"username": "admin", "password": password})
+        except BaseException:
+            if not self._signed_in:
+                self._leave_gate()  # refused, full or unreachable: this client holds no E32 session
+            raise
         self._signed_in = True
         session = await self._read_session()
         self._csrf = session["csrf"]
@@ -1178,8 +1263,14 @@ class ControllerClient:
         finally:
             self._csrf = None
             self._signed_in = False
+            self._leave_gate()
             self._session.cookie_jar.clear()
             await self._session.close()
+
+    def _leave_gate(self):
+        gate, self._gate = self._gate, None
+        if gate is not None:
+            gate.release()
 
 
 def _logout_unconfirmed(err):

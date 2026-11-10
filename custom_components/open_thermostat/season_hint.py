@@ -39,7 +39,6 @@ _ACTION = re.compile(r"open_thermostat_season_(on|off|no)_([0-9A-Za-z]+)_(\d{4}-
 ACTION_TITLES = {
     "en": {"on": "Switch summer mode on", "off": "Switch summer mode off", "no": "Not now"},
     "nl": {"on": "Zomerstand aanzetten", "off": "Zomerstand uitzetten", "no": "Niet nu"},
-    "pl": {"on": "Włącz tryb letni", "off": "Wyłącz tryb letni", "no": "Nie teraz"},
 }
 
 

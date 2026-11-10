@@ -129,7 +129,7 @@ set_comfort:
         text:
 set_room_override:
   name: Temporary temperature for a room
-  description: A temporary target temperature for a room. Boost heats to the room's maximum (one hour unless you choose a duration). The E32 ends the temporary temperature itself, also after a restart, and the room returns to its week program. Only the room's target temperature changes; the water temperature limits and frost protection stay.
+  description: "A temporary target temperature for a room. Boost heats to the room's maximum (one hour unless you choose a duration). The E32 ends the temporary temperature itself, also after a restart, and the room returns to its week program or its temperature without a week program. Only the room's target temperature changes, never its state: a room that is off stays off and refuses it; the water temperature limits and frost protection stay."
   target:
     entity:
       domain: climate

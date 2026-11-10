@@ -181,9 +181,6 @@ TEXT = {
            "none": "No backup yet", "room_one": "1 old Home Assistant room", "rooms": "{n} old Home Assistant rooms"},
     "nl": {"today": "Back-up van vandaag", "yesterday": "Back-up van gisteren", "days": "Back-up van {n} dagen geleden",
            "none": "Nog geen back-up", "room_one": "1 oude Home Assistant-ruimte", "rooms": "{n} oude Home Assistant-ruimtes"},
-    "pl": {"today": "Kopia z dzisiaj", "yesterday": "Kopia z wczoraj", "days": "Kopia sprzed {n} dni",
-           "none": "Brak jeszcze kopii", "room_one": "1 stare pomieszczenie Home Assistant",
-           "rooms": "Stare pomieszczenia Home Assistant: {n}"},
 }
 
 

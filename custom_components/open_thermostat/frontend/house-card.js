@@ -7,7 +7,8 @@
    phone and in one row on a wide card: the one room that is switched on (when the house has exactly one) with its
    target, hot water, gas today with its last 7 days beside it and the average day under it, and burner starts
    today (heating too while the band shows a problem, which then cannot say it); then the day so far, a strip from
-   midnight to now (heating, hot water, keeping warm) with the hours and "now" under it. The layout, sizes and
+   midnight to now (heating, hot water, keeping warm; with a hot water tank charging the tank instead of keeping warm,
+   1.4.2) with the hours and "now" under it. The layout, sizes and
    spacing are the owner's sketch (rc.5 design, Main/Overzicht-donker/Overzicht-desktop).
    HA 1.0.0rc7 completes the desktop sketch: the band also says the burner power and the boiler's display code
    ("burner 37 % · code -H"; on a wide card on its right before the house mode chip, on a phone under the words), the
@@ -47,7 +48,7 @@ const TEXT = {title: 'Your house', heating: 'Heating', status_heating: 'Heating 
  taps: '{n} taps today', taps_one: '1 tap today', taps_none: 'no taps yet today', running: 'running now', gas_today: 'Gas today',
  week: 'Last 7 days: {values}', starts_today: 'Burner starts today', idle: 'Boiler resting', attention: 'Attention: {reason}',
  all_reasons: 'All reasons', mode: 'House mode: {mode}', today: 'Today', legend_heating: 'Heating', legend_hot_water: 'Hot water',
- legend_keep_warm: 'Keeping warm', waiting: 'The E32 is not reporting.', now: 'now', warm: '{room} was warm', early: '{m} min early',
+ legend_keep_warm: 'Keeping warm', legend_charging: 'Charging the tank', waiting: 'The E32 is not reporting.', now: 'now', warm: '{room} was warm', early: '{m} min early',
  late: '{m} min late', on_time: 'on time', degree_days: 'Degree-days', target: 'target {t} °C', per_day: 'On average {value} a day (last {n} days)',
  today_since: 'Today since midnight', burner: 'burner {n} %', code: 'code {code}', water: 'water {t} °C',
  last_hour: '{n} in the last hour', would_ask: 'E32 would ask {flow} °C', no_wish: 'The E32 would not ask for heat',
@@ -55,7 +56,7 @@ const TEXT = {title: 'Your house', heating: 'Heating', status_heating: 'Heating 
  no_warmup: 'no warm-up yesterday', late_hours: '{h} h {m} min late', early_hours: '{h} h {m} min early',
  not_warm: 'not warm within 3 h', yesterday_starts: 'Burner starts per heating hour',
  yesterday_heating: 'Gas for heating (estimate)', warm_on_time: '{room}: warm on time', late_h: '{h} h late', early_h: '{h} h early'};
-// The card's own words (1.4.1), EN/NL/PL: the house mode figure (the mode names are the select's translation, these
+// The card's own words (1.4.1), EN/NL: the house mode figure (the mode names are the select's translation, these
 // the last resort; Summer and its sentence as the summer mode design §5) and "not measured" for a figure without a value.
 const OWN = {
  en: {house_mode: 'House mode', auto_who: 'Who is home decides', home_means: 'Always the week programs',
@@ -71,14 +72,7 @@ const OWN = {
   next_holiday: 'Volgende vakantie: {from} – {until}', not_measured: 'niet gemeten',
   summer_on: 'Al vijf dagen gemiddeld boven 17 °C buiten. Zomerstand aanzetten?', summer_off: 'Het wordt kouder. Zomerstand uitzetten?',
   switch_on: 'Zomerstand aanzetten', switch_off: 'Zomerstand uitzetten', mode_failed: 'De huismodus kon niet worden ingesteld: {reason}',
-  modes: {auto: 'Automatisch', home: 'Thuis', away: 'Afwezig', holiday: 'Vakantie', summer: 'Zomer'}},
- pl: {house_mode: 'Tryb domu', auto_who: 'Decyduje to, kto jest w domu', home_means: 'Zawsze programy tygodniowe',
-  away_means: 'Każde pomieszczenie najwyżej {t} °C', away_plain: 'Każde pomieszczenie najwyżej temperatura nieobecności', holiday_until: 'Do {date}',
-  summer_means: 'Ogrzewanie pozostaje wyłączone, dopóki tego nie wyłączysz; ciepła woda i ochrona przed mrozem działają.',
-  next_holiday: 'Następny urlop: {from} – {until}', not_measured: 'nie zmierzono',
-  summer_on: 'Od pięciu dni średnio powyżej 17 °C na zewnątrz. Włączyć tryb letni?', summer_off: 'Robi się chłodniej. Wyłączyć tryb letni?',
-  switch_on: 'Włącz tryb letni', switch_off: 'Wyłącz tryb letni', mode_failed: 'Nie udało się ustawić trybu domu: {reason}',
-  modes: {auto: 'Automatycznie', home: 'W domu', away: 'Nieobecność', holiday: 'Urlop', summer: 'Lato'}}};
+  modes: {auto: 'Automatisch', home: 'Thuis', away: 'Afwezig', holiday: 'Vakantie', summer: 'Zomer'}}};
 const MODE_ICON = {auto: 'mdi:home-account', home: 'mdi:home-account', away: 'mdi:home-export-outline', holiday: 'mdi:home-export-outline',
  summer: 'mdi:white-balance-sunny'};
 // The warm-on-time sensor's value for a room that did not get warm within 3 hours (the firmware's ArrivalLearner cap).
@@ -86,12 +80,17 @@ const NOT_WARM_MIN = 180;
 const DASH = '—';  // a figure not known yet: the same in every language
 const NBSP = '\u00a0';
 // What the boiler does (boiler_activity, heating_link.BOILER_ACTIVITIES): the kind in the strip and the status tone.
-const KIND = {heating: 'heat', tapping: 'water', hot_water: 'water', keep_warm: 'keep', charging: 'keep', idle: 'rest'};
+// A tank's charge is its own kind (1.4.2, review R142 F7): before, the legend called it "Keeping warm".
+const KIND = {heating: 'heat', tapping: 'water', hot_water: 'water', keep_warm: 'keep', charging: 'charge', idle: 'rest'};
 const RUNNING = new Set(['tapping', 'hot_water']);  // a tap runs (not "charging": the tank is heated)
-const ICON = {heat: 'mdi:fire', water: 'mdi:faucet', keep: 'mdi:water-thermometer', rest: 'mdi:water-boiler',
+const ICON = {heat: 'mdi:fire', water: 'mdi:faucet', keep: 'mdi:water-thermometer', charge: 'mdi:water-thermometer', rest: 'mdi:water-boiler',
  error: 'mdi:alert-circle-outline', wait: 'mdi:timer-sand'};
-const LEGEND = [['heat', 'legend_heating'], ['water', 'legend_hot_water'], ['keep', 'legend_keep_warm']];
-const ACTIVITY_EN = {idle: 'Idle', heating: 'Heating', tapping: 'Tapping', keep_warm: 'Keeping warm', charging: 'Heating the hot water tank',
+const LEGEND = [['heat', 'legend_heating'], ['water', 'legend_hot_water'], ['keep', 'legend_keep_warm'], ['charge', 'legend_charging']];
+// The legend of the day strip: heating and hot water always; keeping warm on a boiler without a tank; charging the tank
+// with a tank (the activity's hot_water_tank) or on a day that has a charge.
+const legendFor = (tank, kinds) => LEGEND.filter(([kind]) => kind === 'heat' || kind === 'water'
+ || (kind === 'keep' ? !tank : tank || kinds.has('charge')));
+const ACTIVITY_EN = {idle: 'Idle', heating: 'Heating', tapping: 'Tapping', keep_warm: 'Keeping warm', charging: 'Charging the tank',
  hot_water: 'Hot water'};
 // The room, as the room status card shows it (room-status-card.js): the tone and icon of each reason.
 const ROOM_TONE = {warm_up: 'heat', heating: 'heat', wants_heat: 'heat', boost: 'heat', away_return: 'heat', window_open: 'warn',
@@ -157,7 +156,7 @@ ha-card.dark{--mark-heat:var(--heat);--mark-water:var(--water);--mark-keep:color
 .wrap{container:house/inline-size}
 p{margin:0}
 .ic{display:flex;flex:none;width:var(--ic,24px);height:var(--ic,24px)}.ic svg{display:block;width:100%;height:100%}
-.tone-heat{--tone:var(--heat);--band:var(--band-heat)}.tone-water,.tone-keep{--tone:var(--water);--band:var(--band-water)}
+.tone-heat{--tone:var(--heat);--band:var(--band-heat)}.tone-water,.tone-keep,.tone-charge{--tone:var(--water);--band:var(--band-water)}
 .tone-rest,.tone-wait{--tone:var(--grey);--band:var(--band-rest)}.tone-error{--tone:var(--error);--band:var(--band-error)}
 [data-focus]:focus{outline:none}[data-focus]:focus-visible{outline:2px solid var(--ot-accent);outline-offset:-3px}
 .status{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:12px 16px;background:var(--band);color:#fff}
@@ -204,14 +203,14 @@ border-top:1px solid var(--oth-line)}
 .today-title{grid-area:title;margin-bottom:6px;font-size:var(--ot-text-s);line-height:var(--ot-line-s);color:var(--oth-muted)}
 .legend{grid-area:legend;display:flex;flex-wrap:wrap;gap:2px 12px;margin:6px 0 0;padding:0;list-style:none;font-size:var(--ot-text-s);color:var(--oth-muted)}
 .legend li{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.legend i{width:8px;height:8px;border-radius:50%;flex:none}
-.legend .heat{background:var(--mark-heat)}.legend .water{background:var(--mark-water)}.legend .keep{background:var(--mark-keep)}
+.legend .heat{background:var(--mark-heat)}.legend .water{background:var(--mark-water)}.legend .keep,.legend .charge{background:var(--mark-keep)}
 .strip{grid-area:strip;position:relative;height:10px;margin:4px 0}
 .strip::before{content:"";position:absolute;inset:0;border-radius:5px;background:var(--oth-track);opacity:.55}
 .seg{position:absolute;top:0;bottom:0;min-width:2px;background:var(--oth-track)}
 .seg.first{border-radius:5px 0 0 5px}.seg.last{border-radius:0 5px 5px 0}.seg.first.last{border-radius:5px}
-.seg.heat,.seg.water,.seg.keep{z-index:1;min-width:6px}
-.seg.heat::after,.seg.water::after,.seg.keep::after{content:"";position:absolute;inset:0;border-radius:5px;background:var(--fill)}
-.seg.heat{--fill:var(--mark-heat)}.seg.water{--fill:var(--mark-water)}.seg.keep{--fill:var(--mark-keep)}.seg.gap::after{left:2px}
+.seg.heat,.seg.water,.seg.keep,.seg.charge{z-index:1;min-width:6px}
+.seg.heat::after,.seg.water::after,.seg.keep::after,.seg.charge::after{content:"";position:absolute;inset:0;border-radius:5px;background:var(--fill)}
+.seg.heat{--fill:var(--mark-heat)}.seg.water{--fill:var(--mark-water)}.seg.keep,.seg.charge{--fill:var(--mark-keep)}.seg.gap::after{left:2px}
 .ticks{grid-area:ticks;position:relative;height:18px;margin-top:2px;font-size:var(--ot-text-s);line-height:var(--ot-line-s);color:var(--oth-muted);font-variant-numeric:tabular-nums}
 .ticks span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}.ticks span:first-child,.ticks .now.start{transform:none}
 .ticks .now.end{transform:translateX(-100%)}
@@ -252,7 +251,7 @@ p{margin:0}
 @container yesterday (min-width:420px){.figures{gap:16px 24px;padding:16px}}`;
 
 const locale = hass => hass?.locale?.language || hass?.language || 'en';
-const lang = hass => /^(nl|pl)\b/.exec(locale(hass))?.[1] || 'en';
+const lang = hass => /^nl\b/.test(locale(hass)) ? 'nl' : 'en';
 // Dark: Home Assistant's theme when it says so, else the browser's colour scheme (CONTRACT-1.4.1 §8).
 const darkOf = hass => {
  if (typeof hass?.themes?.darkMode === 'boolean') return hass.themes.darkMode;
@@ -305,9 +304,9 @@ const clockMoment = (hass, value, now = Date.now()) => {
  if (days === 0) return time;
  if (Math.abs(days) === 1) {
   try {
-   const word = new Intl.RelativeTimeFormat(clockLocale(hass), {numeric: 'auto'}).format(days, 'day');
-   // Polish "do"/"od"/"na" would need the genitive ("do jutra"): the time first keeps every sentence right ("do 06:30 jutro").
-   return /^pl\b/.test(clockLocale(hass)) ? time + ' ' + word : word + ' ' + time;
+   // "tomorrow" in the card's own language (English for a language it has no words for), as the sentence around it.
+   const word = new Intl.RelativeTimeFormat(lang(hass), {numeric: 'auto'}).format(days, 'day');
+   return word + ' ' + time;
   } catch (e) { /* older browser */ }
  }
  try { return new Date(ms).toLocaleString(clockLocale(hass), {weekday: 'short', day: 'numeric', month: 'short', ...clockOptions(hass)}); }
@@ -335,7 +334,7 @@ const icon = (name, attrs = {}) => {
  box.append(svg);
  return box;
 };
-// A figure's value: its number large, the words and the unit around it small and muted ("3 taps today", "Pobory dziś: 3",
+// A figure's value: its number large, the words and the unit around it small and muted ("3 taps today",
 // "2.0 m³"); words without the number ("off", "no taps yet today") a size smaller; "—" while it is not known.
 const valueOf = (text, num) => {
  const value = make('p', {class: 'value'});
@@ -658,7 +657,8 @@ class OpenThermostatHouse extends OpenThermostatCard {
  boilerWords() {
   const c = this._config, parts = [], power = this.value(c.modulation), code = this.st(c.code);
   let title = '';
-  if (power !== null) parts.push(['power', this.t('burner', {n: this.number(Math.max(0, Math.min(100, Math.round(power))))})]);
+  // As the boiler reports it: up to 140 % while some boilers heat hot water (1.4.2, review R142 F1).
+  if (power !== null) parts.push(['power', this.t('burner', {n: this.number(Math.max(0, Math.min(250, Math.round(power))))})]);
   const text = known(code) ? code.state.replace(/[\s.]/g, '') : '';
   if (text && text !== '--') {
    // A fault's cause number with it, as the Boiler tab's Now card ("3L 214"); normal operation the code alone.
@@ -920,7 +920,7 @@ class OpenThermostatHouse extends OpenThermostatCard {
   const unitText = typeof unit === 'string' && unit ? NBSP + unit : '';
   if (points.length >= 2) {
    const row = make('div', {class: 'trend'});
-   // "; " between the values: a comma is the decimal separator in Dutch and Polish.
+   // "; " between the values: a comma is the decimal separator in Dutch.
    const label = this.t('week', {values: points.map(p => this.number(p.v, 1)).join('; ') + unitText});
    row.append(box.querySelector('.value'), sparkline(points, label));
    box.append(row);
@@ -949,14 +949,15 @@ class OpenThermostatHouse extends OpenThermostatCard {
   if (Number.isFinite(current.t) && (!list.length || current.t > list[list.length - 1].t)) list.push(current);
   const pct = ms => (ms - start) / (end - start) * 100;
   const box = make('div', {class: 'today'}), legend = make('ul', {class: 'legend'});
-  for (const [kind, key] of LEGEND) {
+  const drawn = runs(list, start, now).filter(r => r.kind);
+  const shown = legendFor(activity.attributes?.hot_water_tank === true, new Set(drawn.map(r => r.kind)));
+  for (const [kind, key] of shown) {
    const li = make('li', {'data-key': kind});
    li.append(make('i', {class: kind}), this.t(key));
    legend.append(li);
   }
   const title = make('span', {class: 'today-title'}, this.t('today_since'));
-  const strip = make('div', {class: 'strip', 'data-strip': ''}), spoken = {heat: [], water: [], keep: []};
-  const drawn = runs(list, start, now).filter(r => r.kind);
+  const strip = make('div', {class: 'strip', 'data-strip': ''}), spoken = {heat: [], water: [], keep: [], charge: []};
   drawn.forEach((r, i) => {
    const prev = drawn[i - 1], colored = r.kind !== 'rest', span = this.time(r.start) + '–' + this.time(r.end);
    const word = colored ? this.t(LEGEND.find(l => l[0] === r.kind)[1]) : this.t('idle');
@@ -983,6 +984,8 @@ class OpenThermostatHouse extends OpenThermostatCard {
   return box;
  }
  // An hour mark that "now" would cover steps aside (its place is plain from the others); measured, so in any language.
+ // 1.4.2: two hour marks that would come closer than 6 px (a narrow phone, a 12-hour clock, a font that arrives late)
+ // keep their distance too: the later one steps aside, so every other mark goes when the card is too narrow.
  fitTicks() {
   const ticks = this.shadowRoot?.querySelector('.ticks'), now = ticks?.querySelector('.now');
   if (!now) return;
@@ -996,9 +999,11 @@ class OpenThermostatHouse extends OpenThermostatCard {
    return;
   }
   this._fitTries = 0;
+  let last = null;
   for (const span of hours) {
    const b = span.getBoundingClientRect();
-   if (b.right + 6 > a.left && b.left - 6 < a.right) span.style.visibility = 'hidden';
+   if ((b.right + 6 > a.left && b.left - 6 < a.right) || (last && b.left - 6 < last.right)) span.style.visibility = 'hidden';
+   else last = b;
   }
  }
 }
@@ -1100,7 +1105,14 @@ const ensureDefined = (name, cls) => {
  if (document.readyState !== 'complete') window.addEventListener('load', check, {once: true});
  for (const ms of [0, 250, 1000, 3000, 10000]) setTimeout(check, ms);
  window.addEventListener('location-changed', check);
- setInterval(check, 500);
+ // A HACS card may replace window.customElements later (the owner's HA, 31 Oct 2026: an intermittent
+ // "Configuration error" on the week view): a cheap check every 0.5 s puts the element back in the registry in
+ // use, and Home Assistant's error card then rebuilds the card. 1.4.2 (P22): only for the first 30 s, when the other
+ // cards load; after that a navigation (location-changed) or the page coming back into view checks again, so no
+ // timer runs for ever on a wall tablet.
+ const timer = setInterval(check, 500);
+ setTimeout(() => clearInterval(timer), 30000);
+ document.addEventListener('visibilitychange', check);
  return check;
 };
 ensureDefined('openthermostat-house', OpenThermostatHouse);

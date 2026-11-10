@@ -72,7 +72,7 @@ def holiday_input(start, end, now=None):
 
 
 def holiday_line(period, language="en"):
-    """One holiday in plain words, local time: "19 Dec 2030 10:00 – 3 Jan 2031 18:00" (numeric dates in Dutch and Polish)."""
+    """One holiday in plain words, local time: "19 Dec 2030 10:00 – 3 Jan 2031 18:00" (numeric dates in Dutch)."""
     def moment(utc):
         local = dt_util.as_local(dt_util.utc_from_timestamp(utc))
         if language == "en":
@@ -248,7 +248,7 @@ class HouseHeatingSteps:
 
     def _holiday_language(self):
         language = str(getattr(self.hass.config, "language", "en") or "en").split("-")[0]
-        return language if language in ("en", "nl", "pl") else "en"
+        return language if language in ("en", "nl") else "en"
 
     async def _holiday_periods(self, house):
         """Every planned holiday as the E32 holds it now (the status names only the next two)."""
@@ -274,7 +274,7 @@ class HouseHeatingSteps:
         except HomeAssistantError:
             return self.async_abort(reason="house_mode_unavailable")
         language = self._holiday_language()
-        none = {"en": "No holidays planned.", "nl": "Geen vakanties gepland.", "pl": "Brak zaplanowanych urlopów."}[language]
+        none = {"en": "No holidays planned.", "nl": "Geen vakanties gepland."}[language]
         lines = "\n".join(f"- {holiday_line(p, language)}" for p in periods) or none
         options = ["house_mode_set", "house_holiday_add", *(["house_holiday_change"] if periods else []), "house_holiday_temperature"]
         return self.async_show_menu(step_id="house_holidays", menu_options=options, description_placeholders={"holidays": lines})

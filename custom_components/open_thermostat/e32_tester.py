@@ -10,7 +10,7 @@ and:
   (Home Assistant sends nothing itself);
 - "Switch the tester program off".
 
-The texts the menu builds itself are selector.tester_text (EN/NL/PL); every request is one sign-in.
+The texts the menu builds itself are selector.tester_text (EN/NL); every request is one sign-in.
 """
 from __future__ import annotations
 

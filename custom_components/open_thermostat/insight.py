@@ -34,7 +34,7 @@ changes, dismissed when it is gone. One the owner dismissed stays dismissed unti
 over a restart of Home Assistant (a small store per installation). Notifications start only after a
 live insight message in this Home Assistant run: a retained one alone may be stale (left behind by a
 firmware downgrade) and would otherwise come back at every restart. The texts follow the Home Assistant
-language (English, Dutch or Polish), as the learned overview does; the E32 Home page says the same.
+language (English or Dutch), as the learned overview does; the E32 Home page says the same.
 """
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ TEXT = {
         "boiler.no_return": "Your boiler does not report the water coming back, so the E32 cannot see how much heat your "
                             "house takes; it still learns how your boiler holds its temperature.",
         "boiler.not_driving": "The E32 listens to your boiler once it controls the boiler itself.",
-        "minute.one": "{n} minute", "minute.few": "{n} minutes", "minute.other": "{n} minutes",
+        "minute.one": "{n} minute", "minute.other": "{n} minutes",
         "insight.gas_per_dd_up": "Yesterday used {pct} % more gas per degree of cold than usual.",
         "insight.gas_per_dd_down": "Yesterday used {pct} % less gas per degree of cold than usual.",
         "insight.starts_up": "Yesterday the burner started {pct} % more often per heating hour than usual.",
@@ -143,7 +143,7 @@ TEXT = {
         "boiler.no_return": "Je ketel meldt het terugkomende water niet, dus de E32 kan niet zien hoeveel warmte je huis "
                             "opneemt; hij leert wel hoe je ketel zijn temperatuur vasthoudt.",
         "boiler.not_driving": "De E32 luistert naar je ketel zodra hij de ketel zelf regelt.",
-        "minute.one": "{n} minuut", "minute.few": "{n} minuten", "minute.other": "{n} minuten",
+        "minute.one": "{n} minuut", "minute.other": "{n} minuten",
         "insight.gas_per_dd_up": "Gisteren ging er {pct} % meer gas per graad kou door dan normaal.",
         "insight.gas_per_dd_down": "Gisteren ging er {pct} % minder gas per graad kou door dan normaal.",
         "insight.starts_up": "Gisteren startte de brander {pct} % vaker per stookuur dan normaal.",
@@ -171,68 +171,6 @@ TEXT = {
                           "van de andere iets minder.",
         "note.loop": "De E32 vergelijkt het water dat terugkomt uit de vloergroepen over uren vloerverwarming. Zelf "
                      "verandert hij niets.",
-    },
-    # Polish: a room name stands after "pomieszczenie" (docs/UX-GLOSSARY.md), so the sentence fits any name.
-    "pl": {
-        "missing.warmup": "Musi jeszcze zobaczyć, jak szybko nagrzewa się pomieszczenie {room}.",
-        "missing.cooling": "Musi jeszcze zobaczyć, jak szybko stygnie pomieszczenie {room}.",
-        "missing.arrival": "Musi jeszcze sprawdzić, czy pomieszczenie {room} jest ciepłe na czas.",
-        "missing.curve": "Wciąż się uczy, o ile cieplejsza musi być woda, gdy na zewnątrz robi się zimniej.",
-        "missing.boiler_minimum": "Wciąż sprawdza, od jakiej temperatury wody Twój kocioł zaczyna grzać.",
-        "missing.boiler_response": "Wciąż wsłuchuje się, jak Twój kocioł utrzymuje swoją temperaturę.",
-        "missing.house": "Wciąż oblicza, jak szybko Twój dom traci ciepło.",
-        "missing.model": "Wciąż sprawdza swój model pomieszczenia {room}.",
-        "missing.track": "Jego prognozy dla pomieszczenia {room} muszą jeszcze przez kilka dni być dobre.",
-        "missing.plant": "Wciąż sprawdza najmniejszy płomień Twojego kotła i temperaturę wody, przy której pali równo.",
-        "missing.outlook": "Potrzebuje jeszcze prognozy pogody lub kilku dni temperatur zewnętrznych.",
-        "boiler.learned_both": "Twój kocioł utrzymuje około {flow} °C i odpoczywa {rest}; blisko temperatury docelowej E32 "
-                               "żąda najwyżej {ceiling} °C.",
-        "boiler.learned_ceiling": "Twój kocioł utrzymuje około {flow} °C; blisko temperatury docelowej E32 żąda najwyżej "
-                                  "{ceiling} °C.",
-        "boiler.learned_held_rest": "Twój kocioł utrzymuje około {flow} °C i odpoczywa {rest}.",
-        "boiler.learned_held": "Twój kocioł utrzymuje około {flow} °C.",
-        "boiler.learned_rest": "Twój kocioł odpoczywa {rest} za każdym razem, gdy osiągnie swoją temperaturę.",
-        "boiler.learned": "E32 nauczył się, jak Twój kocioł utrzymuje swoją temperaturę.",
-        "boiler.ceiling_off": "Z włączonym Inteligentnym nagrzewaniem E32 żądałby blisko temperatury docelowej "
-                              "najwyżej {ceiling} °C.",
-        "boiler.collecting": "E32 wciąż wsłuchuje się, jak Twój kocioł utrzymuje swoją temperaturę.",
-        "boiler.collecting_output": "Twój kocioł jeszcze sam nie utrzymał temperatury wody; każdy stopień, o który woda "
-                                    "jest cieplejsza od pomieszczeń, daje Twojemu domowi około {kw} kW. E32 słucha "
-                                    "dalej.",
-        "boiler.no_return": "Twój kocioł nie zgłasza temperatury wody powrotnej, więc E32 nie widzi, ile ciepła pobiera "
-                            "Twój dom; nadal uczy się, jak Twój kocioł utrzymuje swoją temperaturę.",
-        "boiler.not_driving": "E32 zacznie wsłuchiwać się w Twój kocioł, gdy sam będzie nim sterował.",
-        # Polish minutes: 1 minutę, 2-4 minuty (not 12-14), else minut.
-        "minute.one": "{n} minutę", "minute.few": "{n} minuty", "minute.other": "{n} minut",
-        "insight.gas_per_dd_up": "Wczoraj zużyto o {pct} % więcej gazu na stopień zimna niż zwykle.",
-        "insight.gas_per_dd_down": "Wczoraj zużyto o {pct} % mniej gazu na stopień zimna niż zwykle.",
-        "insight.starts_up": "Wczoraj palnik uruchamiał się o {pct} % częściej na godzinę grzania niż zwykle.",
-        "insight.hours_per_dd_up": "Wczoraj ogrzewanie pracowało o {pct} % dłużej na stopień zimna niż zwykle.",
-        "insight.warmup_slower": "Wczoraj pomieszczenie {room} nagrzewało się o {pct} % wolniej niż zwykle.",
-        "title.gas_per_dd_up": "Więcej gazu niż zwykle",
-        "title.gas_per_dd_down": "Mniej gazu niż zwykle",
-        "title.starts_up": "Więcej startów palnika niż zwykle",
-        "title.hours_per_dd_up": "Dłuższe grzanie niż zwykle",
-        "title.warmup_slower": "Pomieszczenie {room} nagrzewało się wolniej",
-        "mean.gas_per_dd_up": "Może to wynikać z otwartego okna lub drzwi albo z wyższej temperatury ustawionej w "
-                              "pomieszczeniu.",
-        "mean.gas_per_dd_down": "Może to wynikać ze słońca, niższego ustawienia lub krótszego pobytu w domu.",
-        "mean.starts_up": "Rzadsza, dłuższa praca oszczędza kocioł; E32 to obserwuje.",
-        "mean.hours_per_dd_up": "Może to wynikać z otwartego okna lub drzwi albo z wyższej temperatury ustawionej w "
-                                "pomieszczeniu.",
-        "mean.warmup_slower": "Otwarte okno, zamknięty zawór grzejnika lub meble przed grzejnikiem mogą spowolnić "
-                              "nagrzewanie.",
-        "note": "E32 porównuje każdy dzień ze zwykłymi dniami Twojego domu, z uwzględnieniem tego, jak było zimno. To "
-                "informacja; nie musisz nic robić.",
-        "insight.loop_warm": "Woda z pętli podłogowej {loop} wraca o {delta} °C cieplejsza niż z pozostałych.",
-        "insight.loop_cold": "Woda z pętli podłogowej {loop} wraca o {delta} °C chłodniejsza niż z pozostałych.",
-        "title.loop_warm": "Pętla podłogowa {loop} wraca cieplejsza",
-        "title.loop_cold": "Pętla podłogowa {loop} wraca chłodniejsza",
-        "mean.loop_warm": "Może być zbyt mocno otwarta: pozostałe pętle dostają wtedy mniej wody.",
-        "mean.loop_cold": "Może dostawać za mało wody: otwórz nieco bardziej jej zawór na rozdzielaczu albo nieco mniej "
-                          "zawory pozostałych.",
-        "note.loop": "E32 porównuje wodę wracającą z pętli podłogowych przez wiele godzin ogrzewania podłogowego. Sam "
-                     "niczego nie zmienia.",
     },
 }
 
@@ -325,9 +263,8 @@ def boiler_values(boiler):
 
 
 def minutes(count, lang):
-    """A whole number of minutes in words, with the plural each language needs (Polish: 1, 2-4, 5+)."""
-    form = "one" if count == 1 else "few" if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14) else "other"
-    return TEXT[lang]["minute." + form].format(n=count)
+    """A whole number of minutes in words: "1 minute", "5 minutes"."""
+    return TEXT[lang]["minute." + ("one" if count == 1 else "other")].format(n=count)
 
 
 # A held target is the boiler stopping by itself at about the E32's request; the ceiling it leaves is that request

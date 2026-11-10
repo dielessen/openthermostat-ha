@@ -194,8 +194,7 @@ class BluetoothOptionsSteps:
         from .learned_overview import language
         lang = language(self.hass)
         words = {"en": ("new name", "will be forgotten", "no changes yet"),
-                 "nl": ("nieuwe naam", "wordt vergeten", "nog geen wijzigingen"),
-                 "pl": ("nowa nazwa", "zostanie usunięty", "na razie bez zmian")}[lang]
+                 "nl": ("nieuwe naam", "wordt vergeten", "nog geen wijzigingen")}[lang]
         state = self._ble
         lines = []
         for sensor in state["sensors"]:

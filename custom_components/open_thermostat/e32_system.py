@@ -14,8 +14,10 @@ logout afterwards, so no E32 web session is left open.
   secrets stay on the E32) and used after one restart (``POST /updates/reboot``), in the
   same sign-in.
 - Repairs "The E32 uses another time zone" (checked from the daily settings backup, the time
-  zone step and every change of Home Assistant's own zone); its fix sets Home Assistant's zone
-  with the same write, and the issue clears itself once both match.
+  zone step, every change of Home Assistant's own zone and, 1.4.2, the read after every E32
+  restart: a zone changed on the E32 page restarts it, so Home Assistant sees the new zone at
+  once instead of with the next daily backup, async_read_time_zone); its fix sets Home
+  Assistant's zone with the same write, and the issue clears itself once both match.
 - the button "Restart E32" (configuration) on the product device: the E32's controlled
   restart; refused while it updates or checks new firmware.
 
@@ -313,6 +315,21 @@ async def async_write_zone(client, posix, expected=None):
     await client.async_reboot()
 
 
+async def async_read_time_zone(client):
+    """The E32's time zone (its POSIX text from GET /config/device) on a signed-in client, or None.
+
+    Part of the read after an E32 restart (room_plan.RoomPlanLink, HA-REREAD 1.4.2, review A48), in that read's one
+    sign-in: firmware without the device settings' ETag or an answer without a zone is None, never an error.
+    """
+    from .controller_link import ControllerLinkError
+    try:
+        settings, _tag = await client.async_read("/config/device")
+    except ControllerLinkError:
+        return None
+    zone = settings.get("timeZone") if type(settings) is dict else None
+    return zone if type(zone) is str and 0 < len(zone) <= 64 else None
+
+
 # -- Repairs: the E32's time zone differs from Home Assistant's --------------------------
 
 TIME_ZONE_ISSUE = "e32_time_zone"
@@ -328,8 +345,8 @@ def check_time_zone(hass, entry, posix=None):
     """Show or clear "The E32 uses another time zone" for the E32's POSIX text (None: the last one seen).
 
     Only for a Home Assistant zone the E32 knows (its Settings list); unknown on either side
-    shows nothing. Sources: the daily settings backup, the E32 time zone step, and a change of
-    Home Assistant's own time zone.
+    shows nothing. Sources: the daily settings backup, the E32 time zone step, a change of
+    Home Assistant's own time zone and the read after every E32 restart (async_read_time_zone).
     """
     state = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if state is None:

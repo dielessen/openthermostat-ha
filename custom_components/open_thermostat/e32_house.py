@@ -507,10 +507,18 @@ class HolidayTemperature(HouseEntity, NumberEntity):
         await self.house.async_holiday_temperature(value)
 
 
+# (domain, unique ID suffix) of each house entity: kept while the E32's status is not known (1.4.2, HC-03).
+_KEPT = {"HouseModeSelect": ("select", "house_mode"), "HolidayUntil": ("datetime", "holiday_until"),
+         "AwayTemperature": ("number", "away_temperature"), "HolidayTemperature": ("number", "holiday_temperature")}
+
+
 def _wanted(factory, house, condition=None):
+    from .heating_link import kept_while_unknown
+    domain, suffix = _KEPT[factory.__name__]
+
     def wanted(hub):
         away = house_away(hub)
-        if away is not None and (condition is None or condition(away)):
+        if (away is not None and (condition is None or condition(away))) or kept_while_unknown(hub, suffix, domain):
             yield factory.__name__, lambda: factory(house)
     return wanted
 

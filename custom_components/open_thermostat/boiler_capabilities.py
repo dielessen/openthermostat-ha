@@ -21,7 +21,7 @@ On the product device, once the topic arrived (older firmware: no entity, nothin
 the product, version, family, model, route, reason and the state in one sentence). For other_boiler a
 Repairs issue "A different boiler is connected", whose fix confirms the boiler on the E32
 (POST /boiler/match/acknowledge, with the stored sign-in). The same words appear in Configure ->
-Heating and boiler -> Boiler model and in "Your boiler" on the Learning tab (insight.py). EN/NL/PL,
+Heating and boiler -> Boiler model and in "Your boiler" on the Learning tab (insight.py). EN/NL,
 the plan's texts (EMSPLUS-PLAN 3.6) and E2's reason words. Since E7 the sentence follows the family (sentence_key):
 a Classic boiler keeps the Classic route, also unlisted or after another boiler; an EMS+ boiler with only its own
 passed test waits for review and is not controlled.
@@ -122,38 +122,6 @@ TEXT = {
         "product": "product {product}",
         "version": "versie {version}",
         "recognised": "Herkend op de bus: {boiler}. {sentence}",
-    },
-    "pl": {
-        "state.not_recognised": "Jeszcze nie rozpoznany: E32 czeka, aż kocioł się przedstawi.",
-        "state.read_only": "Tylko odczyt: ten model kotła nie był jeszcze testowany z OpenThermostat. E32 pokazuje jego "
-                           "wartości i to, o co by poprosił, ale nim nie steruje.",
-        "state.probe_passed": "Przetestowany przez Ciebie: E32 może sterować tym kotłem. Udostępnij wynik, aby inni też "
-                              "mogli.",
-        "state.verified": "Zweryfikowany: E32 może sterować tym kotłem.",
-        "state.other_boiler": "Podłączono inny kocioł. Sterowanie jest wyłączone do czasu potwierdzenia tego kotła.",
-        "state.read_only.classic_unlisted": "Jeszcze nie na liście: E32 steruje nim w sposób Classic, jak dotąd; "
-                                            "udostępnij nagranie, aby można go było dodać do listy.",
-        "state.read_only.classic": "Jeszcze nie testowany z OpenThermostat: E32 steruje nim w sposób Classic, jak dotąd; "
-                                   "udostępnij nagranie, aby można go było przetestować.",
-        "state.probe_passed.plus": "Przetestowany przez Ciebie: wynik czeka na ocenę; E32 jeszcze nie steruje tym kotłem.",
-        "state.other_boiler.classic": "Podłączono inny kocioł. E32 nadal steruje nim w sposób Classic; potwierdź kocioł, "
-                                      "aby został ponownie rozpoznany.",
-        "reason.awaiting_identity": "Czekam, aż kocioł się przedstawi",
-        "reason.awaiting_family": "Brak jeszcze komunikatów z kotła",
-        "reason.family_settling": "Rozpoznawanie kotła (10 minut)",
-        "reason.family_conflict": "Kocioł używa dwóch protokołów, tylko odczyt",
-        "reason.unknown_product": "Tego modelu kotła nie ma jeszcze na liście",
-        "reason.other_family": "Ten kocioł komunikuje się inaczej niż model z listy",
-        "reason.version_not_listed": "Ta wersja oprogramowania kotła nie była testowana",
-        "reason.unverified_profile": "Jeszcze nie testowany z OpenThermostat",
-        "reason.not_supported": "Nie można bezpiecznie sterować (brak czystego zatrzymania)",
-        "reason.tested_profile": "Przetestowany na tym kotle, jeszcze nie oceniony",
-        "reason.verified_profile": "Zweryfikowany dla tego modelu kotła",
-        "reason.other_boiler": "Podłączono inny kocioł",
-        "unknown_model": "Nieznany model",
-        "product": "produkt {product}",
-        "version": "wersja {version}",
-        "recognised": "Rozpoznany na magistrali: {boiler}. {sentence}",
     },
 }
 

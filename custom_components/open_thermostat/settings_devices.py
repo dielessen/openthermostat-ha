@@ -11,6 +11,26 @@ frontend/openthermostat-settings-devices.js): the three blocks of the E32's page
   optional name and its password. The password goes to the E32 only: it is in no model, no error and no log, and
   Home Assistant keeps nothing of it.
 - ``valve-add``: add a valve to a BLU Gateway by its number (200–299), as Configure does.
+- ``batteries`` (1.4.2, plan 3.5): every battery of the installation on one list (device_battery.collect: the E32's
+  Bluetooth sensors, the valves, window and door contacts, setting devices, Home Assistant temperature sources), low
+  first, under ``live.devices`` (a battery that reports a new figure never makes the save "changed elsewhere"), and
+  the one battery limit ``limit_pct`` (15, 20, 25 or 30 %) with its save key ``limit_pct``: stored in the entry
+  options without a reload; "Batteries low" counts again and the dashboard's badges follow. No sign-in on the E32.
+
+1.4.2 (plan 3.9): every block screen has its own address, read and saved on its own (deep links and the browser's
+back button work; the panel no longer keeps a screen in ``history.state``):
+
+- ``bluetooth``: the paired sensors, each with the room it measures for (``live.bluetooth``), the Search state;
+- ``pair``: the search (``live.searching``, ``live.discovery``, ``live.discovery_ended_s``); ``pair/<address>``: the
+  pairing form of one device the search heard (``heard``), its save pairs it as the action ``pair`` does;
+- ``sensor/<address>``: one sensor: its own name (a sensor without one is named after its room, ``automatic``), the
+  room it measures for (``measures_for``: one plan write makes it that room's first temperature source and takes it
+  out of every other room) and Forget sensor (``forget``);
+- ``shelly``, ``device/<id>`` (remove the device, remove valves) and ``bus`` (read-only).
+
+The Search (``ble.discovery.v1``, E32 1.4.2): the E32 names a requested search on its own (``discovery``:
+idle/queued/running, ``discovery_ended_s``), so Search is off only while one is queued or running; firmware without
+it keeps the 95 s rule (SEARCH_SECONDS).
 
 One sign-in reads the Bluetooth list, the Shelly record and the Shelly devices' state. What only informs (the
 readings and battery of a sensor through its Home Assistant entities, the rooms that use it, a device's state, the
@@ -39,6 +59,7 @@ saving, each with the requests that page makes and the integration's E32 session
 """
 from __future__ import annotations
 
+import re
 import time
 
 from .const import DOMAIN
@@ -50,6 +71,13 @@ SEARCH_SECONDS = 95
 # entry_id -> monotonic start of the last Bluetooth search the panel started (RAM only).
 _SEARCHES: dict[str, float] = {}
 CLOCK = time.monotonic  # the clock of SEARCH_SECONDS (a test moves it)
+# 1.4.2: the requested Search on its own (BleScanLifecycle.h; CONTRACT-1.4.2 §1).
+DISCOVERY_FEATURE = "ble.discovery.v1"
+DISCOVERY_STATES = ("idle", "queued", "running")
+# The screens of the section by address (plan 3.9): the blocks, and one sensor, one heard device, one Shelly device.
+BLOCKS = ("bluetooth", "pair", "shelly", "bus")
+ONE = re.compile(r"(sensor|pair)/([0-9a-f]{12})")
+DEVICE = re.compile(r"device/([A-Za-z0-9][A-Za-z0-9_.:-]{0,63})")
 # The E32's refusals of the panel's actions that Configure never meets, as the panel's codes.
 PANEL_ERRORS = {"duplicate_probe_role": "shelly_probe_role_duplicate", "invalid_probe": "shelly_probe_invalid",
                 "invalid_probe_role": "shelly_probe_invalid", "duplicate_probe": "shelly_probe_invalid",
@@ -88,20 +116,23 @@ def _failure(err):
     return SettingsError(key, **placeholders)
 
 
-async def _read_all(link):
+async def _read_all(link, bluetooth=True, shelly=True):
     """(bluetooth value or None, Shelly record or None, Shelly status or None) in one sign-in; a part this firmware
-    does not have is None."""
+    does not have (or the screen does not need) is None."""
     from .controller_link import ControllerLinkError
 
     async def read(client):
+        ble = record = None
         try:
-            ble, _tag = await client.async_bluetooth()
+            if bluetooth:
+                ble, _tag = await client.async_bluetooth()
         except ControllerLinkError as err:
             if str(err) != "controller_update_required":
                 raise
             ble = None
         try:
-            record = await client.async_shelly()
+            if shelly:
+                record = await client.async_shelly()
         except ControllerLinkError as err:
             if str(err) != "controller_update_required":
                 raise
@@ -116,24 +147,103 @@ async def _read_all(link):
     return await link.async_call(read)
 
 
-def _ble_live(hass, entry, sensors):
-    """{address: {"rooms", "temperature", "humidity", "battery"}}: the rooms that measure with each sensor (the room
-    plan Home Assistant last read) and its Home Assistant entities, whose state the panel shows."""
-    from homeassistant.helpers import entity_registry as er
-    from .heating_link import BLE_METRICS
-    hub = (hass.data.get(DOMAIN, {}).get(entry.entry_id) or {}).get("heating_hub")
+def _hub(hass, entry):
+    return (hass.data.get(DOMAIN, {}).get(entry.entry_id) or {}).get("heating_hub")
+
+
+def _plan_rooms(hub):
+    """The rooms of the room plan Home Assistant last read ([] before the first read)."""
     plan = getattr(getattr(hub, "plan", None), "plan", None)
-    rooms = plan.get("rooms", []) if type(plan) is dict else []
-    registry, prefix = er.async_get(hass), getattr(hub, "prefix", None)
+    rooms = plan.get("rooms") if type(plan) is dict else None
+    return [room for room in rooms if type(room) is dict and type(room.get("id")) is str] if type(rooms) is list else []
+
+
+def _measures(room, address):
+    """0 when the sensor is the room's first temperature source, 1 when it is a later one, None when not at all."""
+    sources = [s for s in room.get("sources") or [] if type(s) is dict]
+    for place, source in enumerate(sources):
+        if source.get("type") == "ble" and source.get("id") == address:
+            return min(place, 1)
+    return None
+
+
+def measures_for(rooms, address):
+    """The id of the room a sensor measures for: the room whose first source it is, else the first room that lists it,
+    else None."""
+    using = sorted((place, k, room["id"]) for k, room in enumerate(rooms)
+                   if (place := _measures(room, address)) is not None)
+    return using[0][2] if using else None
+
+
+def _room_name(room):
+    name = room.get("name")
+    return name.strip() if type(name) is str and name.strip() else room["id"]
+
+
+def _ble_live(hass, entry, sensors, nearby=None):
+    """{address: {"rooms", "room_ids", "measures_for", "temperature", "humidity", "battery", "shown", "automatic",
+    "rssi"}}: the rooms that measure with each sensor (the room plan Home Assistant last read), the one it measures for
+    (``measures_for``), its Home Assistant entities, whose state the panel shows, the name Home Assistant shows for it
+    (``shown``; ``automatic`` when the E32 has no own name for it: it is named after its room) and its signal when the
+    last search heard it."""
+    from homeassistant.helpers import device_registry as dr, entity_registry as er
+    from .heating_link import BLE_METRICS, ble_broadcast_name, ble_device_identifier
+    hub = _hub(hass, entry)
+    rooms = _plan_rooms(hub)
+    registry, devices, prefix = er.async_get(hass), dr.async_get(hass), getattr(hub, "prefix", None)
+    heard = {row["address"]: row.get("rssi") for row in nearby or []}
     live = {}
     for sensor in sensors:
         address = sensor["address"]
-        live[address] = {"rooms": [room.get("name") or room.get("id") for room in rooms if type(room) is dict and any(
-            type(s) is dict and s.get("type") == "ble" and s.get("id") == address for s in room.get("sources", []))]}
+        using = [room for room in rooms if _measures(room, address) is not None]
+        own = (sensor.get("name") or "").strip()
+        automatic = ble_broadcast_name({"id": address, "name": own})
+        device = (devices.async_get_device_by_identifier(ble_device_identifier(prefix, address), entry.entry_id)
+                  if prefix else None)
+        shown = own if not automatic else (device.name if device is not None and device.name else own)
+        live[address] = {"rooms": [_room_name(room) for room in using], "room_ids": [room["id"] for room in using],
+                         "measures_for": measures_for(rooms, address), "shown": shown or address,
+                         "automatic": automatic, "rssi": heard.get(address)}
         for metric in BLE_METRICS:
             live[address][metric] = (registry.async_get_entity_id("sensor", DOMAIN, f"{prefix}_e32_ble_{address}_{metric}")
                                      if prefix else None)
     return live
+
+
+def _ids_stale(hass, entry, address):
+    """True when an entity of the sensor still has an ID from an older device name (Tidy entity IDs renames it)."""
+    from homeassistant.helpers import device_registry as dr, entity_registry as er
+    from homeassistant.util import slugify
+    from .heating_link import BLE_METRICS, ble_device_identifier
+    prefix = getattr(_hub(hass, entry), "prefix", None)
+    if not prefix:
+        return False
+    device = dr.async_get(hass).async_get_device_by_identifier(ble_device_identifier(prefix, address), entry.entry_id)
+    name = (device.name_by_user or device.name) if device is not None else None
+    if not name:
+        return False
+    registry, slug = er.async_get(hass), slugify(name)
+    for metric in BLE_METRICS:
+        entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{prefix}_e32_ble_{address}_{metric}")
+        if entity_id is not None and not entity_id.split(".", 1)[1].startswith(slug):
+            return True
+    return False
+
+
+def _discovery(hass, entry, value):
+    """The Search as the panel shows it: {"discovery", "discovery_ended_s", "searching"}. With ble.discovery.v1 the
+    E32 names a requested search on its own (Search is off only while one is queued or running); firmware without it
+    keeps the 95 s rule: searching while the panel's own search is younger than SEARCH_SECONDS."""
+    features = getattr(getattr(_hub(hass, entry), "plan", None), "features", None) or ()
+    state = value.get("discovery") if type(value) is dict else None
+    if DISCOVERY_FEATURE in features and state in DISCOVERY_STATES:
+        ended = value.get("discovery_ended_s")
+        ended = ended if type(ended) is int and ended >= 0 else None
+        return {"discovery": state, "discovery_ended_s": ended, "searching": state in ("queued", "running")}
+    started = _SEARCHES.get(entry.entry_id)
+    searching = (started is not None and CLOCK() - started < SEARCH_SECONDS and type(value) is dict
+                 and value.get("scan_pending") is True)
+    return {"discovery": None, "discovery_ended_s": None, "searching": searching}
 
 
 def _shelly_model(record):
@@ -186,38 +296,247 @@ def _bus(hass, entry):
     return shown
 
 
-async def _devices(hass, entry):
-    """(link, sensors or None, record or None, status) as the E32 holds them now."""
+async def _devices(hass, entry, bluetooth=True, shelly=True):
+    """(link, sensors or None, record or None, status, the Bluetooth answer) as the E32 holds them now; a part the
+    screen does not need is not read (None)."""
     from .controller_link import ControllerLinkError
     from .e32_bluetooth import decode_sensors
     from .e32_devices import decode_record
     link = _link(hass, entry)
     try:
-        ble, record, status = await _read_all(link)
+        ble, record, status = await _read_all(link, bluetooth, shelly)
     except ControllerLinkError as err:
         raise _failure(err) from None
     sensors = decode_sensors(ble) if ble is not None else None
     record = decode_record(record) if record is not None else None
     if ble is not None and sensors is None:
         raise SettingsError("e32_settings_unreachable", error="controller_response_invalid")
-    return link, sensors, record, status
+    return link, sensors, record, status, ble
+
+
+def _shelly_part(record):
+    from .e32_devices import MAX_DEVICES, MAX_VALVES
+    return None if record is None else {"devices": _shelly_model(record), "max_devices": MAX_DEVICES,
+                                        "max_valves": MAX_VALVES}
+
+
+def _nearby(value):
+    from .e32_bluetooth import decode_nearby
+    return decode_nearby(value) if value is not None else None
 
 
 async def _read_devices(hass, entry):
-    _link_, sensors, record, status = await _devices(hass, entry)
-    from .e32_devices import MAX_DEVICES, MAX_VALVES
-    return {"bluetooth": sensors,
-            "shelly": None if record is None else {"devices": _shelly_model(record), "max_devices": MAX_DEVICES,
-                                                   "max_valves": MAX_VALVES},
-            "live": {"bluetooth": _ble_live(hass, entry, sensors or []), "shelly": _shelly_live(hass, entry, status),
-                     "bus": _bus(hass, entry)}}
+    _link_, sensors, record, status, ble = await _devices(hass, entry)
+    return {"bluetooth": sensors, "shelly": _shelly_part(record),
+            "live": {"bluetooth": _ble_live(hass, entry, sensors or [], _nearby(ble)),
+                     "shelly": _shelly_live(hass, entry, status), "bus": _bus(hass, entry),
+                     "batteries": _batteries_line(hass, entry)}}
 
 
-async def _save_devices(hass, entry, values):
+# -- one screen per address (1.4.2, plan 3.9) -------------------------------------------------------------------------
+
+def _address(item):
+    """(screen, argument) of an item of this section: ("bluetooth", None), ("sensor", "<address>"), ("device",
+    "<id>") …; SettingsError unknown_section for anything else."""
+    if item in BLOCKS:
+        return item, None
+    found = ONE.fullmatch(item) if type(item) is str else None
+    if found is not None:
+        return found.group(1), found.group(2)
+    found = DEVICE.fullmatch(item) if type(item) is str else None
+    if found is not None:
+        return "device", found.group(1)
+    raise SettingsError("unknown_section")
+
+
+async def _read_item(hass, entry, item):
+    """The model of one block screen (plan 3.9): only what that screen shows, so its token moves only with it."""
+    from .e32_bluetooth import MAX_SENSORS, guess
+    from .e32_devices import MAX_VALVES
+    screen, arg = _address(item)
+    if screen == "bus":
+        _link(hass, entry)
+        return {"screen": "bus", "live": {"bus": _bus(hass, entry)}}
+    if screen in ("shelly", "device"):
+        _link_, _sensors, record, status, _ble = await _devices(hass, entry, bluetooth=False)
+        live = {"shelly": _shelly_live(hass, entry, status)}
+        if screen == "shelly":
+            return {"screen": "shelly", "shelly": _shelly_part(record), "live": live}
+        device = next((d for d in _shelly_model(record) if d["id"] == arg), None) if record is not None else None
+        return {"screen": "device", "id": arg, "supported": record is not None, "device": device,
+                "max_valves": MAX_VALVES, "live": live}
+    _link_, sensors, _record, _status, ble = await _devices(hass, entry, shelly=False)
+    nearby, search = _nearby(ble), _discovery(hass, entry, ble)
+    paired = [s["address"] for s in sensors or []]
+    if screen == "bluetooth":
+        return {"screen": "bluetooth", "bluetooth": sensors, "max": MAX_SENSORS,
+                "live": {"bluetooth": _ble_live(hass, entry, sensors or [], nearby), **search,
+                         "battery_limit": _battery_limit(entry)}}
+    if screen == "pair" and arg is None:
+        return {"screen": "pair", "supported": sensors is not None, "paired": len(paired), "max": MAX_SENSORS,
+                "live": search}
+    if screen == "pair":
+        row = next((r for r in nearby or [] if r["address"] == arg), None)
+        kind, encryption = guess(row["name"]) if row is not None else (None, None)
+        heard = None if row is None else {"name": row["name"], "rssi": row["rssi"], "kind": kind, "encryption": encryption}
+        return {"screen": "pair_form", "address": arg, "supported": sensors is not None, "known": arg in paired,
+                "paired": len(paired), "max": MAX_SENSORS, "live": {"heard": heard}}
+    sensor = next((s for s in sensors or [] if s["address"] == arg), None)
+    if sensor is None:  # forgotten, or never paired: the panel goes back to the list
+        return {"screen": "sensor", "address": arg, "missing": True, "live": {}}
+    rooms = _plan_rooms(_hub(hass, entry))
+    facts = _ble_live(hass, entry, [sensor], nearby)[arg]
+    return {"screen": "sensor", "address": arg, "profile": sensor["profile"], "encryption": sensor["encryption"],
+            "own_name": sensor["name"], "rooms": [{"id": room["id"], "name": _room_name(room)} for room in rooms],
+            "measures_for": facts["measures_for"],
+            "live": {**facts, "ids_stale": _ids_stale(hass, entry, arg), "battery_limit": _battery_limit(entry)}}
+
+
+def _battery_limit(entry):
+    """The house's one battery limit (HA-BATTERIES, device_battery): a battery below it is low, here too."""
+    from .device_battery import limit_pct
+    return limit_pct(entry)
+
+
+def _saved_how(answer):
+    """The done marker of a Bluetooth write (the E32's answer)."""
+    return ("ble_unchanged" if answer.get("changed") is False else
+            "ble_saved" if answer.get("restart_scheduled") is not False else "ble_saved_restart_later")
+
+
+async def _write_sensors(link, sensors, names, forget):
+    """Rename and forget in one Bluetooth save (async_save_sensors); the E32's answer, or the panel's refusal."""
+    from .controller_link import BluetoothRejected, ControllerLinkError
+    from .e32_bluetooth import REFUSALS, async_save_sensors
+    try:
+        answer = await async_save_sensors(link, sensors, names, forget)
+    except BluetoothRejected as err:
+        raise SettingsError(REFUSALS.get(err.error, "ble_rejected"), error=err.error) from None
+    except ControllerLinkError as err:
+        if str(err) == "controller_settings_changed":
+            raise SettingsError("ble_changed") from None
+        raise _failure(err) from None
+    if type(answer) is not dict:
+        raise SettingsError("e32_settings_unconfirmed")
+    return answer
+
+
+def _moving(address, room_id):
+    """The plan change of "Measures for": the sensor first in ``room_id``'s sources (None: in no room) and out of every
+    other room's."""
+    from copy import deepcopy
+
+    def change(plan):
+        candidate = deepcopy(plan)
+        for room in candidate.get("rooms") or []:
+            if type(room) is not dict:
+                continue
+            sources = [s for s in room.get("sources") or []
+                       if not (type(s) is dict and s.get("type") == "ble" and s.get("id") == address)]
+            if room.get("id") == room_id:
+                sources = [{"type": "ble", "id": address}, *sources]
+            room["sources"] = sources
+        return candidate
+    return change
+
+
+async def _assign(hass, entry, address, room_id):
+    """Make the sensor ``room_id``'s first temperature source (None: no room's) in one plan write, after the room form's
+    own check of every room it changes (E32RoomFlow._e32_room_values). The room's name when the plan changed, "" for
+    no room, None when it already was so. Never routine: a room's sources are the user's structural choice."""
+    from homeassistant.exceptions import HomeAssistantError
+    from .e32_room_flow import MAX_SOURCES, FlowError, RoomEditor
+    from .room_plan import plan_room
+    link = getattr(_hub(hass, entry), "plan", None)
+    if link is None:
+        raise SettingsError("unavailable")
+    try:
+        plan = link.plan if link.plan is not None else await link.async_read()
+    except HomeAssistantError as err:
+        raise SettingsError("ble_room_not_saved", "measures_for",
+                            error=getattr(err, "translation_key", None) or "unknown") from None
+    target = plan_room(plan, room_id) if room_id is not None else None
+    if room_id is not None and target is None:
+        raise SettingsError("ble_room_missing", "measures_for")
+    change = _moving(address, room_id)
+    candidate = change(plan)
+    if candidate == plan:
+        return None
+    editor = RoomEditor(hass, entry, plan)
+    for before in plan.get("rooms") or []:
+        after = plan_room(candidate, before.get("id")) if type(before) is dict else None
+        if after is None or after.get("sources") == before.get("sources"):
+            continue
+        user_input = editor.room_input(before)
+        sources = after["sources"]
+        user_input.update(ha_sources=[s["id"] for s in sources if s.get("type") == "ha"],
+                          ble_sources=[s["id"] for s in sources if s.get("type") == "ble"],
+                          bluetooth_first=bool(sources) and sources[0].get("type") == "ble")
+        try:
+            editor._e32_room_values(user_input, before, editor._e32_ble_options(before))
+        except FlowError as err:
+            name = _room_name(before)
+            if err.key == "e32_sources_count":
+                raise SettingsError("ble_room_full" if before.get("id") == room_id else "ble_room_only_source",
+                                    "measures_for", room=name, max=MAX_SOURCES) from None
+            raise SettingsError("ble_room_refused", "measures_for", room=name,
+                                error=err.placeholders.get("error") or err.key) from None
+    try:
+        await link.async_change_plan(change, lambda stored: change(stored) == stored)
+    except HomeAssistantError as err:
+        raise SettingsError("ble_room_not_saved", "measures_for",
+                            error=getattr(err, "translation_key", None) or "unknown") from None
+    return _room_name(target) if target is not None else ""
+
+
+async def _save_sensor(hass, entry, item, address, values):
+    """One sensor's screen: Forget sensor (``ble_forget:<address>`` as on the list, or ``forget``), the room it measures for (``measures_for``: a room id, ""
+    or None for no room) and its own name (``name``; the automatic name sent as it is becomes its own). The plan
+    first, then the name (the E32 restarts about 30 s after a Bluetooth save)."""
+    from .e32_bluetooth import valid_name
+    link, sensors, _record, _status, _ble = await _devices(hass, entry, shelly=False)
+    if sensors is None:
+        raise SettingsError("e32_settings_update_required")
+    sensor = next((s for s in sensors if s["address"] == address), None)
+    if sensor is None:
+        raise SettingsError("ble_changed")
+    if values.get("forget") is True or values.get(f"ble_forget:{address}") is True:  # the list's key, as in 1.4.1
+        answer = await _write_sensors(link, sensors, {}, {address})
+        model = await _read_item(hass, entry, item)
+        model["live"]["saved"] = {"done": _saved_how(answer)}
+        return model
+    name = values.get("name", sensor["name"])
+    name = name.strip() if type(name) is str else name
+    if name != sensor["name"] and not valid_name(name):
+        raise SettingsError("ble_name_invalid", "name")
+    done = {}
+    if "measures_for" in values:
+        wanted = values["measures_for"] or None
+        if wanted is not None and type(wanted) is not str:
+            raise SettingsError("ble_room_missing", "measures_for")
+        room = await _assign(hass, entry, address, wanted)
+        if room is not None:
+            done = {"done": "room_saved", "room": room}
+    if name != sensor["name"]:
+        done = {**done, "done": _saved_how(await _write_sensors(link, sensors, {address: name}, set()))}
+    model = await _read_item(hass, entry, item)
+    model["live"]["saved"] = done or {"done": "ble_unchanged"}
+    return model
+
+
+async def _save_pair(hass, entry, item, address, values):
+    """``pair/<address>``: pair the device the search heard, as the action ``pair`` does."""
+    answer = await _action_pair(hass, entry, item, {**values, "address": address})
+    model = await _read_item(hass, entry, item)
+    model["live"]["saved"] = {"done": "paired", **answer}
+    return model
+
+
+async def _save_devices(hass, entry, values, item=None):
     from .controller_link import BluetoothRejected, ControllerLinkError
     from .e32_bluetooth import REFUSALS, async_save_sensors, valid_name
     from .e32_devices import Refused, async_change, gateway_valves, removing, removing_valves
-    link, sensors, record, _status = await _devices(hass, entry)
+    link, sensors, record, _status, _ble = await _devices(hass, entry)
     action = values.get("action")
     if action in ("shelly_remove", "valves_remove"):
         if record is None:
@@ -279,9 +598,8 @@ async def _save_devices(hass, entry, values):
             raise _failure(err) from None
         if type(answer) is not dict:
             raise SettingsError("e32_settings_unconfirmed")
-        done = {"done": "ble_unchanged" if answer.get("changed") is False else
-                "ble_saved" if answer.get("restart_scheduled") is not False else "ble_saved_restart_later"}
-    model = await _read_devices(hass, entry)
+        done = {"done": _saved_how(answer)}
+    model = await _read_devices(hass, entry) if item is None else await _read_item(hass, entry, item)
     model["live"]["saved"] = done
     return model
 
@@ -371,6 +689,45 @@ async def _save_valve_add(hass, entry, values):
     return model
 
 
+# -- the batteries (1.4.2, HA-BATTERIES) ---------------------------------------------------------------------------
+
+def _batteries(hass, entry):
+    from .device_battery import collect
+    from .settings import language
+    return collect(hass, entry, lang=language(hass))
+
+
+def _batteries_line(hass, entry):
+    """{"devices", "low"}: the Batteries row of #devices (how many report a battery, how many are low)."""
+    rows = _batteries(hass, entry)
+    return {"devices": len(rows), "low": sum(1 for row in rows if row["low"])}
+
+
+def _read_batteries(hass, entry):
+    from .device_battery import LIMITS, limit_pct
+    return {"screen": "batteries", "limit_pct": limit_pct(entry), "limits": list(LIMITS),
+            "live": {"devices": _batteries(hass, entry)}}
+
+
+def _save_batteries(hass, entry, values):
+    from .device_battery import LIMIT_KEY, LIMITS, refresh
+    from .energy_input import ENERGY_ONLY_UPDATE
+    limit = values.get("limit_pct")
+    if isinstance(limit, float) and limit.is_integer():
+        limit = int(limit)
+    if type(limit) is not int or limit not in LIMITS or set(values) - {"limit_pct"}:
+        raise SettingsError("battery_limit_invalid", "limit_pct")
+    if (entry.options or {}).get(LIMIT_KEY) != limit:
+        options = {**entry.options, LIMIT_KEY: limit}
+        state = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+        if type(state) is dict:
+            state[ENERGY_ONLY_UPDATE] = dict(options)  # the comfort settings' no-reload marker
+        if not hass.config_entries.async_update_entry(entry, options=options) and type(state) is dict:
+            state.pop(ENERGY_ONLY_UPDATE, None)  # no listener runs: never leave the marker behind
+        refresh(hass, entry)
+    return _read_batteries(hass, entry)
+
+
 # -- actions (1.4.1): pair a Bluetooth sensor, The Pill's probe roles, the gateway's valve search -----------------
 
 def _ble_failure(err):
@@ -412,12 +769,21 @@ async def _action_scan_result(hass, entry, item, values):
     for row in nearby:
         kind, encryption = guess(row["name"])
         found.append({**row, "kind": kind, "encryption": encryption, "known": row["address"] in paired})
-    started = _SEARCHES.get(entry.entry_id)
-    done = value.get("scan_pending") is not True or started is None or CLOCK() - started >= SEARCH_SECONDS
+    started, search = _SEARCHES.get(entry.entry_id), _discovery(hass, entry, value)
+    elapsed = CLOCK() - started if started is not None else None
+    if search["discovery"] is not None:
+        # E32 1.4.2: done once the requested search is idle again and ended after the panel's start (one that ended
+        # before it is an older one); SEARCH_SECONDS stays the cap.
+        ended = search["discovery_ended_s"]
+        done = (search["discovery"] == "idle" and (elapsed is None or ended is not None and ended <= elapsed + 2)
+                or elapsed is not None and elapsed >= SEARCH_SECONDS)
+    else:
+        done = value.get("scan_pending") is not True or elapsed is None or elapsed >= SEARCH_SECONDS
     if done:
         _SEARCHES.pop(entry.entry_id, None)
     return {"sensors": found, "done": done, "paired": len(sensors), "max": MAX_SENSORS,
-            "full": value.get("discovery_full") is True}
+            "full": value.get("discovery_full") is True, "discovery": search["discovery"],
+            "discovery_ended_s": search["discovery_ended_s"]}
 
 
 async def _action_pair(hass, entry, item, values):
@@ -599,7 +965,9 @@ async def read_devices(hass, entry, item=None):
         return {"screen": "shelly-add"}  # nothing to read: the form starts empty, the save tests the address
     if item == "valve-add":
         return await _read_valve_add(hass, entry)
-    raise SettingsError("unknown_section")
+    if item == "batteries":
+        return _read_batteries(hass, entry)
+    return await _read_item(hass, entry, item)
 
 
 async def save_devices(hass, entry, item, values):
@@ -609,7 +977,44 @@ async def save_devices(hass, entry, item, values):
         return await _save_shelly_add(hass, entry, values)
     if item == "valve-add":
         return await _save_valve_add(hass, entry, values)
-    raise SettingsError("unknown_section")
+    if item == "batteries":
+        return _save_batteries(hass, entry, values)
+    screen, arg = _address(item)
+    if screen == "sensor":
+        return await _save_sensor(hass, entry, item, arg, values)
+    if screen == "pair" and arg is not None:
+        return await _save_pair(hass, entry, item, arg, values)
+    # The blocks and a Shelly device: the saves of #devices (remove a device or valves; rename or forget sensors),
+    # answered with this screen's model; a screen with nothing to save (bus, pair) reads its model again.
+    return await _save_devices(hass, entry, values, item)
+
+
+# -- the room screen's suggestion (1.4.2, plan 3.9 item 6b) ----------------------------------------------------------
+
+def e32_sensor_suggestion(hass, hub, room):
+    """{"entity_id", "address", "name"} when one of the room's Home Assistant temperature sources is the same device
+    as a Bluetooth sensor paired on the E32 (its Bluetooth address among the entity's device identifiers or
+    connections, as BTHome and Xiaomi BLE give them) that the room does not measure with yet; else None. The room
+    screen then suggests the E32's own sensor: it works without Home Assistant."""
+    from homeassistant.helpers import device_registry as dr, entity_registry as er
+    from .e32_bluetooth import address_of
+    from .heating_link import label
+    paired = getattr(hub, "ble", None) or {}
+    if not paired or type(room) is not dict:
+        return None
+    sources = [s for s in room.get("sources") or [] if type(s) is dict]
+    used = {s.get("id") for s in sources if s.get("type") == "ble"}
+    entities, devices = er.async_get(hass), dr.async_get(hass)
+    for source in sources:
+        entity = entities.async_get(source.get("id") or "") if source.get("type") == "ha" else None
+        device = devices.async_get(entity.device_id) if entity is not None and entity.device_id else None
+        if device is None or any(domain == DOMAIN for domain, _value in device.identifiers):
+            continue
+        for _kind, value in [*device.identifiers, *device.connections]:
+            address = address_of(value) if type(value) is str else None
+            if address in paired and address not in used:
+                return {"entity_id": source["id"], "address": address, "name": label(paired[address])}
+    return None
 
 
 register_section("devices", read_devices, save_devices, actions=ACTIONS)

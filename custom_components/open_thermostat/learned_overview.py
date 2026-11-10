@@ -2,7 +2,7 @@
 
 One sensor on the product device ("What the E32 learned"). Its state is the newest change
 the self-tuning made (or what it is doing), its attributes the whole overview in the Home Assistant
-language (English, Dutch or Polish), each figure with a line on what it means:
+language (English or Dutch), each figure with a line on what it means:
 
 - ``rooms``: per room its learning progress and what was learned (1.1.1 stage B: first how far the E32 is with
   its model of the room, ``model``: collecting, checking its predictions "2 of 3 days good", trusted with its heat
@@ -168,8 +168,8 @@ TEXT = {
         "minimum_own_mean": "The E32 never asks for cooler water, also when your boiler could do with less. Automatic: OpenThermostat → Configure → Heating and boiler → Water temperature limits.",
         "house_none": "Nothing yet: this appears after the first heating days.",
         "unavailable": "The E32 has not reported what it learned yet.",
-        # rc7: the sentences review (R1, R3). {subject}: the room as the subject of a sentence (Polish: "pomieszczenie X").
-        "room_subject": "{room}", "your_rooms_subject": "a typical room",
+        # rc7: the sentences review (R1, R3). {subject}: the room as the subject of a sentence.
+        "your_rooms_subject": "a typical room",
         # 1.1.1 stage B (SL-B2): the room's model in shadow, in the E32 House page's words.
         "model.collecting": "The E32 is collecting readings for a model of {room}.",
         "model.checking": "The E32 is checking its predictions for {room} ({n} of {m} days good).",
@@ -332,7 +332,7 @@ TEXT = {
         "house_none": "Nog niets: dit verschijnt na de eerste dagen met verwarming.",
         "unavailable": "De E32 heeft nog niet gemeld wat hij geleerd heeft.",
         # rc7: the sentences review (R1, R3).
-        "room_subject": "{room}", "your_rooms_subject": "een gemiddelde ruimte",
+        "your_rooms_subject": "een gemiddelde ruimte",
         # 1.1.1 stage B (SL-B2): the room's model in shadow, in the E32 House page's words.
         "model.collecting": "De E32 verzamelt metingen voor een model van {room}.",
         "model.checking": "De E32 controleert zijn voorspellingen voor {room} ({n} van {m} dagen goed).",
@@ -374,170 +374,6 @@ TEXT = {
         "learned_warms": "warmt ongeveer 1 °C op in {d} met water van {flow} °C",
         "curve_slope": "Het water wordt ongeveer {s} °C warmer voor elke graad kouder buiten.",
     },
-    "pl": {
-        "h_m": "{h} godz. {m} min", "h": "{h} godz.", "m": "{m} min", "at_least": "co najmniej {d}", "per_c": "{d} na °C",
-        "gain": "woda cieplejsza o {v} °C na każdy °C za zimno", "automatic": "(automatycznie)", "yours": "(ustawione przez Ciebie)",
-        "standard": "(wartość standardowa)", "your_rooms": "Przeciętne pomieszczenie",
-        "knob.min_off_s": "Przerwa palnika między uruchomieniami", "knob.min_on_s": "Czas pracy palnika",
-        "knob.heat_start_c": "Zacznij grzać, gdy w pomieszczeniu jest o tyle chłodniej niż zadana temperatura",
-        "knob.heat_stop_c": "Przestań grzać, gdy w pomieszczeniu jest o tyle cieplej niż zadana temperatura",
-        "knob.flow_per_degree_c": "Jak mocno temperatura wody reaguje na zimne pomieszczenie",
-        "knob.floor_lead_min_per_c": "Czas nagrzewania dla ogrzewania podłogowego", "knob.radiator_lead_min_per_c": "Czas nagrzewania dla grzejników",
-        "knob.curve_correction_pct": "Korekta pomieszczenia przy kompensacji pogodowej",
-        "knob.learned_accept_pct": "Dopuszczalny czas nagrzewania przy wyuczonej temperaturze wody",
-        "knob.night_saving_min_pct": "Najmniejsza nocna oszczędność warta porady",
-        "why.many_starts": "Palnik odpoczywa teraz co najmniej {to}, zanim znów się uruchomi, bo wczoraj uruchomił się {figure} razy. Mniej uruchomień oszczędza kocioł.",
-        "why.cold_during_rest": "Przerwa palnika wynosi teraz {to}, bo {subject} ochłodziło się o {figure} °C poniżej zadanej temperatury, gdy palnik odpoczywał. Komfort jest najważniejszy.",
-        "why.short_burns": "Każda praca palnika trwa teraz co najmniej {to}, bo wczoraj {figure} razy pracował bardzo krótko. Dłuższa praca oszczędza kocioł.",
-        "why.boiler_cycling": "Kocioł sam włącza się i wyłącza ({figure} razy wczoraj); dłuższe przerwy tylko opóźniłyby ciepło, więc teraz znów jest to {to}.",
-        "why.overshoot": "{subject} nagrzało się o {figure} °C powyżej zadanej temperatury; E32 kończy teraz grzanie nieco wcześniej.",
-        "why.overshoot_gain": "{subject} wciąż nagrzało się o {figure} °C powyżej zadanej temperatury; E32 grzeje teraz nieco łagodniej.",
-        "why.settled": "{room} prawie już się nie przegrzewa ({figure} °C); E32 znów kończy grzanie nieco później, więc palnik rzadziej się uruchamia.",
-        "why.hovering": "Grzanie zaczyna się teraz, gdy w pomieszczeniu jest o {to} chłodniej niż zadana temperatura, bo wczoraj uruchomiło się {figure} razy przy małych spadkach. Mniej uruchomień oszczędza kocioł.",
-        "why.few_starts": "Grzanie zaczyna się znów wcześniej, przy {to} poniżej zadanej temperatury: przy zaledwie {figure} uruchomieniach wczoraj jest miejsce na większy komfort.",
-        "why.room_response_up": "{room} nagrzewa się o około 1 °C w {figure}; E32 reaguje teraz nieco mocniej na zimne pomieszczenie.",
-        "why.room_response_down": "{room} nagrzewa się o około 1 °C w {figure}; E32 reaguje teraz nieco łagodniej na zimne pomieszczenie.",
-        "why.learned_warmup": "{room} nagrzewa się o około 1 °C w {figure}; E32 zaczyna od tego, dopóki nie nauczy się nagrzewania tego pomieszczenia.",
-        "would": "Zmieniłby: {text}",
-        "state.waiting": "Po ponownym uruchomieniu lub zmianie E32 najpierw obserwuje cały dzień, zanim coś zmieni.",
-        "state.collecting": "Wczoraj grzano za mało, by się czegoś nauczyć; ustawienia pozostają bez zmian.",
-        "state.shadow": "Nadal decyduje Twój obecny termostat lub własna regulacja kotła, więc E32 tylko pokazuje, co by zmienił.",
-        "state.active": "E32 sam dostosowuje swoje ustawienia, najwyżej o jeden mały krok dziennie.",
-        "state.none": "Jeszcze nic nie zmieniono: wartości początkowe nadal pasują albo jest za mało danych.",
-        "learned": "Wyuczone", "learning": "Uczy się: widziano {n} z {m} nagrzewań",
-        "learning_seen": "Uczy się: widziano {n} nagrzewań; potrzebuje jeszcze nagrzewań w inne dni lub przy innej temperaturze wody",
-        "learning_timing": "Czas nagrzewania wyuczony; najchłodniejszej wody wciąż się uczy",
-        "learning_more": "Potrzebuje jeszcze kilku nagrzewań, w inne dni lub przy innych temperaturach wody.",
-        "learning_first": "Uczy się z każdego nagrzewania, gdy ogrzewanie pracuje.",
-        "learning_mean": "Do tego czasu używa bezpiecznych czasów standardowych.",
-        "warms": "Nagrzewa się o około 1 °C w {d} przy wodzie o temperaturze {flow} °C.",
-        "warms_mean": "Według tego E32 planuje początek każdego nagrzewania.",
-        "lowest": "Najniższa temperatura wody, która jeszcze nagrzewa na czas: {flow} °C.",
-        "lowest_mean": "Chłodniejsza woda pozwala kotłowi lepiej kondensować, więc zużywa mniej gazu.",
-        "cools": "Traci około {rate} °C na godzinę przy {out} °C na zewnątrz.",
-        "cools_mean": "Tak szybko stygnie, gdy ogrzewanie jest wyłączone, na przykład w nocy.",
-        "free_heat": "{when} to pomieszczenie samo się nagrzewa, o około {rate} °C na godzinę (słońce, gotowanie lub ludzie).",
-        "free_heat_applied": "Następne nagrzewanie zaczyna się dzięki temu {m} min później, więc Inteligentne nagrzewanie "
-                             "nie grzeje tego, co przychodzi za darmo.",
-        "free_heat_mean": "Inteligentne nagrzewanie uwzględnia to, gdy planuje nagrzewanie o tej porze dnia.",
-        "daypart.0": "W nocy", "daypart.1": "Wcześnie rano", "daypart.2": "Rano",
-        "daypart.3": "Po południu", "daypart.4": "Wieczorem", "daypart.5": "Późnym wieczorem",
-        "start_only": "Zaczyna grzać o {start} przed następnym krokiem programu.",
-        "start_mean": "Dzięki temu pomieszczenie jest ciepłe na czas, bez grzania dłużej niż trzeba.",
-        "warmup_on": "Inteligentne nagrzewanie: start o {start}, aby o {time} było {target} °C.",
-        "warmup_now": "Inteligentne nagrzewanie: grzeje teraz, aby o {time} było {target} °C.",
-        "warmup_late": "Inteligentne nagrzewanie: grzeje teraz; {target} °C może być dopiero nieco po {time}.",
-        "warmup_ready": "Inteligentne nagrzewanie: jest dość ciepło na {target} °C o {time}, wcześniejszy start nie jest potrzebny.",
-        "warmup_learning": "Inteligentne nagrzewanie wciąż się uczy: na razie grzanie zaczyna się o {time} (szacunek: od {start} byłoby {target} °C na czas).",
-        "warmup_learning_mean": "Dopóki pomieszczenie nie zostanie wyuczone, nie zaczyna grzać wcześniej na podstawie szacunku.",
-        "warmup_off": "Inteligentne nagrzewanie jest wyłączone: grzanie zaczyna się o {time}.",
-        "warmup_off_mean": "Włącz Inteligentne nagrzewanie, aby było ciepło na czas.",
-        "warmup_room_off": "Inteligentne nagrzewanie jest wyłączone dla tego pomieszczenia: grzanie zaczyna się o {time}.",
-        "warmup_room_off_mean": "Wybrane w ustawieniach tego pomieszczenia (Konfiguruj → Pomieszczenia).",
-        "warmup_estimate": "Inteligentne nagrzewanie: start o {start} (szacunek; uczy się z każdego poranka), aby o {time} było {target} °C.",
-        "timing_learned": "Czas nagrzewania jest wyuczony; najchłodniejszej wody wciąż się uczy.",
-        "timing_learned_mean": "Inteligentne nagrzewanie już z tego korzysta; do najchłodniejszej wody potrzeba jeszcze kilku nagrzewań przy innych temperaturach wody.",
-        "arrival": "{when} ciepło o {time} ({how}).",
-        "arrival_earlier": "{when} ciepło o {time} ({how}); następnym razem nagrzewanie zacznie się nieco wcześniej.",
-        "arrival_later": "{when} ciepło o {time} ({how}); następnym razem nagrzewanie zacznie się nieco później.",
-        "arrival_earlier_min": "{when} ciepło o {time} ({how}); następnym razem nagrzewanie zacznie się około {n} wcześniej.",
-        "arrival_later_min": "{when} ciepło o {time} ({how}); następnym razem nagrzewanie zacznie się około {n} później.",
-        "arrival_mean": "Każdego ranka sprawdza, czy pomieszczenie było ciepłe na czas, i dostosowuje czas nagrzewania.",
-        "how_late": "{d} za późno",
-        "how_early": "{d} za wcześnie",
-        "how_on_time": "na czas",
-        "when_today": "Dziś",
-        "when_yesterday": "Wczoraj",
-        "when_date": "Dnia {date}",
-        "months": "sty lut mar kwi maj cze lip sie wrz paź lis gru",
-        "saving_eur": "około {m3} m³ gazu ({eur}) na noc", "saving": "około {m3} m³ gazu na noc",
-        "night_hold": "Utrzymywanie {night} °C w nocy jest tańsze niż wychładzanie: {saving}.",
-        "night_program": "Wychładzanie w nocy, tak jak robi to Twój program, jest najtańsze.",
-        "night_mean": "To porada: Twój program tygodniowy pozostaje bez zmian.",
-        "curve_status_off": "Kompensacja pogodowa: wyłączona, temperatura wody zależy tylko od pomieszczeń.",
-        "curve_status_no_outdoor": "Kompensacja pogodowa: teraz brak temperatury zewnętrznej, więc temperatura wody zależy tylko od pomieszczeń.",
-        "curve_status_learned": "Kompensacja pogodowa: wyuczona dla Twojego domu.",
-        "curve_status_learning": "Kompensacja pogodowa: na razie standardowa, uczy się Twojego domu ({n} z {m} stabilnych okresów).",
-        "curve_status_learning_plain": "Kompensacja pogodowa: na razie standardowa, uczy się Twojego domu.",
-        "curve_status_house": "Kompensacja pogodowa: na razie oszacowana na podstawie Twojego domu, wciąż się uczy ({n} z {m} stabilnych okresów).",
-        "curve_status_house_plain": "Kompensacja pogodowa: na razie oszacowana na podstawie Twojego domu, wciąż się uczy.",
-        "curve_status_mean": "E32 sam decyduje, kiedy to, czego się nauczył, jest wystarczająco dobre, by tego używać.",
-        "flow_status_collecting": "Najchłodniejsza woda: wciąż uczy się z każdego nagrzewania.",
-        "flow_status_ready": "Najchłodniejsza woda: wyuczona dla Twojego domu.",
-        "flow_status_advice": "Najchłodniejsza woda: wyuczona; używana, gdy Inteligentne nagrzewanie jest włączone.",
-        "flow_status_mean": "Przy chłodniejszej wodzie kocioł lepiej kondensuje, więc zużywa mniej gazu.",
-        "curve_learned": "Kompensacja pogodowa wyuczona z Twojego domu: woda jest cieplejsza o około {s} °C na każdy stopień zimniej na zewnątrz.",
-        "curve_house": "Kompensacja pogodowa oszacowana na podstawie Twojego domu: woda jest cieplejsza o około {s} °C na każdy stopień zimniej na zewnątrz.",
-        "curve": "Kompensacja pogodowa: woda jest cieplejsza o około {s} °C na każdy stopień zimniej na zewnątrz.",
-        "curve_on": "Kompensacja pogodowa ustala temperaturę wody, więc kocioł pracuje tak chłodno, jak pozwala pogoda.",
-        "curve_off": "Kompensacja pogodowa nie jest włączona; to tylko porada.",
-        "burner": "Wczoraj palnik uruchomił się {n} razy do ogrzewania; praca trwała średnio {d}.",
-        "burner_starts": "Wczoraj palnik uruchomił się {n} razy do ogrzewania.",
-        "burner_often": "To często. Rzadsza, dłuższa praca oszczędza kocioł; E32 nad tym pracuje.",
-        "burner_mean": "Rzadsza, dłuższa praca oszczędza kocioł i zużywa gaz wydajniej.",
-        "boiler_minimum": "Twój kocioł zaczyna grzać dopiero od wody o temperaturze około {flow} °C; E32 żąda co najmniej tyle.",
-        "boiler_minimum_mean": "Nauczył się tego, gdy kocioł nie uruchamiał się przy chłodniejszej wodzie.",
-        "steady": "Twój kocioł pali równo od wody o temperaturze około {flow} °C; E32 żąda co najmniej tyle.",
-        "steady_off": "Twój kocioł pali równo od wody o temperaturze około {flow} °C; przy włączonym Inteligentnym nagrzewaniu E32 żąda co najmniej tyle.",
-        "steady_mean": "Poniżej tego kocioł na najmniejszym płomieniu sam ciągle się wyłącza i włącza. Nieco cieplejsza woda daje znacznie mniej startów palnika i kosztuje co najwyżej odrobinę sprawności.",
-        "steady_trying": "E32 przez pół godziny próbuje wody o temperaturze {to} °C: jeśli kocioł nadal będzie palił równo, zostanie przy niej.",
-        "steady_today": "dzisiaj",
-        "steady_yesterday": "wczoraj",
-        "steady_days": "{n} dni temu",
-        "steady_last_week": "w zeszłym tygodniu",
-        "steady_kept": "E32 {when} spróbował wody chłodniejszej o {d} °C ({to} °C) i przy niej został: kocioł palił równo.",
-        "steady_cycling": "E32 {when} spróbował wody chłodniejszej o {d} °C ({to} °C); kocioł sam ciągle się wyłączał i włączał, więc E32 wrócił do {from_c} °C. Spróbuje ponownie za tydzień.",
-        "steady_cool": "E32 {when} spróbował wody chłodniejszej o {d} °C ({to} °C); pomieszczenie się wychłodziło, więc E32 wrócił do {from_c} °C. Spróbuje ponownie za tydzień.",
-        "minimum_auto": "Najniższa temperatura wody: automatycznie, teraz {flow} °C.",
-        "minimum_auto_mean": "E32 ustala ją na podstawie tego, czego nauczył się o kotle i domu, nigdy poniżej 30 °C.",
-        "minimum_own": "Najniższa temperatura wody: ustawiona przez ciebie, teraz {flow} °C.",
-        "minimum_own_mean": "E32 nigdy nie prosi o chłodniejszą wodę, nawet gdy kocioł poradziłby sobie z mniejszą. Automatycznie: OpenThermostat → Konfiguruj → Ogrzewanie i kocioł → Limity temperatury wody.",
-        "house_none": "Jeszcze nic: pojawi się po pierwszych dniach ogrzewania.",
-        "unavailable": "E32 jeszcze nie przekazał, czego się nauczył.",
-        # rc7: the sentences review (R1, R3).
-        "room_subject": "pomieszczenie {room}",
-        "your_rooms_subject": "przeciętne pomieszczenie",
-        # 1.1.1 stage B (SL-B2): the room's model in shadow (the E32 pages have no Polish: written here).
-        "model.collecting": "E32 zbiera pomiary do modelu pomieszczenia {room}.",
-        "model.checking": "E32 sprawdza swoje prognozy dla pomieszczenia {room} ({n} z {m} dni dobrych).",
-        "model.trusted": "E32 ufa swojemu modelowi pomieszczenia {room}: straty ciepła {ua} kW na stopień, pomieszczenie potrzebuje około {h} godz. na stopień przy wodzie 50 °C.",
-        "model.trusted_plain": "E32 ufa swojemu modelowi pomieszczenia {room}: straty ciepła {ua} kW na stopień.",
-        "model.trusted_bare": "E32 ufa swojemu modelowi pomieszczenia {room}.",
-        "model.demoted": "Model pomieszczenia {room} prognozował gorzej; E32 wrócił do ostatniego dobrego modelu i sprawdza go ponownie ({n} z {m} dni dobrych).",
-        "model_mean": "Na razie to tylko kontrola: nic w ogrzewaniu się przez to nie zmienia.",
-        "model_mean_planning": "E32 planuje ogrzewanie z tym modelem.",
-        "warmup_now_estimate": "Inteligentne nagrzewanie: grzeje teraz (szacunek; uczy się z każdego poranka), aby o {time} było {target} °C.",
-        "warmup_trial": "Inteligentne nagrzewanie w okresie próbnym: start byłby o {start}, aby o {time} było {target} °C.",
-        "warmup_trial_now": "Inteligentne nagrzewanie w okresie próbnym: grzałoby teraz, aby o {time} było {target} °C.",
-        "free_heat_later": "Dlatego nagrzewanie zaczyna się {m} min później niż bez darmowego ciepła.",
-        "arrival_not_warm": "{when} nie było ciepło w ciągu 3 godz. po {time}.",
-        "arrival_not_warm_earlier": "{when} nie było ciepło w ciągu 3 godz. po {time}; następnym razem nagrzewanie zacznie się nieco wcześniej.",
-        "arrival_not_warm_earlier_min": "{when} nie było ciepło w ciągu 3 godz. po {time}; następnym razem nagrzewanie zacznie się około {n} wcześniej.",
-        "saving_eur_once": "około {m3} m³ gazu ({eur})",
-        "saving_once": "około {m3} m³ gazu",
-        "night_hold_until": "Utrzymywanie {night} °C do {time} jest tańsze niż wychładzanie: {saving}.",
-        "night_program_until": "Wychładzanie do {time}, tak jak robi to Twój program, jest najtańsze.",
-        "burner_one": "Wczoraj palnik uruchomił się 1 raz do ogrzewania; praca trwała {d}.",
-        "burner_starts_one": "Wczoraj palnik uruchomił się 1 raz do ogrzewania.",
-        "burner_none": "Wczoraj palnik nie uruchomił się do ogrzewania.",
-        "why.few_starts_one": "Grzanie zaczyna się znów wcześniej, przy {to} poniżej zadanej temperatury: przy zaledwie 1 uruchomieniu wczoraj jest miejsce na większy komfort.",
-        "would_set": "Zmieniłby ustawienie „{knob}” na {to}, bo {because}.",
-        "because.many_starts": "wczoraj palnik uruchomił się {figure} razy",
-        "because.cold_during_rest": "{subject} ochłodziło się o {figure} °C poniżej zadanej temperatury, gdy palnik odpoczywał",
-        "because.short_burns": "wczoraj palnik {figure} razy pracował bardzo krótko",
-        "because.boiler_cycling": "kocioł sam włącza się i wyłącza ({figure} razy wczoraj)",
-        "because.overshoot": "{subject} nagrzało się o {figure} °C powyżej zadanej temperatury",
-        "because.overshoot_gain": "{subject} wciąż nagrzało się o {figure} °C powyżej zadanej temperatury",
-        "because.settled": "{room} prawie już się nie przegrzewa ({figure} °C)",
-        "because.hovering": "wczoraj grzanie uruchomiło się {figure} razy przy małych spadkach",
-        "because.few_starts": "liczba uruchomień wczoraj wyniosła tylko {figure}",
-        "because.few_starts_one": "wczoraj było tylko 1 uruchomienie",
-        "because.room_response_up": "{room} nagrzewa się o około 1 °C w {figure}",
-        "because.room_response_down": "{room} nagrzewa się o około 1 °C w {figure}",
-        "because.learned_warmup": "{room} nagrzewa się o około 1 °C w {figure}",
-        "learned_warms": "nagrzewa się o około 1 °C w {d} przy wodzie o temperaturze {flow} °C",
-        "curve_slope": "Woda jest cieplejsza o około {s} °C na każdy stopień zimniej na zewnątrz.",
-    },
 }
 # The knobs (control/ControlTuning.h): automatic (AutoTuner) or fixed, the built-in value and how a value reads.
 KNOBS = (("min_off_s", True, 300, "rest"), ("min_on_s", True, 300, "run"), ("heat_start_c", True, 0.2, "c"),
@@ -549,13 +385,13 @@ MINUTE_REASONS = ("room_response", "learned_warmup")
 
 
 def language(hass):
-    """English, Dutch or Polish by the Home Assistant language (English otherwise)."""
+    """English or Dutch by the Home Assistant language (English otherwise)."""
     value = (getattr(getattr(hass, "config", None), "language", None) or "en").lower().replace("_", "-").split("-")[0]
     return value if value in TEXT else "en"
 
 
 def number(value, lang, digits=1):
-    """A short decimal: 0.15, 7.5, 21 (a decimal comma in Dutch and Polish)."""
+    """A short decimal: 0.15, 7.5, 21 (a decimal comma in Dutch)."""
     text = f"{round(float(value), digits):.{digits}f}".rstrip("0").rstrip(".") if digits else str(round(float(value)))
     return text.replace(".", ",") if lang != "en" else text
 
@@ -594,8 +430,8 @@ def change_text(change, names, lang, proposal=False):
     """One change ([knob, from, to, reason, figure, room]) in words, or None when it is not understood.
 
     proposal: a change the trial run only proposes (``tuning.would``): "Would set “Burner rest between starts” to
-    10 min, because the burner started 25 times yesterday.", never the "now rests" of a change made. A Polish room
-    name with a neuter past tense stands after "pomieszczenie" ({subject}); the sentence starts with a capital.
+    10 min, because the burner started 25 times yesterday.", never the "now rests" of a change made. The
+    sentence starts with a capital.
     """
     if type(change) is not list or len(change) != 6:
         return None
@@ -613,10 +449,7 @@ def change_text(change, names, lang, proposal=False):
     shown = (duration(figure, lang) if reason.startswith("room_response") or reason == "learned_warmup"
              else str(figure) if float(figure).is_integer() else number(figure, lang, 2))
     name = names.get(room, room) if room else t["your_rooms"]
-    if not room:
-        subject = t.get("your_rooms_subject", name)
-    else:
-        subject = t["room_subject"].format(room=name) if "room_subject" in t else name
+    subject = name if room else t.get("your_rooms_subject", name)
     values = {"to": knob_value(key, new, lang), "figure": shown, "room": name, "subject": subject}
     text = template.format(**values)
     if proposal:
@@ -896,13 +729,13 @@ NIGHT_HOURS = range(3, 12)  # a step up between 03:00 and 12:00 ends a night set
 
 
 def money(value, lang, currency=None):
-    """An amount with exactly two decimals in Home Assistant's currency: "€0.15", "€ 0,15" (Dutch), "0,15 zł"."""
+    """An amount with exactly two decimals in Home Assistant's currency: "€0.15", "€ 0,15" (Dutch), "0.15 zł"."""
     amount = f"{float(value):.2f}"
     amount = amount.replace(".", ",") if lang != "en" else amount
     if not currency:
         return amount
     sign = CURRENCY_SIGNS.get(currency, currency)
-    if lang == "pl" or sign not in ("€", "£", "$"):
+    if sign not in ("€", "£", "$"):
         return f"{amount} {sign}"
     return f"{sign} {amount}" if lang == "nl" else f"{sign}{amount}"
 

@@ -10,9 +10,11 @@ Zigbee2MQTT on the same broker; Home Assistant only shows and configures:
   (the lowest, diagnostic), "Valve problem" (a low battery or a valve that stopped
   reporting, diagnostic) and the switch "Valve control" (configuration; its entity
   ID ends in ``_valve_control``);
-- Repairs: a low battery (about 20 %), a valve that stopped reporting, and a room
-  whose valve control is on while the room has a single temperature source (a
-  separate sensor keeps it heating when that one fails);
+- Repairs: a valve that stopped reporting, a BLU Gateway that does not answer and a
+  valve the gateway does not know. A low battery is no Repairs item since 1.4.2
+  (upcoming maintenance, not a fault): the Batteries list under Devices, the
+  "Batteries low" entity and the room's battery message say it
+  (device_battery.py); "Valve problem" keeps the firmware's 20 %;
 - the valves of a room are chosen in the room's own form, section Radiator valves
   (Configure → Rooms → Edit or remove a room → Edit room, e32_room_flow.py): just
   their climate entities; valve_routes.py decides per valve whether the E32
@@ -80,7 +82,7 @@ HEALTH = ("ok", "low_battery", "offline", "unknown")
 LINKS = ("gateway", "silent", "missing", "unpaired", "unknown")
 ENTITY_KEYS = ("valve_position", "valve_battery", "valve_problem", "valve_control")
 # A room with one temperature source is no Repairs item (1.4): the room form's help text says what it means.
-ISSUES = ("valve_battery_low", "valve_offline", "valve_gateway_silent", "valve_not_found")
+ISSUES = ("valve_offline", "valve_gateway_silent", "valve_not_found")
 # A switched control shows its new state until the E32's telemetry agrees (at most this long).
 PENDING_SECONDS = 30
 
@@ -334,8 +336,7 @@ def link_problems(room):
 
 
 # A BLU Gateway valve in a sentence: the E32 knows it as g<n>:<id> (the room's own name says where it is).
-GATEWAY_VALVE_TEXT = {"en": "valve {id} on BLU Gateway {n}", "nl": "kraan {id} aan BLU Gateway {n}",
-                      "pl": "zawór {id} na BLU Gateway {n}"}
+GATEWAY_VALVE_TEXT = {"en": "valve {id} on BLU Gateway {n}", "nl": "kraan {id} aan BLU Gateway {n}"}
 # The route's problem in plain words (the Valve problem attributes).
 LINK_TEXT = {
     "en": {"gateway": "the BLU Gateway does not answer", "silent": "the valve has not reported to the gateway",
@@ -344,26 +345,25 @@ LINK_TEXT = {
     "nl": {"gateway": "de BLU Gateway antwoordt niet", "silent": "de kraan heeft zich niet bij de gateway gemeld",
            "missing": "de gateway kent deze kraan niet", "unpaired": "de kraan is niet gekoppeld aan de gateway",
            "unknown": "de gateway staat niet bij de Shelly-apparaten van de E32"},
-    "pl": {"gateway": "BLU Gateway nie odpowiada", "silent": "zawór nie zgłosił się do bramki",
-           "missing": "bramka nie zna tego zaworu", "unpaired": "zawór nie jest sparowany z bramką",
-           "unknown": "bramki nie ma wśród urządzeń Shelly w E32"},
 }
 
 
 # The Valves open sensor's note for such a valve (1.3: the E32 decides, the valve opens and closes; never "regulates
 # itself"). The same sentence as the E32's Rooms page.
 POSITION_NOTE = {"en": "Driven by temperature; the position cannot be read",
-                 "nl": "Gestuurd op temperatuur; de stand is niet uit te lezen",
-                 "pl": "Sterowany temperaturą; nie można odczytać położenia"}
+                 "nl": "Gestuurd op temperatuur; de stand is niet uit te lezen"}
+# 1.4.2 (plan 3.1, one role per valve): why the Valve control switch stays off (CONTRACT-1.4.2 device_two_roles, EN).
+TWO_ROLES_TEXT = "A device can be the room's setting device or a radiator valve the E32 drives, not both. Choose one."
+# 1.4.2 (HC-11): a valve Home Assistant drives (ha_climate) that reports no opening, such as a Sonoff TRV in ZHA, gets
+# the target and regulates on its own sensor: the same kind of note, in the panel and the Valves open attribute.
+SELF_REGULATING_NOTE = {"en": "Regulates itself to the target; the position cannot be read",
+                        "nl": "Regelt zichzelf naar het doel; de stand is niet uit te lezen"}
 # 1.3 (NEXT-RELEASE 1f): the temperature the E32 gave such valves, and in a mixed room how many there are, as
 # sentences the dashboard's valve tile shows (state_content).
 SET_TO_TEXT = {"en": ("Set to {t} °C", "Set to {t} °C (frost protection)"),
-               "nl": ("Ingesteld op {t} °C", "Ingesteld op {t} °C (vorstbeveiliging)"),
-               "pl": ("Ustawiono na {t} °C", "Ustawiono na {t} °C (ochrona przed mrozem)")}
+               "nl": ("Ingesteld op {t} °C", "Ingesteld op {t} °C (vorstbeveiliging)")}
 DRIVEN_TEXT = {"en": ("{n} valve driven by temperature", "{n} valves driven by temperature"),
-               "nl": ("{n} kraan op temperatuur gestuurd", "{n} kranen op temperatuur gestuurd"),
-               "pl": ("{n} zawór sterowany temperaturą", "{n} zawory sterowane temperaturą",
-                      "{n} zaworów sterowanych temperaturą")}
+               "nl": ("{n} kraan op temperatuur gestuurd", "{n} kranen op temperatuur gestuurd")}
 
 
 def language(hass):
@@ -380,9 +380,23 @@ def shown_name(name, lang="en"):
 
 
 def driven(room):
-    """The valves of a room document that the E32 drives by temperature and that report no opening."""
-    return [v for v in (room or {}).get("valves", [])
-            if v.get("model") in NO_POSITION_MODELS and type(v.get("position_pct")) not in (int, float)]
+    """The valves of a room document that are driven by temperature and report no opening: the E32's own models without
+    a position readback, and (1.4.2, HC-11) Home Assistant's valves that report none while they are there."""
+    return [v for v in (room or {}).get("valves", []) if type(v.get("position_pct")) not in (int, float) and (
+        v.get("model") in NO_POSITION_MODELS or v.get("model") == HA_MODEL and v.get("health") in ("ok", "low_battery"))]
+
+
+def self_regulating(room):
+    """The valves of driven() that Home Assistant drives (ha_climate): they regulate themselves to the target."""
+    return [v for v in driven(room) if v.get("model") == HA_MODEL]
+
+
+def position_note(room, lang="en"):
+    """The note on the valves of a room document that report no opening, or None: the E32's ("Driven by temperature;
+    …"), Home Assistant's ("Regulates itself to the target; …"), or both."""
+    found = driven(room)
+    notes = ([POSITION_NOTE.get(lang, POSITION_NOTE["en"])] if any(v.get("model") != HA_MODEL for v in found) else [])         + ([SELF_REGULATING_NOTE.get(lang, SELF_REGULATING_NOTE["en"])] if self_regulating(room) else [])
+    return " · ".join(notes) or None
 
 
 def tile_kind(room):
@@ -425,11 +439,7 @@ def set_to_text(value, frost, lang="en"):
 
 def driven_text(count, lang="en"):
     forms = DRIVEN_TEXT.get(lang, DRIVEN_TEXT["en"])
-    if lang == "pl":  # 1 zawór, 2-4 zawory (not 12-14), else zaworów
-        form = forms[0] if count == 1 else forms[1] if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14) else forms[2]
-    else:
-        form = forms[0 if count == 1 else 1]
-    return form.format(n=count)
+    return forms[0 if count == 1 else 1].format(n=count)
 
 
 def valve_attributes(room):
@@ -474,11 +484,16 @@ class ValvePositionSensor(ValveEntity, SensorEntity):
     def extra_state_attributes(self):
         attributes = valve_attributes(self.valves or {})
         lang = language(getattr(self, "hass", None))
-        own = [shown_name(v["name"], lang) for v in driven(self.valves)]
-        if own:  # these valves are not in the average: say why, and what the E32 gave them, in words
-            attributes["driven_by_temperature"] = own
-            attributes["position_note"] = POSITION_NOTE[lang]
-            attributes["driven_text"] = driven_text(len(own), lang)
+        found = driven(self.valves)
+        own = [shown_name(v["name"], lang) for v in found if v.get("model") != HA_MODEL]
+        itself = [shown_name(v["name"], lang) for v in found if v.get("model") == HA_MODEL]
+        if found:  # these valves are not in the average: say why, and what they were given, in words
+            if own:
+                attributes["driven_by_temperature"] = own
+            if itself:
+                attributes["regulates_itself"] = itself
+            attributes["position_note"] = position_note(self.valves, lang)
+            attributes["driven_text"] = driven_text(len(found), lang)
             given = set_to(self.valves, self.room)
             if given is not None:
                 attributes["set_to_c"] = given[0]
@@ -551,7 +566,31 @@ class ValveControlSwitch(ValveEntity, SwitchEntity):
         self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs):
+        # One role per valve (1.4.2, plan 3.1): never on while a valve of the room is its setting device too; the room
+        # form and the settings panel refuse it the same way (valve_routes.two_roles).
+        both = await self._two_roles()
+        if both is not None:
+            _LOGGER.warning("Valve control of room %s stays off: %s is the room's setting device and one of its "
+                            "radiator valves", self.room_id, both)
+            raise HomeAssistantError(TWO_ROLES_TEXT)
         await self._set(True)
+
+    async def _two_roles(self):
+        """The room's setting device when it is also one of the valves valve control would drive, else None."""
+        from .e32_room_flow import valve_context
+        from .room_plan import plan_room
+        from .valve_routes import two_roles
+        plan = getattr(getattr(self.hub, "plan", None), "plan", None)
+        room = plan_room(plan, self.room_id) if type(plan) is dict else None
+        setpoint = (room or {}).get("setpoint_entity")
+        entry = getattr(getattr(self, "platform", None), "config_entry", None)
+        if not (type(setpoint) is str and setpoint.startswith("climate.")) or entry is None or self.hass is None:
+            return None
+        config, gateway = await self.link.async_read_with_gateway()
+        if config is None:
+            return None
+        ctx = valve_context(self.hass, entry, config, self.room_id, room, gateway)
+        return two_roles(self.room_id, setpoint, [*ctx.stored, *ctx.gateway_stored], True, ctx, plan)
 
     async def async_turn_off(self, **kwargs):
         await self._set(False)
@@ -562,6 +601,13 @@ def _valve_rooms(hub):
         room = hub.rooms.get(room_id)
         if room is not None and valves.get("valves"):
             yield room_id, room
+    if hub.status is None:
+        # 1.4.2 (HC-03): while the E32's status is not known (Home Assistant started while it is offline), a room's
+        # valve entities that existed are made again (heating_link.entity_was_there), unavailable until it reports.
+        from .heating_link import entity_was_there
+        for room_id, room in hub.known_rooms.items():
+            if entity_was_there(hub, f"e32_room_{room_id}_valve_position"):
+                yield room_id, room
 
 
 def wanted_sensors(hub):
@@ -603,13 +649,8 @@ def sync_issues(hass, entry, hub, raised):
         valves = room_valves(hub, room_id)
         room = hub.rooms.get(room_id) or {"id": room_id}
         name = names.get(room_id) or label(room) or room_id
-        found = problems(valves)
-        low = [n for n, h in found if h == "low_battery"]
-        gone = [n for n, h in found if h == "offline"]
-        if low:
-            wanted[issue_id("valve_battery_low", entry, room_id)] = ("valve_battery_low", ir.IssueSeverity.WARNING,
-                                                                     {"room": name, "valves": ", ".join(
-                                                                         shown_name(n, lang) for n in low)})
+        # 1.4.2: a low battery is no Repairs item (the Batteries list and the battery message, device_battery.py).
+        gone = [n for n, h in problems(valves) if h == "offline"]
         if gone:
             wanted[issue_id("valve_offline", entry, room_id)] = ("valve_offline", ir.IssueSeverity.WARNING,
                                                                  {"room": name, "valves": ", ".join(

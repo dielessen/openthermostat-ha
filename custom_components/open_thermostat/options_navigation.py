@@ -21,8 +21,8 @@ from homeassistant.config_entries import OptionsFlow
 
 from .const import DOMAIN
 
-SAVED = {"en": "Saved.", "nl": "Opgeslagen.", "pl": "Zapisano."}
-UNCHANGED = {"en": "Nothing changed.", "nl": "Niets veranderd.", "pl": "Nic się nie zmieniło."}
+SAVED = {"en": "Saved.", "nl": "Opgeslagen."}
+UNCHANGED = {"en": "Nothing changed.", "nl": "Niets veranderd."}
 
 # Abort reasons that only say "saved" (a menu with SAVED) or "nothing changed" (a menu with UNCHANGED).
 SAVED_REASONS = frozenset({
@@ -71,10 +71,10 @@ def _selector_texts(language, key):
 
 
 async def async_flow_texts(hass, key):
-    """The text pieces of ``selector.<key>.options`` in the Home Assistant language (English, Dutch or Polish).
+    """The text pieces of ``selector.<key>.options`` in the Home Assistant language (English or Dutch).
 
     For texts a form builds itself (a list of rooms, a status line) that a description placeholder carries
-    (R4-24: Polish users got English): the pieces live in strings.json and its translations, with English for a
+    (R4-24): the pieces live in strings.json and its translations, with English for a
     key a language lacks.
     """
     language = _language(hass)

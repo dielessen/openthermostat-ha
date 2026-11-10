@@ -606,6 +606,9 @@ async def async_remove_entry(hass, entry):
     # What its notifications kept: the cooldowns and the open episodes (notifications.py).
     from .notifications import async_remove_notifications
     await async_remove_notifications(hass, entry.entry_id)
+    # Its active-control log (boiler_share.py, HA-SHARE 1.4.2): gone at once, the store file with the last entry.
+    from .boiler_share import async_forget_active_control
+    await async_forget_active_control(hass, entry.entry_id)
     # What the shared bookkeeping kept for it: the Repairs groups and the information notes (R4-31).
     from .issue_sync import forget_entry
     forget_entry(hass, entry.entry_id)

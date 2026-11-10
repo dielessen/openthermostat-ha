@@ -78,17 +78,6 @@ WORDS = {
            "valve": "Kraan {id}", "in_room": "in {room}", "no_devices": "Nog geen Shelly-apparaten.",
            "bus_unknown": "de E32 heeft ze nog niet gemeld.", "bus_none": "nog niets gehoord.",
            "boiler": "Ketel", "thermostat": "Thermostaat", "device": "EMS-apparaat", "none": "-"},
-    "pl": {"kinds": {"switch": "Plug", "probes": "The Pill", "gateway": "BLU Gateway"},
-           "labels": {"switch": "Pompa podłogowa", "probes": "Sondy podłogi", "gateway": "Bramka zaworów"},
-           "health": {"waiting": "czeka na pierwszą odpowiedź", "ok": "połączono", "unreachable": "nieosiągalne",
-                      "wrong_device": "pod tym adresem odpowiada inne urządzenie",
-                      "auth_failed": "hasło nie jest akceptowane", "error": "urządzenie zgłasza błąd"},
-           "valve_health": {"waiting": "czeka na zgłoszenie", "ok": "zgłasza się", "silent": "cisza od 15 minut",
-                            "offline": "nie zgłasza się", "missing": "nie znaleziono w bramce",
-                            "unpaired": "nie sparowano z bramką", "gateway": "bramka nieosiągalna"},
-           "valve": "Zawór {id}", "in_room": "w pomieszczeniu {room}", "no_devices": "Brak urządzeń Shelly.",
-           "bus_unknown": "E32 jeszcze ich nie zgłosił.", "bus_none": "na razie nic nie słychać.",
-           "boiler": "Kocioł", "thermostat": "Termostat", "device": "Urządzenie EMS", "none": "-"},
 }
 
 

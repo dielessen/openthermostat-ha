@@ -7,8 +7,8 @@
   Maintenance (notifications.HOUSE_MAINTENANCE). With the switch on and nobody ticked, the step says so and the
   messages show in Home Assistant.
 - Rooms: pick a room, then one switch "Notify about this room" and its messages (notifications.ROOM_KINDS).
-  The people of the room (Configure → Rooms → the room → Persons) get them; a room without its own people
-  sends them to everyone with a phone.
+  The room's own recipients get them (1.4.2: chosen on the room's screen on the Settings tab, apart from its
+  persons for presence); the step says who in one sentence (settings_notifications.recipients_line).
 
 Nothing is on by default. Saving stores the settings without a reload (notifications.save_notifications).
 
@@ -23,8 +23,8 @@ from homeassistant.helpers import selector
 
 from .const import DOMAIN
 from .notifications import (HOUSE_MAINTENANCE, HOUSE_PROBLEMS, ROOM_KINDS, house_people, notification_options,
-                            phone_services, room_people, save_notifications, suggested_phone, with_house,
-                            with_house_person, with_phone, with_room)
+                            phone_services, save_notifications, suggested_phone, with_house, with_house_person,
+                            with_phone, with_room)
 from .e32_room_flow import FlowError
 from .options_navigation import async_flow_texts
 
@@ -113,9 +113,12 @@ def room_change(settings, room_id, on, kinds):
 
 
 def room_recipients(hass, entry, room_id):
-    """The names of the people who get this room's messages: the room's own persons (Configure → Rooms → the room →
-    Persons); empty: everyone with a phone (the screens say so in their own words)."""
-    return [person_name(hass, p) for p in room_people(entry, room_id)]
+    """The names of the people chosen for this room's messages whom Home Assistant still knows (1.4.2: the room's
+    own recipients); empty: everyone with a phone, nobody, or nobody left (settings_notifications.recipients_line
+    says which, in a sentence)."""
+    from .notifications import person_found, room_choice
+    return [person_name(hass, p) for p in room_choice(notification_options(entry), room_id) or ()
+            if person_found(hass, p)]
 
 
 class NotificationOptionsSteps:
@@ -261,10 +264,13 @@ class NotificationOptionsSteps:
                     return self.async_abort(reason="notifications_unchanged")
                 save_notifications(self.hass, self.config_entry, changed)
                 return self.async_abort(reason="notifications_saved")
-        who = ", ".join(room_recipients(self.hass, self.config_entry, room_id)) or texts["everyone"]
+        from .heating_advice import language
+        from .settings_notifications import recipients_line
+        who = recipients_line(self.hass, self.config_entry, settings, room_id, rooms[room_id])
         schema = vol.Schema({vol.Required("on", default=room["on"]): selector.BooleanSelector(),
                              vol.Required("kinds", default=room["kinds"]): _kinds_selector("notification_room_kind")})
         if user_input is not None:
             schema = self.add_suggested_values_to_schema(schema, user_input)
         return self.async_show_form(step_id="notify_room", data_schema=schema, errors=errors,
-                                    description_placeholders={"room": rooms[room_id], "people": who})
+                                    description_placeholders={"room": rooms[room_id],
+                                                              "who": who.get(language(self.hass), who["en"])})

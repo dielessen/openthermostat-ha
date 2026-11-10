@@ -2,8 +2,9 @@
    calm screen. #notifications: one status line (where messages go now) and two rows; #notifications/people: "Who gets
    messages", a row per person; #notifications/person/<person>: one person's phone and the tick "Also messages about
    the house"; #notifications/house: "Which messages", the house (its switch and, while on, the messages in two groups
-   with what causes each) and the rooms (a row per room with its summary; a room's messages are set on the room screen,
-   #room/<id>). Backend settings_notifications.py (one item per screen, its own token; CONTRACT-1.4.1, the
+   with what causes each) and the rooms (a row per room with its summary and, while on, who gets its messages; a room's
+   messages and their recipients are set on the room screen, #room/<id>, which saves the recipients through this
+   section's item room/<id>, 1.4.2). Backend settings_notifications.py (one item per screen, its own token; CONTRACT-1.4.1, the
    S-NOTIFY-BACKEND report); the kit and the core: openthermostat-settings-kit.js, openthermostat-settings.js. Words:
    Configure's for the same settings, the backend's cause sentences (glossary block 1.4.1 NOTIFY-BACKEND), word for
    word (test/ha-settings-texts.test.cjs). */
@@ -44,7 +45,7 @@ const TEXTS = {
   'Problems': 'Problemen',
   'Maintenance': 'Onderhoud',
   'Rooms': 'Ruimtes',
-  'A room\'s messages are set on its own screen.': 'De meldingen van een ruimte stel je in op haar eigen scherm.',
+  'A room\'s messages, and who gets them, are set on its own screen.': 'De meldingen van een ruimte, en wie ze krijgt, stel je in op haar eigen scherm.',
   'The E32 has not reported any rooms yet.': 'De E32 heeft nog geen ruimtes gemeld.',
   'The rooms could not be read. Reload the page.': 'De ruimtes konden niet worden gelezen. Laad de pagina opnieuw.',
   'Boiler fault': 'Ketelstoring',
@@ -71,70 +72,6 @@ const TEXTS = {
   'Choose one of the phones in the list.': 'Kies een van de telefoons in de lijst.',
   'Something in the form was not valid. Try again.': 'Iets in het formulier klopte niet. Probeer het opnieuw.',
   'Choose one of the people in the list.': 'Kies een van de personen in de lijst.'
- },
- pl: {
-  'Notifications': 'Powiadomienia',
-  'Messages on your phone about a room or the house. Nothing is on until you switch it on.': 'Wiadomości na telefon o pomieszczeniu lub domu. Nic nie jest włączone, dopóki sam tego nie włączysz.',
-  'Who gets messages': 'Kto otrzymuje wiadomości',
-  'Each person\'s phone, and whether they also get the messages about the house.': 'Telefon każdej osoby oraz to, czy otrzymuje też wiadomości o domu.',
-  'The phone or app that gets this person\'s messages.': 'Telefon lub aplikacja, która otrzymuje wiadomości tej osoby.',
-  'Which messages': 'Jakie wiadomości',
-  'Messages about the house and about each room.': 'Wiadomości o domu i o każdym pomieszczeniu.',
-  'No people in Home Assistant yet.': 'Brak osób w Home Assistant.',
-  'House: on': 'Dom: włączone',
-  'House: off': 'Dom: wyłączone',
-  'no rooms': 'brak pomieszczeń',
-  '1 room': '1 pomieszczenie',
-  '{n} rooms': 'Pomieszczenia: {n}',
-  'There are no people in Home Assistant yet. Add a person under Settings → People, then choose their phone here.': 'W Home Assistant nie ma jeszcze osób. Dodaj osobę w Ustawienia → Osoby, a potem wybierz tutaj jej telefon.',
-  'No phone': 'Brak telefonu',
-  '{name} (Home Assistant app)': '{name} (aplikacja Home Assistant)',
-  '{service} (not found)': '{service} (nie znaleziono)',
-  'Also house messages': 'Także wiadomości o domu',
-  'Phone or app': 'Telefon lub aplikacja',
-  'Choose No phone to stop messages to a phone; they then show in Home Assistant.': 'Wybierz Brak telefonu, aby nie wysyłać już wiadomości na telefon; pojawią się wtedy w Home Assistant.',
-  'Suggested: the app on {name}\'s own phone. Choose Save to use it.': 'Sugerowane: aplikacja na własnym telefonie osoby {name}. Wybierz Zapisz, aby jej użyć.',
-  'This phone is no longer in Home Assistant: the messages show in Home Assistant until you choose another one.': 'Tego telefonu nie ma już w Home Assistant: wiadomości pojawiają się w Home Assistant, dopóki nie wybierzesz innego.',
-  'Also messages about the house': 'Także wiadomości o domu',
-  '{name} gets the messages about the house too.': '{name} otrzymuje też wiadomości o domu.',
-  'Off: {name} gets no messages about the house.': 'Wyłączone: {name} nie otrzymuje wiadomości o domu.',
-  'The house': 'Dom',
-  'Notify about the house': 'Powiadomienia o domu',
-  'Off: no messages about the house.': 'Wyłączone: brak wiadomości o domu.',
-  'They go to: {people}.': 'Trafiają do: {people}.',
-  '{name} (no phone: in Home Assistant)': '{name} (brak telefonu: w Home Assistant)',
-  'Nobody gets these yet: switch on “Also messages about the house” for a person under Who gets messages.': 'Nikt ich jeszcze nie otrzymuje: włącz „Także wiadomości o domu” przy osobie w Kto otrzymuje wiadomości.',
-  'Messages about the whole house, day and night, also when nobody is home.': 'Wiadomości o całym domu, w dzień i w nocy, także gdy nikogo nie ma w domu.',
-  'Problems': 'Problemy',
-  'Maintenance': 'Konserwacja',
-  'Rooms': 'Pomieszczenia',
-  'A room\'s messages are set on its own screen.': 'Wiadomości pomieszczenia ustawiasz na jego własnym ekranie.',
-  'The E32 has not reported any rooms yet.': 'E32 nie zgłosił jeszcze żadnych pomieszczeń.',
-  'The rooms could not be read. Reload the page.': 'Nie udało się odczytać pomieszczeń. Wczytaj stronę ponownie.',
-  'Boiler fault': 'Usterka kotła',
-  'E32 not reporting for 10 minutes, and when it is back': 'E32 nie odzywa się od 10 minut, i gdy znów jest dostępny',
-  'E32 waits for your confirmation to control the boiler': 'E32 czeka na Twoje potwierdzenie, by sterować kotłem',
-  'Frost protection on': 'Ochrona przed mrozem włączona',
-  'Water pressure low': 'Ciśnienie wody za niskie',
-  'Boiler asks for maintenance (H code)': 'Kocioł wymaga konserwacji (kod H)',
-  'New version of the E32 firmware or of this integration': 'Nowa wersja oprogramowania E32 lub tej integracji',
-  'Daily backup of the E32 settings keeps failing': 'Codzienna kopia ustawień E32 stale się nie udaje',
-  'E32 ready to plan the heating (asks for your confirmation once)': 'E32 gotowy do planowania ogrzewania (raz prosi o potwierdzenie)',
-  'Season: switch summer mode on or off?': 'Pora roku: włączyć lub wyłączyć tryb letni?',
-  'The boiler reports a fault.': 'Kocioł zgłasza usterkę.',
-  'The E32 has not reported for 10 minutes; a second message when it is back.': 'E32 nie odzywa się od 10 minut; druga wiadomość, gdy znów jest dostępny.',
-  'The E32 waits for your confirmation before it controls the boiler.': 'E32 czeka na Twoje potwierdzenie, zanim zacznie sterować kotłem.',
-  'A room cooled below 8 °C, so the E32 heats against frost.': 'Pomieszczenie wychłodziło się poniżej 8 °C, więc E32 grzeje, chroniąc przed mrozem.',
-  'The water pressure of the heating is too low.': 'Ciśnienie wody w instalacji grzewczej jest za niskie.',
-  'The boiler asks for maintenance (an H code).': 'Kocioł wymaga konserwacji (kod H).',
-  'A new version of the E32 firmware or of this integration is available.': 'Dostępna jest nowa wersja oprogramowania E32 lub tej integracji.',
-  'The daily backup of the E32 settings has failed for more than 3 days.': 'Codzienna kopia ustawień E32 nie udaje się od ponad 3 dni.',
-  'The E32 is ready to plan the heating and asks for your confirmation once.': 'E32 jest gotowy do planowania ogrzewania i raz prosi o Twoje potwierdzenie.',
-  'Five days above 17 °C outside, or three cold days while summer mode is on.': 'Pięć dni powyżej 17 °C na zewnątrz albo trzy chłodne dni, gdy tryb letni jest włączony.',
-  'Choose at least one message, or switch notifications off.': 'Wybierz co najmniej jedną wiadomość albo wyłącz powiadomienia.',
-  'Choose one of the phones in the list.': 'Wybierz jeden z telefonów z listy.',
-  'Something in the form was not valid. Try again.': 'Coś w formularzu było nieprawidłowe. Spróbuj ponownie.',
-  'Choose one of the people in the list.': 'Wybierz jedną z osób z listy.'
  }};
 // The house messages in Configure's words (selector notification_house_kind), and what causes each (the backend's
 // CAUSES by cause_key, glossary block 1.4.1 NOTIFY-BACKEND).
@@ -316,7 +253,9 @@ function house(ctx) {
   rows.replaceChildren(...(list.length ? list.map(r => {
    const route = '#room/' + encodeURIComponent(r.room);
    // The room screen opens with its section "Notifications for this room" open (the rooms module remembers folds).
-   return kit.row({label: r.name, summary: [say(ctx, r.summary || {})], route, data: {room: r.room}, onClick: e => {
+   // While on: who gets them, in the backend's sentence (1.4.2, recipients per room; chosen on the room screen).
+   const who = r.on && r.recipients_line ? [say(ctx, r.recipients_line)] : [];
+   return kit.row({label: r.name, summary: [say(ctx, r.summary || {}), ...who], route, data: {room: r.room}, onClick: e => {
     if (e.button || e.metaKey || e.ctrlKey || e.shiftKey) return;
     e.preventDefault();
     const folds = kit.memory('room-folds:' + r.room), shadow = e.currentTarget.getRootNode();
@@ -333,7 +272,7 @@ function house(ctx) {
  });
  return h('div', {class: 'nn-page', 'data-screen': 'house'},
   kit.card({title: t('The house'), icon: 'home', cls: 'nn-card', data: {block: 'house'}}, toggle, groups),
-  kit.card({title: t('Rooms'), icon: 'thermostat', summary: t('A room\'s messages are set on its own screen.'), cls: 'nn-card', data: {block: 'rooms'}}, rows));
+  kit.card({title: t('Rooms'), icon: 'thermostat', summary: t('A room\'s messages, and who gets them, are set on its own screen.'), cls: 'nn-card', data: {block: 'rooms'}}, rows));
 }
 
 (window.OpenThermostatSettingsSections ||= []).push(['notifications', {

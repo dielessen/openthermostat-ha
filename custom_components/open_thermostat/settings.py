@@ -28,11 +28,15 @@ Errors are ``connection.send_error(id, code, message)``: the code from SettingsE
 ``FlowError`` of the options flow: ``key``, ``field``, ``placeholders``), or ``not_admin``, ``unknown_section``,
 ``unavailable``, ``e32_unreachable``, ``save_uncertain``. The error's data (the field, the
 placeholders and, for ``changed_elsewhere``, the fresh model and token) travels in Home Assistant's
-``translation_placeholders`` slot of the error, which the frontend receives as it is.
+``translation_placeholders`` slot of the error, which the frontend receives as it is. 1.4.2: a refused save whose
+earlier steps were stored already (the house mode screen writes holidays, then the temperature, then the mode) also
+carries the fresh model and token, so the next save of that screen is not "changed elsewhere" about your own change;
+a Home Assistant error a section lets through keeps its placeholders (``_failure``).
 
-No answer ever carries a password, a passphrase or the E32's connection data: ``_scrub`` removes every key that
-contains "password", "passphrase" or "secret" and the controller_* connection keys from every model, at any depth,
-whatever a section returns (a section that needs "a password is stored" names that flag otherwise).
+No answer ever carries a password, a passphrase, a bind key or the E32's connection data: ``_scrub`` removes every
+key that contains "password", "passphrase", "secret", "bindkey" or "bind_key" and the controller_* connection keys
+from every model, at any depth, whatever a section returns (a section that needs "a password is stored" names that
+flag otherwise).
 """
 from __future__ import annotations
 
@@ -54,31 +58,31 @@ _LOGGER = logging.getLogger(__name__)
 
 # The panel's module, served and loaded with the dashboard cards (week_planner.card_modules); the release script
 # moves the version in the name (tools/dev/prepare_release.py, "frontend URLs").
-URL = "/open_thermostat/openthermostat-settings-1.4.1.js"
+URL = "/open_thermostat/openthermostat-settings-1.4.2.js"
 # 1.4.1: the component kit (frontend/openthermostat-settings-kit.js) and the section modules are no longer loaded on every
 # Home Assistant page: only the core is (URL above, week_planner.card_modules); the core loads the kit and the sections
 # when the Settings tab opens, from the overview's ``modules`` list (modules()).
-KIT_URL = "/open_thermostat/openthermostat-settings-kit-1.4.1.js"
+KIT_URL = "/open_thermostat/openthermostat-settings-kit-1.4.2.js"
 CARD_TYPE = "custom:openthermostat-settings"
 # A section package's own module (frontend/openthermostat-settings-<section>.js, it calls the kit's defineSection), served
 # with the panel and loaded by it on the first visit of the tab: one (URL, file) line per package, the URL versioned as
 # the panel's.
 SECTION_MODULES: tuple[tuple[str, str], ...] = (
     # ("/open_thermostat/openthermostat-settings-<section>-<HA version>.js", "openthermostat-settings-<section>.js"),
-    ("/open_thermostat/openthermostat-settings-rooms-1.4.1.js", "openthermostat-settings-rooms.js"),
-    ("/open_thermostat/openthermostat-settings-house-1.4.1.js", "openthermostat-settings-house.js"),
-    ("/open_thermostat/openthermostat-settings-heating-1.4.1.js", "openthermostat-settings-heating.js"),
-    ("/open_thermostat/openthermostat-settings-devices-1.4.1.js", "openthermostat-settings-devices.js"),
-    ("/open_thermostat/openthermostat-settings-energy-1.4.1.js", "openthermostat-settings-energy.js"),
-    ("/open_thermostat/openthermostat-settings-notifications-1.4.1.js", "openthermostat-settings-notifications.js"),
-    ("/open_thermostat/openthermostat-settings-installation-1.4.1.js", "openthermostat-settings-installation.js"),
+    ("/open_thermostat/openthermostat-settings-rooms-1.4.2.js", "openthermostat-settings-rooms.js"),
+    ("/open_thermostat/openthermostat-settings-house-1.4.2.js", "openthermostat-settings-house.js"),
+    ("/open_thermostat/openthermostat-settings-heating-1.4.2.js", "openthermostat-settings-heating.js"),
+    ("/open_thermostat/openthermostat-settings-devices-1.4.2.js", "openthermostat-settings-devices.js"),
+    ("/open_thermostat/openthermostat-settings-energy-1.4.2.js", "openthermostat-settings-energy.js"),
+    ("/open_thermostat/openthermostat-settings-notifications-1.4.2.js", "openthermostat-settings-notifications.js"),
+    ("/open_thermostat/openthermostat-settings-installation-1.4.2.js", "openthermostat-settings-installation.js"),
 )
 VIEW_PATH = "settings"  # the dashboard view: /<dashboard>/settings#<route>
 CONFIGURE_PATH = "/config/integrations/integration/" + DOMAIN
 NAME_MAX = 80  # the installation name, as the options step "general" allows it
-LANGUAGES = ("en", "nl", "pl")
+LANGUAGES = ("en", "nl")
 # Keys that never leave Home Assistant in a panel answer (a section that returns one has a bug; the core drops it).
-SECRET_PARTS = ("password", "passphrase", "secret")
+SECRET_PARTS = ("password", "passphrase", "secret", "bindkey", "bind_key")
 SECRET_KEYS = frozenset({"controller_address", "controller_password", "controller_url"})
 LIVE = "live"  # a model's values shown beside the fields, not edited: not part of the token
 
@@ -160,6 +164,7 @@ def _load_sections():
     from . import settings_energy  # noqa: F401
     from . import settings_notifications  # noqa: F401  (Notifications: people and phones, the house, the rooms)
     from . import settings_installation  # noqa: F401  (Installation: name, dashboard, Advanced's screens, maintenance)
+    from . import room_advice  # noqa: F401  (Rooms: the action adopt_advice, "Use 18 °C", 1.4.2 HA-ADVICE)
 
 
 # -- the token ------------------------------------------------------------------------------------------------
@@ -177,7 +182,7 @@ def token(model):
 
 
 def _scrub(value):
-    """The value without passwords, passphrases, secrets and the E32's connection keys, at any depth."""
+    """The value without passwords, passphrases, secrets, bind keys and the E32's connection keys, at any depth."""
     if isinstance(value, dict):
         return {key: _scrub(item) for key, item in value.items()
                 if not (type(key) is str and (key.lower() in SECRET_KEYS
@@ -203,7 +208,7 @@ async def read_model(hass, entry, section, item=None):
 # -- language and plain figures ---------------------------------------------------------------------------------
 
 def language(hass, wanted=None):
-    """en, nl or pl: the viewer's language when the panel names one, else Home Assistant's, else English."""
+    """en or nl: the viewer's language when the panel names one, else Home Assistant's, else English."""
     for value in (wanted, getattr(getattr(hass, "config", None), "language", None)):
         if type(value) is str and value[:2].lower() in LANGUAGES:
             return value[:2].lower()
@@ -216,7 +221,7 @@ def figure(value, lang, digits=None):
         text = f"{round(float(value), 1):g}"
     else:
         text = f"{float(value):.{digits}f}"
-    return text.replace(".", ",") if lang in ("nl", "pl") else text
+    return text.replace(".", ",") if lang == "nl" else text
 
 
 def degrees(value, lang):
@@ -256,7 +261,7 @@ def _connected(hass, entry, hub):
     return None if has_room_plan(entry) else "connect_e32"
 
 
-# The words of the summaries (EN, NL, PL). The house modes are the select's words (strings.json
+# The words of the summaries (EN, NL). The house modes are the select's words (strings.json
 # entity.select.house_mode, checked by test_settings_panel.py); the room states are the shared words of 1.4.
 TEXT = {
     "en": {"no_data": "No data from the E32 yet", "no_rooms": "No rooms yet", "more": "and {n} more",
@@ -283,20 +288,6 @@ TEXT = {
            "no_devices": "Geen Bluetooth-sensoren of Shelly-apparaten", "on": "Aan", "notifications_off": "Uit",
            "gas_meter": "Gasmeter", "gas_price": "Gasprijs", "outdoor": "buiten: {name}", "boiler_kw": "{kw} kW",
            "water_meter": "Watermeter", "forecast": "Weersverwachting", "energy_none": "Nog niets ingesteld"},
-    "pl": {"no_data": "Brak jeszcze danych z E32", "no_rooms": "Brak jeszcze pomieszczeń", "more": "i jeszcze {n}",
-           "follow": "grzeje tylko razem z innymi", "off": "wyłączone", "auto": "Automatycznie", "home": "W domu",
-           "away": "Nieobecność", "holiday": "Urlop", "summer": "Lato", "away_after": "nieobecność po {n} min, potem {t}",
-           "away_at": "nieobecność: {t}",
-           "limits_own": "Temperatura wody: {low}–{high} °C",
-           "limits_auto": "Temperatura wody: najwyżej {high} °C, najniższa automatycznie",
-           "limits_auto_now": "Temperatura wody: najwyżej {high} °C, najniższa automatycznie (teraz {now} °C)",
-           "boiler": "Kocioł", "ble_one": "1 czujnik Bluetooth", "ble": "Czujniki Bluetooth: {n}",
-           "shelly_one": "1 zawór Shelly", "shelly": "Zawory Shelly: {n}",
-           "circuit_one": "1 obieg grzewczy", "circuit": "Obiegi grzewcze: {n}",
-           "no_devices": "Brak czujników Bluetooth i urządzeń Shelly", "on": "Włączone",
-           "notifications_off": "Wyłączone", "gas_meter": "Licznik gazu", "gas_price": "Cena gazu",
-           "outdoor": "na zewnątrz: {name}", "boiler_kw": "{kw} kW", "water_meter": "Licznik wody",
-           "forecast": "Prognoza pogody", "energy_none": "Jeszcze nic nie ustawiono"},
 }
 ROOMS_SHOWN = 6  # the overview names this many rooms, then "and 2 more"
 
@@ -573,10 +564,34 @@ def _section(name):
     return section
 
 
+# Home Assistant error keys of the E32 links that say the E32 did not answer, or did not confirm a write: the panel's
+# own codes (e32_unreachable, save_uncertain) say it, with the link's key as {error}.
+UNREACHABLE_KEYS = ("_unreachable", "e32_no_free_session")
+UNCONFIRMED_KEYS = ("_unconfirmed",)
+
+
 def _failure(err):
-    """A Home Assistant error of a write to the E32 as the panel's code: the E32's own key when it names one."""
+    """A Home Assistant error of a read or write of the E32 that a section let through, as the panel's code: the room
+    plan's keys as the room form names them (e32_room_flow.FAILURES), "... could not be reached" and "... not
+    confirmed" as the core's two codes, any other key as it is; its placeholders go along (a sentence with {error}
+    shows the reason, never the bare "{error}")."""
+    from .e32_room_flow import FAILURES
     key = getattr(err, "translation_key", None)
-    return SettingsError(key if type(key) is str and key else "e32_unreachable")
+    raw = getattr(err, "translation_placeholders", None)
+    placeholders = {str(k): v for k, v in raw.items()} if isinstance(raw, dict) else {}
+    if type(key) is not str or not key:
+        key = "e32_unreachable"
+    elif key in FAILURES:
+        placeholders.setdefault("error", key)
+        key = FAILURES[key]
+    elif key.endswith(UNREACHABLE_KEYS):
+        placeholders.setdefault("error", key)
+        key = "e32_unreachable"
+    elif key.endswith(UNCONFIRMED_KEYS):
+        key = "save_uncertain"
+    failure = SettingsError(key)
+    failure.placeholders = placeholders
+    return failure
 
 
 @websocket_api.websocket_command({vol.Required("type"): "open_thermostat/settings/overview",
@@ -633,18 +648,55 @@ async def ws_save(hass, connection, msg):
         if current["token"] != msg["token"]:
             _send_error(connection, msg["id"], SettingsError("changed_elsewhere"), current)
             return
-        saved = await _call(section.save, hass, entry, item, msg["values"])
+        try:
+            saved = await _call(section.save, hass, entry, item, msg["values"])
+        except Exception as err:  # noqa: BLE001 - said below, with the screen as it is now when part of it was stored
+            fresh = await _fresh(hass, entry, section, item, current["token"]) if _refusal(err) else None
+            raise _Refused(err, fresh) from err
         model = _scrub(saved) if type(saved) is dict else (await read_model(hass, entry, section, item))["model"]
-    except HomeAssistantError as err:
-        _send_error(connection, msg["id"], _failure(err))
-    except Exception as err:  # noqa: BLE001 - a refusal has a code; anything else is logged and said plainly
-        if (known := as_settings_error(err)) is not None:
-            _send_error(connection, msg["id"], known)
-            return
-        _LOGGER.exception("The settings section %s could not be saved", msg.get("section"))
-        _send_error(connection, msg["id"], SettingsError("save_uncertain"))
+    except _Refused as refused:
+        _send_refusal(connection, msg, refused.error, refused.fresh)
+    except Exception as err:  # noqa: BLE001 - a refusal before the save itself (an unknown section, an unreadable screen)
+        _send_refusal(connection, msg, err, None)
     else:
         connection.send_result(msg["id"], {"model": model, "token": token(model)})
+
+
+class _Refused(Exception):
+    """A section's save that was refused (or failed) after the token check: the error, and the fresh {model, token}
+    when an earlier step of that save was stored already (None when the screen did not change)."""
+
+    def __init__(self, error, fresh):
+        super().__init__(str(error))
+        self.error, self.fresh = error, fresh
+
+
+def _refusal(err):
+    """A section's own refusal (SettingsError or FlowError) that is not "the E32 could not be reached": only after
+    such a refusal can an earlier step of the save have been stored, and reading the screen again is worth it."""
+    known = None if isinstance(err, HomeAssistantError) else as_settings_error(err)
+    return known is not None and not known.key.endswith(UNREACHABLE_KEYS)
+
+
+async def _fresh(hass, entry, section, item, before):
+    """{"model", "token"} of the screen as it is now, when that is not what the panel was shown (a part of the save was
+    stored before a later step was refused); None when nothing changed or the screen cannot be read now."""
+    try:
+        now = await read_model(hass, entry, section, item)
+    except Exception:  # noqa: BLE001 - the refusal itself is what the panel shows
+        return None
+    return now if now["token"] != before else None
+
+
+def _send_refusal(connection, msg, err, fresh):
+    """A save's refusal: its code, field and placeholders, and the fresh model and token when part of it was stored."""
+    if isinstance(err, HomeAssistantError):
+        _send_error(connection, msg["id"], _failure(err), fresh)
+    elif (known := as_settings_error(err)) is not None:
+        _send_error(connection, msg["id"], known, fresh)
+    else:
+        _LOGGER.error("The settings section %s could not be saved", msg.get("section"), exc_info=err)
+        _send_error(connection, msg["id"], SettingsError("save_uncertain"), fresh)
 
 
 @websocket_api.websocket_command({vol.Required("type"): "open_thermostat/settings/action",

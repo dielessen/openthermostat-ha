@@ -185,7 +185,7 @@ async def async_plan(hass, config_entry) -> Plan:
 
 
 # "used in" after a listed rename, per language of the form.
-USED_IN = {"en": "used in", "nl": "gebruikt in", "pl": "używane w"}
+USED_IN = {"en": "used in", "nl": "gebruikt in"}
 
 
 def preview_text(plan: Plan, only_unused: bool, language: str | None = "en") -> str:

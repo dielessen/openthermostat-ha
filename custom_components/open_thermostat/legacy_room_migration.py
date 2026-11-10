@@ -388,32 +388,11 @@ TEXT = {
         "unreadable": "Het E32-ruimteplan kon nu niet gelezen worden, dus dit overzicht is niet compleet. Verstuur "
                       "om het opnieuw te proberen; er wordt niets verwijderd voordat het ruimteplan gecontroleerd is.",
     },
-    # 1.4.1 (INSTALL-V2): Polish, for Settings → Installation → Old Home Assistant rooms and Configure in Polish.
-    "pl": {
-        "source": "Pomieszczenie {room} na E32 używało {old} jako źródła temperatury; teraz będzie to {new}.",
-        "source_dropped": "Pomieszczenie {room} na E32 używało {old} jako jednego ze swoich źródeł temperatury; to "
-                          "źródło znika razem ze starym pomieszczeniem, a {room} zachowuje pozostałe źródła.",
-        "source_kept": "Pomieszczenie {room} na E32 używało {old} jako źródła temperatury, a stare pomieszczenie nie "
-                       "ma nic w zamian: {room} nie będzie mieć źródła temperatury, dopóki go nie wybierzesz "
-                       "(Konfiguruj → Pomieszczenia albo komunikat \"Wybierz źródło temperatury dla pomieszczenia "
-                       "{room}\" w Naprawach).",
-        "setpoint": "Pomieszczenie {room} na E32 brało temperaturę docelową z {old}; teraz będzie ją brać z {new}.",
-        "setpoint_dropped": "Pomieszczenie {room} na E32 brało temperaturę docelową z {old}; od teraz {room} działa "
-                            "według własnego programu tygodniowego.",
-        "handover": "Twój termostat {old} zostaje zastąpiony termostatem pomieszczenia {room}; zachowuje on "
-                    "identyfikator encji {entity_id}, więc pulpity, automatyzacje i asystenci głosowi działają dalej.",
-        "handover_other": "Twój termostat {old} zostaje zastąpiony termostatem pomieszczenia {room} ({new}). Pulpity "
-                          "i automatyzacje używające {entity_id} muszą od teraz używać {new}.",
-        "nothing": "Żadne pomieszczenie na E32 nie korzysta ze starych pomieszczeń, więc nic się w nich nie zmienia.",
-        "rooms": "Same pomieszczenia na E32 zostają, z ustawieniami i programami tygodniowymi: {rooms}.",
-        "unreadable": "Nie udało się teraz odczytać planu pomieszczeń E32, więc ta lista nie jest pełna. Zatwierdź, "
-                      "aby spróbować ponownie; nic nie zostanie usunięte, zanim plan pomieszczeń zostanie sprawdzony.",
-    },
 }
 
 
 def describe(hass, migration, language=None):
-    """The plain-language list for the confirmation step (English, Dutch or Polish): in ``language`` (the settings
+    """The plain-language list for the confirmation step (English or Dutch): in ``language`` (the settings
     panel's viewer), else in Home Assistant's."""
     language = str(language or getattr(hass.config, "language", "en") or "en")[:2].lower()
     text = TEXT[language if language in TEXT else "en"]

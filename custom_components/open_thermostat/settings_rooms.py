@@ -36,10 +36,24 @@ none), ``standard_program`` (a new room only), ``remove`` (true: remove the room
 [{entity_id, model} | {id, role?, keep_open?}], control}), ``persons`` ({entity_ids, away_temperature}; null: the
 house away temperature), ``minimum_temperature``, ``maximum_temperature`` (the user's unit) and ``notifications``
 ({on, kinds}). An error names the panel's field: the top key it belongs to.
+
+1.4.2 (CONTRACT-1.4.2 §2, plan 3.3, 3.4, 3.12): the week program, the reset times and Smart warm-up are read values
+under ``live`` (the planner on the same screen saves them itself; outside the token, so a planner save followed by a
+panel save is no "changed elsewhere", P1); ``after`` ("active" | "follow": what "Off until" returns to, P10) on the list
+rows and the room model; ``live.target_source`` (where the room's target comes from now, for the line under the
+temperature field); ``live.setting_device_hint`` ("valve_on_active" | None) with ``live.valve_setting_devices`` (the
+climate entities that are radiator valves, so the screen can say it while you choose); ``live.integrations`` ({platform:
+name}: the Home Assistant integration of a temperature source); ``live.notifications`` (the people who can get the
+room's messages and who gets them in one sentence, HA-NOTIFY's item ``room/<id>``); ``live.advice`` and ``live.model``
+(HA-ADVICE). Save keys: ``remove_program`` (true: the room's week program goes in the same plan write as the other
+fields, normally with ``fallback_temperature``) and ``notifications.recipients`` (a list of person ids, [] nobody, null
+everyone with a phone; saved through the notifications item ``room/<id>``).
 """
 from __future__ import annotations
 
 from collections import namedtuple
+from datetime import datetime, timezone
+import logging
 import time
 
 from homeassistant.exceptions import HomeAssistantError
@@ -55,8 +69,10 @@ from .e32_room_flow import (LIMITS_CENTI_C, MAX_ROOMS, MAX_SOURCES, SMART_WARM_U
                             room_parts, save_room, shown, shown_reset, valve_context)
 from .e32_setting_device import default_program
 from .heating_link import ble_device_identifier, label, number
-from .room_plan import plan_room, until_datetime
+from .room_plan import on_state, plan_room, until_datetime
 from .settings import SettingsError, _hub, language, register_section
+
+_LOGGER = logging.getLogger(__name__)
 
 NEW = "new-room"
 # The room form's fields (and sections) under the panel's name: the two source lists are the one list "sources",
@@ -203,6 +219,173 @@ def program_groups(schedule, unit):
     return groups
 
 
+# -- what a room's screen shows beside its fields (1.4.2, under ``live``: outside the token) -------------------------
+
+def program_live(room, unit, features):
+    """The week program (as groups of days), the reset times and Smart warm-up of the room, under ``live`` (review P1):
+    the week planner on the same screen edits and saves them itself, so a planner save never makes the next panel save
+    "changed elsewhere". A new room (None): the standard program "Workdays and weekend" it starts with (#7)."""
+    stored = room or {}
+    live = {"program": program_groups(default_program(500, 3000) if room is None else stored.get("schedule"), unit)}
+    if features["resets"]:
+        live["resets"] = [shown_reset(r, unit) for r in stored.get("resets") or [] if type(r) is dict]
+    if features["smart_warm_up"]:
+        choice = stored.get(SMART_WARM_UP_FIELD)
+        live["smart_warm_up"] = choice if choice in ("on", "off") else "house"
+    return live
+
+
+def _moment(value):
+    """A moment of the E32's report (unix seconds, or an ISO text in UTC) as the panel's local "YYYY-MM-DDTHH:MM"."""
+    if type(value) in (int, float) and type(value) is not bool and value > 0:
+        return _local(value)
+    if type(value) is str and value:
+        try:
+            found = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        return _local((found if found.tzinfo else found.replace(tzinfo=timezone.utc)).timestamp())
+    return None
+
+
+def active_reset(room, now, zone):
+    """The time ("22:00") of the reset time with a temperature that set the room's target last: the latest one whose
+    day and time are at or before now (the E32 reports which source holds the target, not which reset time; plan
+    3.3). Days 0 = Monday (RoomResets.h); None without one in the past week."""
+    local = now.astimezone(zone)
+    minute = local.hour * 60 + local.minute
+    resets = [r for r in (room or {}).get("resets") or [] if type(r) is dict and "state" not in r
+              and type(r.get("time")) is str and len(r["time"]) == 5 and type(r.get("days")) is list]
+    for back in range(8):
+        day = (local.weekday() - back) % 7
+        times = sorted(r["time"] for r in resets if day in r["days"]
+                       and (back or int(r["time"][:2]) * 60 + int(r["time"][3:]) <= minute))
+        if times:
+            return times[-1]
+    return None
+
+
+def target_source(hass, entry, hub, room, unit, now=None):
+    """Where the room's target comes from now (CONTRACT-1.4.2 §2 ``live.target_source``): {"source", "temperature"
+    (the user's unit, or None), "until" (local "YYYY-MM-DDTHH:MM" or None), "reset_time" ("22:00" or None)} with the
+    source "program" (its week program, until the next switch time), "fixed" (the temperature without a week program),
+    "manual" (a manual change), "reset" (a reset time's temperature), "summer", "window" (paused: 8 °C), "off" or
+    "boost". None while the E32 is not heard, for a new room, and while the house's away or holiday holds the room (the
+    status line above says that). The frontend builds the sentence, in the room card's words."""
+    from .room_overview import e32_zone, program_step
+    if room is None or not getattr(hub, "fresh", False):
+        return None
+    live = (getattr(hub, "rooms", None) or {}).get(room["id"])
+    if type(live) is not dict:
+        return None
+    comfort = live.get("comfort") if type(live.get("comfort")) is dict else {}
+    status = hub.status if type(getattr(hub, "status", None)) is dict else {}
+    away = status.get("away") if type(status.get("away")) is dict else {}
+    mode, source, setpoint = comfort.get("mode"), live.get("setpoint_source"), number(live.get("setpoint"), 5, 35)
+
+    def found(kind, celsius=setpoint, until=None, reset_time=None):
+        return {"source": kind, "temperature": None if celsius is None else shown(round(celsius * 100), unit),
+                "until": until, "reset_time": reset_time}
+    if (live.get("state") or room.get("state")) == "inactive":
+        until = until_datetime(room)
+        return found("off", None, _local(until.timestamp()) if until is not None else None)
+    if source == "summer" or away.get("mode") == "summer":
+        return found("summer")
+    if comfort.get("window") == "open" or mode == "window_open":
+        return found("window")
+    if mode == "boost":
+        return found("boost", until=_moment(comfort.get("until")))
+    if mode in ("timed", "next"):
+        held = number(comfort.get("target_c"), 5, 35)
+        return found("manual", held if held is not None else setpoint, _moment(comfort.get("until")))
+    if mode not in (None, "program"):
+        return None
+    now = now or datetime.now(timezone.utc)
+    zone = e32_zone(hass, entry)
+    if source == "reset":
+        return found("reset", reset_time=active_reset(room, now, zone))
+    if source in ("schedule", "warmup"):
+        step = program_step(room, now, zone, live, away)
+        if step is None:
+            return found("program")
+        return found("program", step["target"], _moment(step["next_at"]))
+    return found("fixed")
+
+
+def _valve_entities(hass, hub, config=None):
+    """The climate entities of the radiator valves the E32 lists, any room: from its valve record
+    (valve_routes.valve_entities: a Zigbee2MQTT valve by the entity of its friendly name too) and from its valve
+    telemetry (a Home Assistant valve by its entity)."""
+    from .valve_routes import valve_entities
+    found = {entity for entities in valve_entities(hass, config).values() for entity in entities} if config else set()
+    found.update(valve["name"] for doc in (getattr(hub, "valves", None) or {}).values() if type(doc) is dict
+                 for valve in doc.get("valves") or [] if type(valve) is dict
+                 and type(valve.get("name")) is str and valve["name"].startswith("climate."))
+    return sorted(found)
+
+
+def setting_device_live(hass, hub, state, setpoint_entity, own=(), config=None):
+    """``setting_device_hint`` (CONTRACT-1.4.2 §2: "valve_on_active" when the room's setting device is a radiator
+    valve and the room is On, HA-SETDEV's rule) and ``valve_setting_devices``: the climate entities that are radiator
+    valves, so the screen says the hint while you choose one or switch the room to On."""
+    from .e32_setting_device import is_radiator_valve, setting_device_hint
+    valves, mine = _valve_entities(hass, hub, config), set(own)
+    return {"setting_device_hint": setting_device_hint(hass, state, setpoint_entity, valves),
+            "valve_setting_devices": sorted(s.entity_id for s in hass.states.async_all("climate")
+                                            if s.entity_id not in mine and is_radiator_valve(hass, s.entity_id, valves))}
+
+
+async def integration_names(hass):
+    """{platform: the integration's name} of every Home Assistant temperature sensor and thermostat (the screen says
+    of a source where it comes from: "Home Assistant · BTHome"); an integration Home Assistant cannot name: its id."""
+    from homeassistant.loader import IntegrationNotFound, async_get_integration
+    registry, platforms = er.async_get(hass), set()
+    for state in hass.states.async_all(("sensor", "climate")):
+        if state.domain == "sensor" and state.attributes.get("device_class") != "temperature":
+            continue
+        item = registry.async_get(state.entity_id)
+        if item is not None and item.platform != DOMAIN:
+            platforms.add(item.platform)
+    names = {}
+    for platform in sorted(platforms):
+        try:
+            names[platform] = (await async_get_integration(hass, platform)).name
+        except IntegrationNotFound:
+            names[platform] = platform
+    return names
+
+
+def advice_live(hass, entry, room_id):
+    """HA-ADVICE's ``live.advice`` and ``live.model`` of the room (room_advice.room_live: {} while the installation has
+    no heating advice). A failure there never keeps the room's screen from opening."""
+    from .room_advice import room_live as advice
+    try:
+        return dict(advice(hass, entry, room_id) or {})
+    except Exception:  # noqa: BLE001  (the advice is a read value beside the fields; the screen opens without it)
+        _LOGGER.exception("The heating advice of room %s could not be read for its screen", room_id)
+        return {}
+
+
+async def room_live(hass, entry, hub, room, model, config=None):
+    """Everything under ``live`` that this package adds (1.4.2 PANEL-ROOM): read values, not edited here, so outside
+    the token."""
+    unit, features = model["unit"], model["features"]
+    live = program_live(room, unit, features)
+    if room is not None:
+        live.update(target_source=target_source(hass, entry, hub, room, unit),
+                    notifications=recipients_model(hass, entry, room["id"])[1],
+                    **setting_device_live(hass, hub, model["state"], model["setpoint_entity"], model["own"], config),
+                    **advice_live(hass, entry, room["id"]))
+    live["integrations"] = await integration_names(hass)
+    return live
+
+
+def _after(room):
+    """What "Off until" returns to (CONTRACT-1.4.2 §2 ``after``, review P10): "follow" when the room remembers Heat
+    along only (room_plan.on_state, the plan's follow_when_on), else "active"."""
+    return on_state(room)
+
+
 def _features(plan):
     features = plan.get("features") if type(plan.get("features")) is list else []
     return {"resets": resets_supported(plan), "smart_warm_up": SMART_WARM_UP_FEATURE in features,
@@ -215,7 +398,7 @@ def list_model(hass, entry, hub, plan):
         until = until_datetime(room)
         rooms.append({"id": room["id"], "name": room.get("name") or room["id"], "state": room.get("state", "active"),
                       "emitter": room.get("emitter", "radiator"),
-                      "inactive_until": _local(until.timestamp()) if until is not None else "",
+                      "inactive_until": _local(until.timestamp()) if until is not None else "", "after": _after(room),
                       "entities": _entities(hass, hub, room["id"])})
     return {"rooms": rooms, "can_add": len(rooms) < MAX_ROOMS, "max_rooms": MAX_ROOMS,
             "unit": RoomEditor(hass, entry, plan)._unit(),
@@ -293,13 +476,48 @@ def persons_model(hass, entry, hub, room, unit, features):
 
 
 def notifications_model(hass, entry, room_id):
-    """The room's notifications as Configure → Notifications → the room shows them, and who gets them (the names
-    of the room's own persons; empty: everyone with a phone)."""
+    """The room's notifications as Configure → Notifications → the room shows them, and who gets them (1.4.2: the
+    room's own recipients, ids, or None for everyone with a phone; recipients_model)."""
     from .notifications import ROOM_KINDS, notification_options
-    from .notifications_flow import room_recipients, shown_room
+    from .notifications_flow import shown_room
     current = shown_room(notification_options(entry), room_id) if room_id else {"on": False, "kinds": list(ROOM_KINDS)}
     return {"on": current["on"], "kinds": list(current["kinds"]), "kind_choices": list(ROOM_KINDS),
-            "recipients": room_recipients(hass, entry, room_id) if room_id else []}
+            "recipients": recipients_model(hass, entry, room_id)[0]}
+
+
+def _notifications_item(hass, entry, room_id):
+    """HA-NOTIFY's settings item ``room/<id>`` of this room ({recipients, people, recipients_line}), or None for a room
+    the notifications do not know yet (one the E32 has not reported since it was added)."""
+    from . import settings_notifications as notify
+    if not room_id:
+        return None
+    try:
+        return notify.read_notifications(hass, entry, notify.ROOM + room_id)
+    except SettingsError:
+        return None
+
+
+def recipients_model(hass, entry, room_id):
+    """(recipients, live part) of a room's messages (plan 3.4, CONTRACT-1.4.2 §2): its own list of person ids (None:
+    never chosen, everyone with a phone; []: nobody) and ``{"people": [{person, name, phone_label, phone_kind, found,
+    chosen}], "recipients_line": {en, nl} | None}`` (the people who can be chosen, outside the token: a new person in
+    Home Assistant changes nothing you edit). A room the notifications do not know yet (or a new one): its stored
+    choice, the persons Home Assistant knows and no line."""
+    from .notifications import notification_options, room_choice
+    item = _notifications_item(hass, entry, room_id)
+    if item is not None:
+        return item.get("recipients"), {"people": list(item.get("people") or []),
+                                        "recipients_line": item.get("recipients_line")}
+    chosen = room_choice(notification_options(entry), room_id) if room_id else None
+    people = [{"person": p["entity_id"], "name": p["name"], "phone_label": None, "phone_kind": None, "found": True,
+               "chosen": p["entity_id"] in (chosen or ())} for p in person_choices(hass, chosen or ())]
+    return chosen, {"people": people, "recipients_line": None}
+
+
+def save_recipients(hass, entry, room_id, recipients):
+    """A room's recipients saved through HA-NOTIFY's item ``room/<id>`` (its own check and write, no reload)."""
+    from . import settings_notifications as notify
+    notify.save_notifications_section(hass, entry, notify.ROOM + room_id, {"recipients": recipients})
 
 
 async def _valve_record(hass, entry):
@@ -343,6 +561,13 @@ def _driven(model):
     return "temperature" if model in NO_POSITION_MODELS else "position"
 
 
+def _battery_entity(hass, entity_id):
+    """The battery entity on the valve's device (HA-BATTERIES' device_battery.battery_entity, R142-HA-PANEL P21: the
+    frontend reads hass.states of it and never scans the registry); None for a valve without an entity."""
+    from .device_battery import battery_entity
+    return battery_entity(hass, entity_id) if entity_id else None
+
+
 def _valve(hass, ctx, route, lang):
     from .e32_valves import shown_name
     if route.gateway:
@@ -353,7 +578,7 @@ def _valve(hass, ctx, route, lang):
     return {"entity_id": route.entity_id, "id": route.name, "name": name, "model": route.model, "kind": kind,
             "choose_model": route.entity_id is not None and ctx.finder.z2m_details(route.entity_id) is not None,
             "driven": _driven(route.model), "role": ("loop" if route.role == "loop" else "radiator") if route.gateway else None,
-            "keep_open": bool(route.keep_open)}
+            "keep_open": bool(route.keep_open), "battery_entity_id": _battery_entity(hass, route.entity_id)}
 
 
 async def radiator_valves_model(hass, entry, ctx):
@@ -376,6 +601,22 @@ async def radiator_valves_model(hass, entry, ctx):
             "models": [{"key": key, "name": words.get(key, key)} for key in (HA_MODEL, *ZIGBEE_MODELS)],
             "choices": choices, "gateway_choices": gateway, "max": MAX_CLASSIC_VALVES_PER_ROOM,
             "max_with_gateway": MAX_VALVES_PER_ROOM}
+
+
+def radiator_valves_live(hass, hub, room, status, error):
+    """HA-DEVICES (1.4.2): what the room screen shows beside its fields about its devices, under ``live`` (out of the
+    token, so a failed read does not flip it): ``radiator_valves_error`` (P12: the valve record could not be read; the
+    Radiator valves block stays with "The radiator valves could not be read ({error}). Reload."), ``self_regulating``
+    (HC-11: the valves Home Assistant drives that report no opening: "Regulates itself to the target; the position
+    cannot be read") and ``e32_sensor_suggestion`` (plan 3.9 item 6b: a Home Assistant source that is the same
+    thermometer as a sensor paired on the E32, which the screen suggests instead)."""
+    from .e32_valves import room_valves, self_regulating
+    from .settings_devices import e32_sensor_suggestion
+    room_id = (room or {}).get("id")
+    doc = room_valves(hub, room_id) if room_id and isinstance(getattr(hub, "valves", None), dict) else None
+    return {"radiator_valves_error": (error or "unknown") if status == "unreadable" else None,
+            "self_regulating": [v["name"] for v in self_regulating(doc)] if doc else [],
+            "e32_sensor_suggestion": e32_sensor_suggestion(hass, hub, room) if room else None}
 
 
 # -- one room --------------------------------------------------------------------------------------------------------
@@ -404,21 +645,17 @@ async def room_state(hass, entry, hub, plan, room):
         "notifications": notifications_model(hass, entry, room_id),
     }
     if room is None:  # the standard program "Workdays and weekend", as the form fills it in for a new room (#7)
-        model["program"] = program_groups(default_program(500, 3000), unit)
         model["standard_program"] = True
         model["full"] = len(plan.get("rooms") or []) >= MAX_ROOMS
     else:
-        model["program"] = program_groups(room.get("schedule"), unit)
         model["entities"] = _entities(hass, hub, room["id"])
-    if features["resets"]:
-        model["resets"] = [shown_reset(r, unit) for r in stored.get("resets") or [] if type(r) is dict]
-    if features["smart_warm_up"]:
-        choice = stored.get(SMART_WARM_UP_FIELD)
-        model["smart_warm_up"] = choice if choice in ("on", "off") else "house"
+    model["after"] = _after(room)
     status, config, extra = await _valve_record(hass, entry)
     ctx = valve_context(hass, entry, config, room_id, room, extra) if status == "ok" else None
     features["radiator_valves"] = status != "update_required"
     model["radiator_valves"] = await radiator_valves_model(hass, entry, ctx) if ctx is not None else None
+    model.setdefault("live", {}).update(await room_live(hass, entry, hub, room, model, config))
+    model.setdefault("live", {}).update(radiator_valves_live(hass, hub, room, status, extra))
     return RoomState(model, ctx, extra if status == "unreadable" else None)
 
 
@@ -521,6 +758,19 @@ def _valves_input(user_input, state, sent):
     return models
 
 
+def _remove_program_input(user_input, room, values):
+    """``remove_program: true`` (plan 3.3, "Use one fixed temperature"): the room's week program goes, as the room form
+    drops it for an empty program field, in the same plan write as the other fields (with ``fallback_temperature``,
+    the temperature the room then keeps); one write, so the E32 never has the one without the other. A room without
+    a program keeps none; anything but true changes nothing."""
+    if "remove_program" not in values:
+        return
+    if type(values["remove_program"]) is not bool:
+        raise SettingsError("e32_rejected", "base", error="invalid_remove_program")
+    if values["remove_program"] and room is not None:
+        user_input["program"] = ""
+
+
 def room_input(editor, room, state, values):
     """What the room form would get for this save: the room as stored, with the panel's fields laid over it; and
     the models of the radiator valves the panel changed."""
@@ -552,6 +802,7 @@ def room_input(editor, room, state, values):
     # A new room starts with the standard program, as the form fills it in, unless the user chose none (issue #7).
     if room is None and values.get("standard_program", True) is False:
         user_input["program"] = ""
+    _remove_program_input(user_input, room, values)
     # 1.4.1: the parts of the room that were only in Configure.
     user_input["limits"] = {**user_input["limits"], **{key: values[key] for key, _ in LIMIT_KEYS if key in values}}
     if "contacts" in values:
@@ -570,6 +821,25 @@ def _notifications_input(model, values):
     if type(sent) is not dict:
         raise SettingsError("notification_invalid", "notifications")
     return sent.get("on", current["on"]), sent.get("kinds", current["kinds"])
+
+
+_UNCHANGED = object()
+
+
+def _recipients_input(hass, entry, model, values):
+    """The room's recipients as the panel sends them (``notifications.recipients``: person ids, [] nobody, None
+    everyone with a phone) when they differ from the stored ones, else _UNCHANGED; checked before anything is written:
+    a list of the people the screen offers (a chosen one Home Assistant no longer knows may stay)."""
+    sent = values.get("notifications")
+    if type(sent) is not dict or "recipients" not in sent or sent["recipients"] == model["notifications"]["recipients"]:
+        return _UNCHANGED
+    if _notifications_item(hass, entry, model["id"]) is None:  # the notifications do not know the room yet
+        raise SettingsError("e32_room_missing", "notifications", room=model["id"])
+    wanted, people = sent["recipients"], {p.get("person") for p in model["live"]["notifications"]["people"]}
+    if wanted is not None and (type(wanted) is not list or len(set(wanted)) != len(wanted)
+                               or any(type(p) is not str or p not in people for p in wanted)):
+        raise SettingsError("notification_person_invalid", "notifications")
+    return wanted
 
 
 async def save_rooms(hass, entry, item, values):
@@ -595,6 +865,7 @@ async def save_rooms(hass, entry, item, values):
     editor = RoomEditor(hass, entry, plan)
     user_input, models = room_input(editor, room, state, values)
     notify = _notifications_input(model, values)
+    recipients = _recipients_input(hass, entry, model, values)
     try:
         plan_values = editor._e32_room_values(user_input, room, editor._e32_ble_options(room))
         parts = room_parts(hass, entry, room, user_input, state.valve_ctx, models)
@@ -612,6 +883,8 @@ async def save_rooms(hass, entry, item, values):
         _forget_valve_record(hass, entry)
     if notify is not None and (changed := room_change(notification_options(entry), saved, *notify)) is not None:
         save_notifications(hass, entry, changed)  # the form's own write: no reload
+    if recipients is not _UNCHANGED:
+        save_recipients(hass, entry, saved, recipients)
     return await read_rooms(hass, entry, saved)
 
 

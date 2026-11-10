@@ -5,7 +5,7 @@
    ``summer``). Then one grey line with the design's sentence and one text button, "Switch summer mode off", which asks
    first and then sets the house mode select back to the mode before summer (its attribute ``previous_mode`` when the
    integration gives it and the select offers it, else Automatic); the E32 restores what was planned around it.
-   Config: {type: custom:openthermostat-house-banner, entity: select.<house mode>}. Words EN/NL/PL in TEXT; the
+   Config: {type: custom:openthermostat-house-banner, entity: select.<house mode>}. Words EN/NL in TEXT; the
    house mode names are the integration's (the select's own translation), with these as the last resort. Tokens:
    CONTRACT §8 on the host; dark from hass.themes.darkMode, else the browser's colour scheme. Icons inline (no ha-icon). */
 const TEXT = {
@@ -14,10 +14,7 @@ const TEXT = {
   failed: 'Summer mode could not be switched off: {reason}', modes: {auto: 'Automatic', home: 'At home', away: 'Away', holiday: 'Holiday'}},
  nl: {summer: 'Zomerstand: de verwarming staat uit tot je dit uitzet; warm water en vorstbeveiliging blijven.',
   off: 'Zomerstand uitzetten', ask: 'Zomerstand uitzetten? De huismodus wordt {mode}.', yes: 'Uitzetten', no: 'Annuleren',
-  failed: 'Zomerstand uitzetten lukte niet: {reason}', modes: {auto: 'Automatisch', home: 'Thuis', away: 'Afwezig', holiday: 'Vakantie'}},
- pl: {summer: 'Tryb letni: ogrzewanie pozostaje wyłączone, dopóki tego nie wyłączysz; ciepła woda i ochrona przed mrozem działają.',
-  off: 'Wyłącz tryb letni', ask: 'Wyłączyć tryb letni? Tryb domu: {mode}.', yes: 'Wyłącz', no: 'Anuluj',
-  failed: 'Nie udało się wyłączyć trybu letniego: {reason}', modes: {auto: 'Automatycznie', home: 'W domu', away: 'Nieobecność', holiday: 'Urlop'}}};
+  failed: 'Zomerstand uitzetten lukte niet: {reason}', modes: {auto: 'Automatisch', home: 'Thuis', away: 'Afwezig', holiday: 'Vakantie'}}};
 // Material Design Icons (v7.4.47, Apache 2.0), inline.
 const ICONS = {
  'white-balance-sunny': 'M3.55 19.09L4.96 20.5L6.76 18.71L5.34 17.29M12 6C8.69 6 6 8.69 6 12S8.69 18 12 18 18 15.31 18 12C18 8.68 15.31 6 12 6M20 13H23V11H20M17.24 18.71L19.04 20.5L20.45 19.09L18.66 17.29M20.45 5L19.04 3.6L17.24 5.39L18.66 6.81M13 1H11V4H13M6.76 5.39L4.96 3.6L3.55 5L5.34 6.81L6.76 5.39M1 13H4V11H1M13 20H11V23H13'};
@@ -59,7 +56,7 @@ button:focus-visible{outline:2px solid var(--ot-accent);outline-offset:2px}butto
 .error{flex:1 1 100%;font-size:var(--ot-text-s);line-height:var(--ot-line-s);color:var(--ot-attention-ink)}`;
 
 const locale = hass => hass?.locale?.language || hass?.language || 'en';
-const lang = hass => /^(nl|pl)\b/.exec(locale(hass))?.[1] || 'en';
+const lang = hass => /^nl\b/.test(locale(hass)) ? 'nl' : 'en';
 const darkOf = hass => {
  if (typeof hass?.themes?.darkMode === 'boolean') return hass.themes.darkMode;
  try { return window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { return false; }
@@ -164,7 +161,14 @@ const ensureDefined = (name, cls) => {
  if (document.readyState !== 'complete') window.addEventListener('load', check, {once: true});
  for (const ms of [0, 250, 1000, 3000, 10000]) setTimeout(check, ms);
  window.addEventListener('location-changed', check);
- setInterval(check, 500);
+ // A HACS card may replace window.customElements later (the owner's HA, 31 Oct 2026: an intermittent
+ // "Configuration error" on the week view): a cheap check every 0.5 s puts the element back in the registry in
+ // use, and Home Assistant's error card then rebuilds the card. 1.4.2 (P22): only for the first 30 s, when the other
+ // cards load; after that a navigation (location-changed) or the page coming back into view checks again, so no
+ // timer runs for ever on a wall tablet.
+ const timer = setInterval(check, 500);
+ setTimeout(() => clearInterval(timer), 30000);
+ document.addEventListener('visibilitychange', check);
  return check;
 };
 ensureDefined('openthermostat-house-banner', OpenThermostatHouseBanner);

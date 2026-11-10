@@ -97,7 +97,7 @@ SOURCES = ["rule", "curve", "learned", "optimum_start", "plan"]  # "plan": the E
 GAS_STATUSES = ["no_meter", "collecting", "calibrated", "meter_stale"]
 # The Learning view's cards (E32 rc.5), the sixth card module (week_planner.card_modules), versioned with the
 # manifest like the other card URLs: "Water temperature by outdoor temperature" and what the E32 knows (a ring).
-CURVE_CARD_URL = "/open_thermostat/heating-curve-card-1.4.1.js"
+CURVE_CARD_URL = "/open_thermostat/heating-curve-card-1.4.2.js"
 CURVE_CARD_TYPE = "custom:openthermostat-heating-curve"
 KNOWLEDGE_CARD_TYPE = "custom:openthermostat-knowledge"
 # WeatherCurve (src/control/WeatherCurve.h): the standard slope follows the water temperature in hard frost
@@ -238,6 +238,14 @@ class FlowSettingsLink:
             if not known:
                 self.read()  # changed on the E32's own page (or not read yet): one read brings the rest along
 
+    @callback
+    def abilities_read(self, _version=None):
+        """HA-REREAD (1.4.2): the E32 restarted (perhaps on other firmware) and the room-plan link read its abilities
+        again: read the options again too, so what the panel and Configure show (settings_heating._flow_settings
+        serves ``settings``) is the new firmware's, and firmware that now has the options is asked again."""
+        self.unsupported = False
+        self.read()
+
     async def _call(self, change=None):
         # A change waits for a free E32 web session; a read does not.
         return await self.plan.async_call(lambda client: client.async_flow_settings(change), write=change is not None)
@@ -305,6 +313,7 @@ def flow_link(hass, entry):
         link = state[KEY] = FlowSettingsLink(hass, hub, hub.plan)
         entry.async_on_unload(link.stop)
         entry.async_on_unload(hub.add_listener(link.hub_changed))
+        entry.async_on_unload(hub.add_firmware_listener(link.abilities_read))
         entry.async_on_unload(async_track_time_interval(hass, link.poll, REFRESH))
         link.add_listener(lambda: remove_stale_controls(hass, entry, link))
         link.hub_changed()
@@ -886,13 +895,20 @@ class NightGasSensor(FlowSummarySensor):
 
 
 def wanted_sensors(hub):
-    if summary_part(hub, "flow") is not None:  # firmware with the flow options (E32 beta.19)
+    # 1.4.2 (HC-03): each also while the E32's status is not known, when it existed before (kept_while_unknown).
+    from .heating_link import kept_while_unknown
+    flow = summary_part(hub, "flow") is not None  # firmware with the flow options (E32 beta.19)
+    if flow or kept_while_unknown(hub, "flow_source"):
         yield ("flow", "source"), lambda: FlowSourceSensor(hub)
-        for key in FlowTemperatureSensor.PATHS:
+    for key in FlowTemperatureSensor.PATHS:
+        if flow or kept_while_unknown(hub, key):
             yield ("flow", key), lambda key=key: FlowTemperatureSensor(hub, key)
+    if flow or kept_while_unknown(hub, "flow_curve_slope"):
         yield ("flow", "slope"), lambda: CurveSlopeSensor(hub)
-    if gas_calibration(hub) is not None:
+    gas = gas_calibration(hub) is not None
+    if gas or kept_while_unknown(hub, "gas_calibration"):
         yield ("gas", "calibration"), lambda: GasCalibrationSensor(hub)
+    if gas or kept_while_unknown(hub, "boiler_full_power"):
         yield ("gas", "full_power"), lambda: BoilerFullPowerSensor(hub)
     last = (summary_part(hub, "night_gas") or {}).get("last")
     # Only with a gas meter, from the first measured night; then it stays (unknown after a night without a

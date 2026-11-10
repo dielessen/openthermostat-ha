@@ -1,20 +1,15 @@
 /* The settings panel's component kit, version 2 (1.4.1): window.OpenThermostatSettingsKit, loaded by the panel core when the
-   Settings tab opens. Design tokens, inline icons, elements, fields, the confirm dialog, time helpers (Home Assistant's
-   language and time format), the section registry and routes; every 1.4 function kept. API: HA-INSTELPANEEL-FASE2.nl.md
-   chapter 4 "zoals gebouwd". Texts: TEXTS, English key (test/ha-settings-texts.test.cjs). */
+   Settings tab opens. Design tokens, inline icons, elements, fields, the confirm dialog, time and number helpers (Home
+   Assistant's language, time zone, time and number format), the section registry and routes. API:
+   HA-INSTELPANEEL-FASE2.nl.md chapter 4 "zoals gebouwd"; 1.4.2: the unused fields days, date and time and routeOf are gone.
+   Texts: TEXTS, English key (test/ha-settings-texts.test.cjs). */
 const TEXTS = {
  nl: {
   'Search by name': 'Zoek op naam', 'No area': 'Geen gebied', 'Nothing found.': 'Niets gevonden.', 'Remove {name}': '{name} verwijderen',
   'Type to see more.': 'Typ om meer te zien.', 'Cancel': 'Annuleren', 'More': 'Meer uitleg', 'Less': 'Minder uitleg',
-  'Every day': 'Elke dag', 'Workdays': 'Werkdagen', 'Weekend days': 'Weekenddagen', 'Day': 'Dag', 'Month': 'Maand', 'Year': 'Jaar', 'Time': 'Tijd',
+  'Day': 'Dag', 'Month': 'Maand', 'Year': 'Jaar', 'Time': 'Tijd',
   'Lower': 'Lager', 'Higher': 'Hoger', 'Enter a time such as {example}.': 'Vul een tijd in zoals {example}.',
-  'Choose a moment': 'Kies een moment', 'No moment': 'Geen moment'},
- pl: {
-  'Search by name': 'Szukaj po nazwie', 'No area': 'Bez obszaru', 'Nothing found.': 'Nic nie znaleziono.', 'Remove {name}': 'Usuń: {name}',
-  'Type to see more.': 'Pisz dalej, aby zobaczyć więcej.', 'Cancel': 'Anuluj', 'More': 'Więcej', 'Less': 'Mniej',
-  'Every day': 'Codziennie', 'Workdays': 'Dni robocze', 'Weekend days': 'Dni weekendu', 'Day': 'Dzień', 'Month': 'Miesiąc', 'Year': 'Rok', 'Time': 'Godzina',
-  'Lower': 'Niżej', 'Higher': 'Wyżej', 'Enter a time such as {example}.': 'Wpisz godzinę, na przykład {example}.',
-  'Choose a moment': 'Wybierz moment', 'No moment': 'Bez momentu'}};
+  'Choose a moment': 'Kies een moment', 'No moment': 'Geen moment'}};
 // Material Design Icons (Apache-2.0), inline.
 const ICONS = {
  thermostat: "M16.95,16.95L14.83,14.83C15.55,14.1 16,13.1 16,12C16,11.26 15.79,10.57 15.43,10L17.6,7.81C18.5,9 19,10.43 19,12C19,13.93 18.22,15.68 16.95,16.95M12,5C13.57,5 15,5.5 16.19,6.4L14,8.56C13.43,8.21 12.74,8 12,8A4,4 0 0,0 8,12C8,13.1 8.45,14.1 9.17,14.83L7.05,16.95C5.78,15.68 5,13.93 5,12A7,7 0 0,1 12,5M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z",
@@ -45,21 +40,22 @@ const ICONS = {
  thermometer: "M15 13V5A3 3 0 0 0 9 5V13A5 5 0 1 0 15 13M12 4A1 1 0 0 1 13 5V8H11V5A1 1 0 0 1 12 4Z",
 };
 
-const CATALOG = {nl: {...TEXTS.nl}, pl: {...TEXTS.pl}};
+const CATALOG = {nl: {...TEXTS.nl}};
 const langOf = hass => {
  const l = String(hass?.locale?.language || hass?.language || 'en').slice(0, 2).toLowerCase();
- return l === 'nl' || l === 'pl' ? l : 'en';
+ return l === 'nl' ? 'nl' : 'en';
 };
 const fill = (text, values = {}) => String(text).replace(/\{(\w+)\}/g, (all, k) => (k in values ? values[k] : all));
 const translate = (lang, key, values) => fill((lang !== 'en' && CATALOG[lang]?.[key]) || key, values);
-const addTexts = texts => { for (const lang of ['nl', 'pl']) Object.assign(CATALOG[lang], texts?.[lang] || {}); };
+const addTexts = texts => { Object.assign(CATALOG.nl, texts?.nl || {}); };
 // "16 °C" never breaks before the unit.
 const together = text => String(text).replace(/ (°C|°F|%|kW|min|s|h)(?=$|[\s·,.;)])/g, ' $1');
 
-// Time and date as Home Assistant says them (the cards' clock).
+// Time and date as Home Assistant says them (the cards' clock), in the zone its profile chooses: the server's (default) or
+// this device's (locale.time_zone "local").
 const clockLocale = hass => hass?.locale?.language || hass?.language || 'en';
 const clockZone = hass => {
- const z = hass?.config?.time_zone;
+ const z = hass?.locale?.time_zone === 'local' ? null : hass?.config?.time_zone;
  if (typeof z !== 'string' || !z) return undefined;
  try { new Intl.DateTimeFormat('en', {timeZone: z}); return z; } catch (e) { return undefined; }
 };
@@ -94,19 +90,22 @@ function formatMoment(hass, value, now = Date.now()) {
  if (days === 0) return noBreak(time);
  if (Math.abs(days) === 1) {
   try {
-   const word = new Intl.RelativeTimeFormat(clockLocale(hass), {numeric: 'auto'}).format(days, 'day');
-   return noBreak(/^pl\b/.test(clockLocale(hass)) ? time + ' ' + word : word + ' ' + time);
+   // "tomorrow" in the panel's own language (English for a language it has no words for), as the sentence around it.
+   const word = new Intl.RelativeTimeFormat(langOf(hass), {numeric: 'auto'}).format(days, 'day');
+   return noBreak(word + ' ' + time);
   } catch (e) { /* older browser */ }
  }
  try { return new Date(ms).toLocaleString(clockLocale(hass), {weekday: 'short', day: 'numeric', month: 'short', ...clockOptions(hass)}); }
  catch (e) { return new Date(ms).toISOString().slice(0, 16).replace('T', ' '); }
 }
-// "Sat 19 Dec" (the year when not this one).
+// "Sat 19 Dec" (the year when not this one): a moment on its day in Home Assistant's zone, a plain date as it is.
 function formatDate(hass, value) {
- const ms = Date.parse(String(value || '').length === 10 ? value + 'T12:00' : value);
+ const text = String(value || ''), plain = /^\d{4}-\d{2}-\d{2}$/.test(text);
+ const ms = plain ? Date.parse(text + 'T12:00Z') : Date.parse(text), zone = plain ? 'UTC' : clockZone(hass);
  if (!Number.isFinite(ms)) return '';
- const d = new Date(ms), year = d.getFullYear() !== new Date().getFullYear() ? {year: 'numeric'} : {};
- try { return d.toLocaleDateString(clockLocale(hass), {weekday: 'short', day: 'numeric', month: 'short', ...year}); } catch (e) { return String(value).slice(0, 10); }
+ const year = y => { try { return new Intl.DateTimeFormat('en', {timeZone: zone, year: 'numeric'}).format(y); } catch (e) { return ''; } };
+ try { return new Date(ms).toLocaleDateString(clockLocale(hass), {weekday: 'short', day: 'numeric', month: 'short', timeZone: zone,
+  ...(year(new Date(ms)) !== year(new Date()) ? {year: 'numeric'} : {})}); } catch (e) { return text.slice(0, 10); }
 }
 // Monday first.
 const weekdays = (hass, style = 'short') => [0, 1, 2, 3, 4, 5, 6].map(i => {
@@ -125,8 +124,13 @@ function parseTime(text) {
  if (hour > 23 || minute > 59) return null;
  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
-const number = (v, lang, digits = 1) => Number(v).toLocaleString(lang || 'en', {maximumFractionDigits: digits});
-const degrees = (v, unit, lang, digits = 1) => (typeof v === 'number' && Number.isFinite(v) ? `${number(v, lang, digits)} ${unit || '°C'}` : '');
+// Numbers as Home Assistant's profile says (locale.number_format), given hass; a language alone keeps that language's.
+const FORMATS = {comma_decimal: 'en-US', decimal_comma: 'de', space_comma: 'fr', system: undefined};
+const numberLocale = where => (typeof where === 'object' && where ? (Object.hasOwn(FORMATS, where.locale?.number_format)
+ ? FORMATS[where.locale.number_format] : clockLocale(where)) : where || 'en');
+const number = (v, where, digits = 1, least = 0) => Number(v).toLocaleString(numberLocale(where), {maximumFractionDigits: Math.max(digits, least),
+ minimumFractionDigits: least, ...(where?.locale?.number_format === 'none' ? {useGrouping: false} : {})});
+const degrees = (v, unit, where, digits = 1) => (typeof v === 'number' && Number.isFinite(v) ? `${number(v, where, digits)} ${unit || '°C'}` : '');
 
 let seq = 0;
 const uid = p => `ot-${p}-${++seq}`;
@@ -327,10 +331,17 @@ function dateInputs(o, onValue) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || '');
   if (!m) return;
   if (![...year.options].some(x => x.value === String(Number(m[1])))) year.append(h('option', {value: String(Number(m[1])), text: m[1]}));
-  year.value = String(Number(m[1])); month.value = String(Number(m[2])); day.value = String(Number(m[3]));
+  year.value = String(Number(m[1])); month.value = String(Number(m[2])); fit(); day.value = String(Math.min(Number(m[3]), day.options.length));
+ };
+ // As many days as the chosen month has (no 31 February); a day past its end becomes the month's last.
+ const fit = () => {
+  const n = new Date(Date.UTC(Number(year.value), Number(month.value), 0)).getUTCDate(), chosen = Number(day.value) || 1;
+  while (day.options.length > n) day.lastChild.remove();
+  while (day.options.length < n) day.append(h('option', {value: String(day.options.length + 1), text: String(day.options.length + 1)}));
+  day.value = String(Math.min(chosen, n));
  };
  const get = () => `${year.value}-${p(month.value)}-${p(day.value)}`;
- for (const s of [day, month, year]) s.addEventListener('change', () => onValue(get()));
+ for (const s of [day, month, year]) s.addEventListener('change', () => { fit(); onValue(get()); });
  set(o.value);
  return {el: h('div', {class: 'ot-date'}, day, month, year), get, set, first: day};
 }
@@ -340,9 +351,10 @@ const fields = {
   'aria-label': o.unit ? `${o.label} (${o.unit})` : null}),
  stepper(o) {
   const id = o.id || uid('stepper'), lang = langOf(o.hass), step = Number(o.step) || 1, digits = String(step).split('.')[1]?.length || 0;
+  const where = o.hass || lang;
   const input = h('input', {id, type: 'text', class: 'input ot-step-input', inputmode: 'decimal', autocomplete: 'off', 'data-fk': o.key || '', disabled: o.disabled,
    'aria-label': o.unit ? `${o.label || ''} (${o.unit})`.trim() : null});
-  const show = v => (v == null || Number.isNaN(v) ? '' : Number(v).toLocaleString(lang, {minimumFractionDigits: digits && v % 1 ? digits : 0, maximumFractionDigits: Math.max(digits, 1), useGrouping: false}));
+  const show = v => (v == null || Number.isNaN(v) ? '' : Number(v).toLocaleString(numberLocale(where), {minimumFractionDigits: digits && v % 1 ? digits : 0, maximumFractionDigits: Math.max(digits, 1), useGrouping: false}));
   const read = () => { const s = input.value.trim().replace(',', '.'); return s === '' || Number.isNaN(Number(s)) ? null : Number(s); };
   input.value = show(o.value);
   const clamp = v => Math.min(o.max ?? Infinity, Math.max(o.min ?? -Infinity, Math.round(v / step) * step));
@@ -359,33 +371,10 @@ const fields = {
   api.describe();
   return api;
  },
- time(o) {
-  const id = o.id || uid('time'), lang = langOf(o.hass);
-  let api;
-  const box = timeInput(o, id, (v, ok) => {
-   api?.setError(ok ? '' : translate(lang, 'Enter a time such as {example}.', {example: formatTime(o.hass, '22:00')}));
-   if (ok) o.onChange?.(v);
-  });
-  api = shell('time', {...o, id}, box.input);
-  api.target = () => box.input;
-  Object.defineProperty(api, 'value', {get: box.get, set: box.set});
-  api.describe();
-  return api;
- },
- date(o) {
-  const id = o.id || uid('date');
-  const box = dateInputs(o, v => o.onChange?.(v));
-  box.first.id = id;
-  const api = shell('date', {...o, id}, box.el);
-  api.target = () => box.first;
-  Object.defineProperty(api, 'value', {get: box.get, set: box.set});
-  api.describe();
-  return api;
- },
  // "YYYY-MM-DDTHH:MM"; optional: '' is no moment.
  moment(o) {
   const id = o.id || uid('moment'), lang = langOf(o.hass), t = k => translate(lang, k);
-  let value = o.value || '';
+  let value = o.value || '', api;
   const emit = () => o.onChange?.(value);
   const suggest = () => o.suggest || (() => { const d = new Date(Date.now() + 86400000), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T07:00`; })();
   const holder = h('div', {class: 'ot-moment'});
@@ -399,12 +388,15 @@ const fields = {
    }
    date = dateInputs({...o, value: value.slice(0, 10)}, v => { value = `${v}T${time.get() || '00:00'}`; emit(); });
    date.first.id = id;
-   time = timeInput({...o, key: (o.key || '') + ':time', value: value.slice(11, 16), label: null}, uid('t'), (v, ok) => { if (ok) { value = `${date.get()}T${v}`; emit(); } });
+   time = timeInput({...o, key: (o.key || '') + ':time', value: value.slice(11, 16), label: null}, uid('t'), (v, ok) => {
+    api?.setError(ok ? '' : translate(lang, 'Enter a time such as {example}.', {example: formatTime(o.hass, '22:00')}));
+    if (ok) { value = `${date.get()}T${v}`; emit(); }
+   });
    holder.replaceChildren(...[date.el, time.input, o.optional && !o.disabled ? iconButton('close', t('No moment'), () => { value = ''; draw(true); emit(); }, {'data-clear': ''}) : null].filter(Boolean));
    if (focus) date.first.focus();
   };
   draw();
-  const api = shell('moment', {...o, id}, holder);
+  api = shell('moment', {...o, id}, holder);
   api.target = () => holder.querySelector('select, button');
   Object.defineProperty(api, 'value', {get: () => value, set: v => { value = v || ''; draw(); }});
   api.describe();
@@ -486,24 +478,6 @@ const fields = {
   Object.defineProperty(api, 'value', {get: () => input.checked, set: v => { input.checked = v === true; }});
   input.addEventListener('change', () => o.onChange?.(input.checked));
   api.describe();
-  return api;
- },
- // [0..6], Monday = 0, with quick picks.
- days(o) {
-  const id = o.id || uid('days'), lang = langOf(o.hass), short = weekdays(o.hass), long = weekdays(o.hass, 'long');
-  let value = [...new Set(o.value || [])].sort((a, b) => a - b);
-  const chips = short.map((d, i) => h('button', {type: 'button', class: 'ot-day-chip', 'aria-pressed': 'false', 'aria-label': long[i], 'data-day': i,
-   disabled: o.disabled, text: d.slice(0, 2), on: {click: () => toggle(i)}}));
-  const set = v => { value = [...new Set(v)].sort((a, b) => a - b); chips.forEach((c, i) => c.setAttribute('aria-pressed', String(value.includes(i)))); };
-  const toggle = i => { set(value.includes(i) ? value.filter(x => x !== i) : [...value, i]); o.onChange?.([...value]); };
-  const quick = (label, days) => button(translate(lang, label), () => { set(days); o.onChange?.([...value]); }, 'text small', {'data-quick': label, disabled: o.disabled});
-  set(value);
-  const control = h('div', {class: 'ot-days'}, h('div', {class: 'ot-day-chips', role: 'group', 'aria-labelledby': id + '-label'}, ...chips),
-   o.quick === false ? null : h('div', {class: 'ot-quick'}, quick('Every day', [0, 1, 2, 3, 4, 5, 6]), quick('Workdays', [0, 1, 2, 3, 4]), quick('Weekend days', [5, 6])));
-  const api = shell('days', {...o, id}, control, false);
-  api.target = () => chips[0];
-  Object.defineProperty(api, 'value', {get: () => [...value], set});
-  api.describe = () => {};
   return api;
  },
  entity: o => entityPicker(o)
@@ -621,8 +595,6 @@ const parseRoute = hash => {
  try { item = item == null ? null : decodeURIComponent(item); } catch (e) { /* keep as typed */ }
  return {section: name, item: item || null};
 };
-const routeOf = (section, item) => '#' + (section ? section + (item ? '/' + encodeURIComponent(item) : '') : 'overview');
-
 // CONTRACT-1.4.1 §8 tokens (and the 1.4 names on them), then the components.
 const STYLE = `:host{display:block;
 --ot-space:8px;--ot-radius:12px;--ot-radius-s:8px;--ot-touch:44px;--ot-motion:150ms ease;
@@ -651,7 +623,7 @@ color:color-mix(in srgb,var(--ot-accent) 55%,var(--ot-text));background:color-mi
 .ot-card-titles,.ot-fold-titles{min-width:0;display:grid;gap:2px}.ot-card-title,.ot-fold-title{font-size:var(--ot-text-l);font-weight:500;line-height:1.3}
 .ot-card-summary,.ot-fold-summary{font-size:var(--ot-text-s);color:var(--ot-muted);overflow-wrap:anywhere}
 .row:focus-visible,.btn:focus-visible,.back:focus-visible,.switch:focus-visible,.choice input:focus-visible,.ot-fold-head:focus-visible,.ot-seg-btn:focus-visible,
-.ot-day-chip:focus-visible,.ot-room:focus-visible,.ot-tile:focus-visible{outline:3px solid var(--ot-accent);outline-offset:2px}
+.ot-room:focus-visible,.ot-tile:focus-visible{outline:3px solid var(--ot-accent);outline-offset:2px}
 .input:focus-visible{outline:2px solid var(--ot-accent);outline-offset:0;border-color:var(--ot-accent)}
 .form{padding:4px var(--ot-s4)}.fields{display:flex;flex-direction:column}
 .field{padding:var(--ot-s4) 0;border-top:1px solid var(--ot-divider);border-left:3px solid transparent;margin-left:-16px;padding-left:13px;display:grid;gap:6px;position:relative}
@@ -681,7 +653,8 @@ list-style:none;background:var(--ot-surface);border:1px solid var(--ot-divider);
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font:inherit;font-weight:500;min-height:var(--ot-touch);padding:8px 18px;border-radius:var(--ot-radius);
 border:1px solid transparent;cursor:pointer;background:none;color:var(--ot-link);transition:background var(--ot-motion),box-shadow var(--ot-motion);white-space:nowrap}
 .btn.text{padding:8px 12px}.btn.text:hover,.btn.outlined:hover{background:color-mix(in srgb,var(--ot-accent) 8%,transparent)}
-.btn.small{min-height:36px;padding:4px 12px;font-size:var(--ot-text-s)}
+.btn.small{min-height:36px;padding:4px 12px;font-size:var(--ot-text-s)}.btn.small,.btn.ot-more{position:relative}
+.btn.small::after,.btn.ot-more::after{content:"";position:absolute;left:0;right:0;top:-5px;bottom:-5px}.btn.ot-more::after{top:-7px;bottom:-7px}
 .btn.outlined{border-color:var(--ot-accent)}.btn.filled{background:var(--ot-fill);color:var(--ot-on-accent)}.btn.filled:hover{box-shadow:0 1px 4px rgba(0,0,0,.25)}
 .btn.danger{background:none;border-color:var(--ot-attention-ink);color:var(--ot-attention-ink)}
 .btn.filled.danger{background:var(--ot-attention-ink);color:var(--ot-on-accent);border-color:transparent}.btn:disabled{opacity:.5;cursor:default}
@@ -737,17 +710,13 @@ color:inherit;text-decoration:none;cursor:pointer;transition:border-color var(--
 .ot-time{width:112px;font-variant-numeric:tabular-nums}
 .ot-date,.ot-moment{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.ot-date .input{width:auto;max-width:none}.ot-day{min-width:64px}.ot-month{min-width:128px}
 .ot-moment-none{color:var(--ot-muted)}
-.ot-days{display:grid;gap:4px}.ot-day-chips{display:flex;flex-wrap:wrap;gap:6px}.ot-quick{display:flex;flex-wrap:wrap;gap:0 4px;margin-left:-12px}
-.ot-day-chip{width:44px;height:44px;border-radius:50%;border:1px solid var(--ot-border);background:var(--ot-surface);color:inherit;font:inherit;font-weight:500;cursor:pointer;
-text-transform:capitalize;transition:background var(--ot-motion)}
-.ot-day-chip[aria-pressed=true]{background:var(--ot-fill);border-color:var(--ot-fill);color:var(--ot-on-accent)}.ot-day-chip:disabled{opacity:.6;cursor:default}
 @media(max-width:420px){.form{padding:4px 12px}.field{margin-left:-12px;padding-left:9px}.form .row{margin:0 -12px;width:calc(100% + 24px)}
 .ot-fold-head{padding:var(--ot-s3)}.ot-fold-body{padding:0 var(--ot-s3) var(--ot-s2)}.ot-fold-body>.field{margin-left:-12px}
 .ot-seg{display:flex;justify-self:stretch}.ot-seg-btn{padding:8px 10px}.ot-card{padding:var(--ot-s3)}.row{padding:var(--ot-s3)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}`;
 
 const KIT = Object.freeze({version: 2, h, translate, addTexts, langOf, together, defineSection, onSection, row, frame, notice, inlineError, button, iconButton,
- fields, shell, confirm: confirmDialog, parseRoute, routeOf, sections: SECTIONS, icon, icons: Object.keys(ICONS), card, fold, statusLine, empty, skeleton,
+ fields, shell, confirm: confirmDialog, parseRoute, sections: SECTIONS, icon, icons: Object.keys(ICONS), card, fold, statusLine, empty, skeleton,
  chip, valueDisplay, roomCard, more, memory, style: STYLE,
  time: Object.freeze({format: formatTime, moment: formatMoment, date: formatDate, parse: parseTime, hour12, weekdays, months}), number, degrees});
 

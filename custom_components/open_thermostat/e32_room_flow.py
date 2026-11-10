@@ -45,6 +45,7 @@ import re
 
 import probatio as vol
 from homeassistant.const import UnitOfTemperature
+from homeassistant.core import callback
 from homeassistant.data_entry_flow import section
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
@@ -63,8 +64,8 @@ from .room_plan import LATEST_UNTIL, LINK_ERRORS, follows, has_room_plan, plan_r
 from . import room_away
 
 MAX_ROOMS = 8
-# The room form's title while adding a room (its name once it has one), EN/NL/PL.
-NEW_ROOM_TITLE = {"en": "new room", "nl": "nieuwe ruimte", "pl": "nowe pomieszczenie"}
+# The room form's title while adding a room (its name once it has one), EN/NL.
+NEW_ROOM_TITLE = {"en": "new room", "nl": "nieuwe ruimte"}
 MAX_SOURCES = 4
 MAX_VALVE_MODELS = 4  # the Advanced step: one model per Zigbee2MQTT valve of a room (e32_valves.MAX_VALVES_PER_ROOM)
 MAX_POINTS = 6
@@ -99,9 +100,7 @@ BOILER_MAXIMUM_TEXT = {
     "en": "Boiler maximum: {maximum} (set on the boiler); the E32 never asks for more. A lower limit here is "
           "useful for floor heating.",
     "nl": "Maximum van de ketel: {maximum} (ingesteld op de ketel); de E32 vraagt nooit meer. Een lagere grens "
-          "hier is nuttig bij vloerverwarming.",
-    "pl": "Maksimum kotła: {maximum} (ustawione na kotle); E32 nigdy nie żąda więcej. Niższy limit jest tu "
-          "przydatny przy ogrzewaniu podłogowym."}
+          "hier is nuttig bij vloerverwarming."}
 FLOW_LIMIT_FIELDS = {"minimum_flow_temperature": "minimum_flow_c", "maximum_flow_temperature": "maximum_flow_c"}
 # Plan item 1 (E32 with "minimum_flow_automatic" in its plan): the lowest water temperature automatic (the
 # default; the E32 keeps 30 °C as the hard lower bound and its learned floors decide above it) or set by you.
@@ -110,7 +109,7 @@ MINIMUM_AUTOMATIC_FIELD = "minimum_flow_automatic"
 # E32 1.4 (#8): a room's own Smart warm-up ("house" | "on" | "off"; absent: as the house), only for an E32 that names it.
 SMART_WARM_UP_FEATURE, SMART_WARM_UP_FIELD = "plan.room_smart_warm_up.v1", "smart_warm_up"
 STANDARD_MINIMUM_FLOW_C = 30  # RoomPlan::defaultMinimumFlowC
-# The form's line about the lowest water temperature in effect (fw/telemetry/flow "minimum_flow"), EN/NL/PL;
+# The form's line about the lowest water temperature in effect (fw/telemetry/flow "minimum_flow"), EN/NL;
 # the same words as the E32's House page.
 MINIMUM_NOW_TEXT = {
     "en": {"standard": "Lowest water temperature now: {value} (standard).",
@@ -118,10 +117,7 @@ MINIMUM_NOW_TEXT = {
            "learned": "Lowest water temperature now: {value} (learned)."},
     "nl": {"standard": "Laagste watertemperatuur nu: {value} (standaard).",
            "own": "Laagste watertemperatuur nu: {value} (door jou ingesteld).",
-           "learned": "Laagste watertemperatuur nu: {value} (geleerd)."},
-    "pl": {"standard": "Najniższa temperatura wody teraz: {value} (standardowa).",
-           "own": "Najniższa temperatura wody teraz: {value} (ustawiona przez ciebie).",
-           "learned": "Najniższa temperatura wody teraz: {value} (wyuczona)."}}
+           "learned": "Laagste watertemperatuur nu: {value} (geleerd)."}}
 
 
 def minimum_flow_now(summary):
@@ -154,7 +150,7 @@ DAY_PREFIX = re.compile(r"([a-z][a-z ,\-]*?)\s*:\s*(.*)")
 # "follow"}], at most four, never two on the same day and minute. Firmware before 1.4 has no such key and ignores it.
 MAX_RESETS = 4
 RESET_STATES = ("active", "follow", "inactive")
-# A state's word in the form, EN and NL (Polish uses the English words, as it does the day names).
+# A state's word in the form, EN and NL.
 STATE_WORDS = {"en": {"active": "on", "follow": "heat along", "inactive": "off"},
                "nl": {"active": "aan", "follow": "meeverwarmen", "inactive": "uit"}}
 STATE_NAMES = {**{word: state for words in STATE_WORDS.values() for state, word in words.items()},
@@ -163,19 +159,16 @@ EVERY_DAY = {"en": "daily", "nl": "dag"}
 EVERY_DAY_NAMES = frozenset({"daily", "every day", "dag", "elke dag", "dagelijks"})
 RESET_LINE = re.compile(r"(?:([a-z][a-z ,\-]*?)\s*:?\s+)?(\d{1,2})[:.](\d{2})\s+(.+)")
 RESET_TEMPERATURE = re.compile(r"(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:°\s*[cf]?)?")
-# The form's one sentence while the E32 has no reset times (firmware before 1.4), after the program's help, EN/NL/PL.
+# The form's one sentence while the E32 has no reset times (firmware before 1.4), after the program's help, EN/NL.
 RESETS_LATER_TEXT = {
     "en": " With E32 firmware 1.4 or newer you can also set reset times here.",
-    "nl": " Met E32-firmware 1.4 of nieuwer kun je hier ook terugzetmomenten instellen.",
-    "pl": " Z oprogramowaniem E32 w wersji 1.4 lub nowszej możesz tu też ustawić godziny powrotu."}
-# After a save, the room list says what the room's week program and reset times now are (issue #7), EN/NL/PL.
+    "nl": " Met E32-firmware 1.4 of nieuwer kun je hier ook terugzetmomenten instellen."}
+# After a save, the room list says what the room's week program and reset times now are (issue #7), EN/NL.
 SAVED_PROGRAM_TEXT = {
     "en": {"none": "Week program: none; the room keeps {temperature} without a week program.",
            "program": "Week program:", "resets": "Reset times:"},
     "nl": {"none": "Weekprogramma: geen; de ruimte houdt {temperature} zonder weekprogramma.",
-           "program": "Weekprogramma:", "resets": "Terugzetmomenten:"},
-    "pl": {"none": "Program tygodniowy: brak; pomieszczenie utrzymuje {temperature} bez programu tygodniowego.",
-           "program": "Program tygodniowy:", "resets": "Godziny powrotu:"}}
+           "program": "Weekprogramma:", "resets": "Terugzetmomenten:"}}
 
 # HA error translation keys of RoomPlanLink -> this flow's error/abort keys.
 FAILURES = {"room_plan_changed": "e32_plan_changed", "room_plan_too_large": "e32_plan_too_large",
@@ -988,9 +981,9 @@ class E32RoomFlow:
         return parse_resets(text, low, high, self._unit())
 
     def _e32_language(self):
-        """The user's language when the flow context carries it, Home Assistant's own otherwise: en, nl or pl."""
+        """The user's language when the flow context carries it, Home Assistant's own otherwise: en or nl."""
         language = ((getattr(self, "context", None) or {}).get("language") or self.hass.config.language or "en")[:2]
-        return language if language in ("en", "nl", "pl") else "en"
+        return language if language in ("en", "nl") else "en"
 
     def _e32_saved_program(self, values):
         """After a save: the room's week program and reset times as saved, for the room list (issue #7)."""
@@ -1102,7 +1095,8 @@ class E32RoomFlow:
             try:
                 values = self._e32_room_values(user_input, room, ble_options)
                 # The contacts, persons and valves of the room: checked as the panel checks them (room_parts).
-                parts = room_parts(self.hass, self.config_entry, room, user_input, valve_ctx, self._e32_valve_models)
+                parts = room_parts(self.hass, self.config_entry, room, user_input, valve_ctx, self._e32_valve_models,
+                                   self._e32_plan)
                 valves = parts.valves
                 if valves is not None:
                     placeholders["valve_routes"] = self._e32_valve_routes(valves[0])
@@ -1150,7 +1144,7 @@ class E32RoomFlow:
             room = {"setpoint_entity": user_input.get("setpoint_entity") or "",
                     "sources": [{"type": "ha", "id": e} for e in user_input.get("ha_sources") or []]}
         # The user's language when the flow context carries it; Home Assistant's own otherwise
-        # (a flow is not told the browser's language). The texts: EN, NL and PL.
+        # (a flow is not told the browser's language). The texts: EN and NL.
         language = (getattr(self, "context", None) or {}).get("language") or self.hass.config.language
         return setting_hint(proposed_device(room), language)
 
@@ -1284,14 +1278,92 @@ async def write_room(link, room, values):
     return created[0]
 
 
+def without_rooms(options, room_ids):
+    """The entry options without what they keep per room for ``room_ids`` (1.4.2, HC-02): the window and door
+    contacts, the room's own pause delays and persons (comfort_settings), its notifications with their recipients
+    (notifications.rooms). The raw options are filtered, never rebuilt, so every other value stays as stored."""
+    from .notifications import CONF_NOTIFICATIONS
+    from .e32_comfort import CONF_COMFORT
+    gone, out = set(room_ids), dict(options)
+    comfort = options.get(CONF_COMFORT)
+    if type(comfort) is dict:
+        comfort = dict(comfort)
+        for key in ("contacts", "doors", "contact_delays", "door_delays", "room_persons"):
+            if type(comfort.get(key)) is dict:
+                comfort[key] = {room: value for room, value in comfort[key].items() if room not in gone}
+        out[CONF_COMFORT] = comfort
+    notifications = options.get(CONF_NOTIFICATIONS)
+    if type(notifications) is dict and type(notifications.get("rooms")) is dict:
+        out[CONF_NOTIFICATIONS] = {**notifications, "rooms": {room: value for room, value in notifications["rooms"].items()
+                                                              if room not in gone}}
+    return out
+
+
+def option_rooms(options):
+    """The room ids the entry options keep something for (without_rooms' parts)."""
+    from .notifications import CONF_NOTIFICATIONS
+    from .e32_comfort import CONF_COMFORT
+    comfort, notifications = options.get(CONF_COMFORT), options.get(CONF_NOTIFICATIONS)
+    found = set()
+    for key in ("contacts", "doors", "contact_delays", "door_delays", "room_persons"):
+        part = comfort.get(key) if type(comfort) is dict else None
+        found |= set(part) if type(part) is dict else set()
+    rooms = notifications.get("rooms") if type(notifications) is dict else None
+    return found | (set(rooms) if type(rooms) is dict else set())
+
+
+@callback
+def forget_rooms_options(hass, entry, room_ids, extra=None, prune=False, rooms=None):
+    """forget_room_options for several rooms in one options write (``extra``: more options to store with it;
+    ``prune``: check the valve choices also without a room; ``rooms``: the room ids that still exist, else the plan's
+    without ``room_ids``). One write, and none when nothing changes: two writes in a row would make the second one
+    reload the entry."""
+    from .energy_input import ENERGY_ONLY_UPDATE
+    from .valve_routes import async_prune_through_ha, through_ha_choices
+    if hass.config_entries.async_get_entry(entry.entry_id) is not entry:
+        return False  # not a stored entry (a removed one, a test's stand-in): nothing to write
+    options = dict(entry.options or {})
+    cleaned = {**without_rooms(options, room_ids), **(extra or {})}
+    changed = False
+    if cleaned != options:
+        state = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+        if isinstance(state, dict):
+            state[ENERGY_ONLY_UPDATE] = dict(cleaned)  # the comfort and notification saves' no-reload marker
+        changed = hass.config_entries.async_update_entry(entry, options=cleaned)
+        if isinstance(state, dict):
+            if not changed:
+                state.pop(ENERGY_ONLY_UPDATE, None)
+            if (forwarder := state.get("comfort_forwarder")) is not None:
+                forwarder.reconfigure()
+            if (notifier := state.get("notifier")) is not None:
+                notifier.evaluate()
+    if (room_ids or prune) and through_ha_choices(entry):
+        plan = getattr(getattr(heating_hub(hass, entry), "plan", None), "plan", None)
+        if rooms is None:
+            rooms = ({r.get("id") for r in plan.get("rooms") or [] if type(r) is dict} - set(room_ids)
+                     if type(plan) is dict else None)
+        hass.async_create_background_task(async_prune_through_ha(hass, entry, rooms),
+                                          f"{DOMAIN} forget the valve choices of removed rooms")
+    return changed
+
+
+@callback
+def forget_room_options(hass, entry, room_id):
+    """Forget everything Home Assistant keeps for a removed room (1.4.2, HC-02), wherever it was removed (here:
+    forget_room; on the E32's own page: native_entity_cleanup.cleanup_removed_rooms): its window and door contacts,
+    its own pause delays and persons, its notifications and their recipients (one options write, without a reload),
+    and the "Through Home Assistant" choices of valves no room has any more (valve_routes.async_prune_through_ha: one
+    valve read in the background). Room ids come from the name, so a room created again with the same name starts
+    empty. True when the options changed."""
+    return forget_rooms_options(hass, entry, [room_id])
+
+
 def forget_room(hass, entry, room_id):
-    """The room is gone from the E32 plan: its device and entities go (this entry's only), and its window and door
-    contacts and its persons with them."""
+    """The room is gone from the E32 plan: its device and entities go (this entry's only), and everything the options
+    keep for it with them (forget_room_options)."""
     from .native_entity_cleanup import remove_room_devices
     remove_room_devices(hass, entry, heating_hub(hass, entry).prefix, [room_id])
-    if room_contacts(entry, room_id) or room_persons(entry, room_id):
-        settings = with_room_persons(comfort_options(entry), room_id, [])
-        save_comfort(hass, entry, with_room_contacts(settings, room_id, []))
+    forget_room_options(hass, entry, room_id)
 
 
 async def remove_room(hass, entry, link, room_id):
@@ -1508,6 +1580,9 @@ async def save_valves(hass, entry, room_id, routes, control, ctx=None, pins=None
             getattr(err, "translation_key", None) or "unknown"
         raise FlowError("e32_valves_rejected", error=error) from None
     if pins is not None:
+        if ctx is not None:  # 1.4.2 (HC-02): a valve that left the room leaves no "Through Home Assistant" choice
+            from .valve_routes import kept_pins
+            pins = kept_pins(pins, [*ctx.others, *(r.record() for r in routes)])
         save_through_ha(hass, entry, pins)
 
 
@@ -1538,16 +1613,34 @@ class RoomParts:
                 and self.persons == room_persons(entry, room_id))
 
 
-def room_parts(hass, entry, room, user_input, valve_ctx=None, models=None):
+def room_parts(hass, entry, room, user_input, valve_ctx=None, models=None, plan=None):
     """The room form's contacts, persons and valves (its sections "window", "persons" and "valves") checked, in the
-    form's order; ``models``: the models chosen per valve (the step e32_room_valve_models). Raises FlowError."""
+    form's order, then one role per valve (refuse_two_roles); ``models``: the models chosen per valve (the step
+    e32_room_valve_models); ``plan``: the room plan the form edits (None: the one Home Assistant read last). Raises
+    FlowError."""
     contacts, doors = submitted_contacts(hass, entry, room, user_input)
     persons = submitted_persons(hass, entry, room, user_input)
     delay = submitted_delay(user_input)
     door_delay = submitted_delay(user_input, "door_delay")
     valves = submitted_valves(user_input.get("valves"), valve_ctx, models)
     pins = valve_pins(valve_ctx, models) if valves is not None else None
+    refuse_two_roles(hass, entry, room, user_input, valves, valve_ctx, plan)
     return RoomParts(contacts, doors, delay, door_delay, persons, valves, valve_ctx, pins)
+
+
+def refuse_two_roles(hass, entry, room, user_input, valves=None, valve_ctx=None, plan=None):
+    """One role per valve (1.4.2): FlowError ``device_two_roles`` on ``setpoint_entity`` when the save would make a
+    device both a room's setting device and a radiator valve the E32 drives (valve_routes.two_roles). The same check
+    for Configure's room form and the settings panel (both save through room_parts); ``valves``: (routes, valve
+    control) after the save, None: as stored."""
+    from .valve_routes import two_roles
+    if valves is None:
+        valves = (valve_ctx.stored, valve_ctx.control) if valve_ctx is not None else ((), False)
+    if plan is None:
+        hub = (hass.data.get(DOMAIN, {}).get(entry.entry_id) or {}).get("heating_hub")
+        plan = getattr(getattr(hub, "plan", None), "plan", None)
+    if two_roles((room or {}).get("id") or "", user_input.get("setpoint_entity") or "", *valves, valve_ctx, plan):
+        raise FlowError("device_two_roles", "setpoint_entity")
 
 
 async def save_room(hass, entry, link, room, values, parts):
@@ -1555,6 +1648,8 @@ async def save_room(hass, entry, link, room, values, parts):
     with their delays (only with contacts) and its persons, each only when it differs from what is stored. A refused
     valve record raises FlowError e32_valves_rejected with ``saved`` (the room is stored: a new room has its id)."""
     saved = await write_room(link, room, values)
+    from .e32_setting_device import clear_two_roles_issue
+    clear_two_roles_issue(hass, entry, saved)  # 1.4.2: the room's roles are chosen again (valve_two_roles)
     if parts.valves_changed:  # after the plan: a new room exists on the E32 before its valves
         try:
             await save_valves(hass, entry, saved, *parts.valves, parts.valve_ctx, parts.pins)

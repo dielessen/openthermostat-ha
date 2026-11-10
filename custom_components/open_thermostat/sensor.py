@@ -1,5 +1,6 @@
 """Room readings beside OpenThermostat climate entities."""
 
+import asyncio
 import json
 import logging
 import math
@@ -103,12 +104,24 @@ async def _release_units(hass, entry):
     release_pinned_units(hass, entry, entry.data[CONF_TOPIC_PREFIX])
 
 
+# How long one optional part of the sensor setup may take (HC-17, 1.4.2): one that waits on a slow broker or
+# a stuck lookup is given up, logged, and the rest still loads.
+OPTIONAL_STEP_S = 30
+
+
 async def _optional_step(name, step, *args, **kwargs):
-    """One optional part of the sensor setup: a failure is logged, the rest still loads."""
+    """One optional part of the sensor setup: a failure or a wait past OPTIONAL_STEP_S is logged, the rest still
+    loads."""
+    timer = asyncio.timeout(OPTIONAL_STEP_S)
     try:
-        await step(*args, **kwargs)
+        async with timer:
+            await step(*args, **kwargs)
     except Exception:  # noqa: BLE001 - never let one optional part take the room entities down
-        _LOGGER.exception("OpenThermostat: setting up the %s failed; the other entities still load", name)
+        if timer.expired():
+            _LOGGER.warning("OpenThermostat: setting up the %s took longer than %s s and was stopped; the other "
+                            "entities still load", name, OPTIONAL_STEP_S)
+        else:
+            _LOGGER.exception("OpenThermostat: setting up the %s failed; the other entities still load", name)
 
 
 async def async_setup_entry(
@@ -169,6 +182,9 @@ async def async_setup_entry(
             from .last_restart import async_setup_errors_sensor
             # "E32 errors" (fw/heartbeat "errors", E32 1.4): the system log's error lines since the restart
             await _optional_step("E32 errors", async_setup_errors_sensor, hass, entry, async_add_entities)
+            from .device_battery import async_setup_sensor as async_setup_batteries
+            # "Batteries low" (1.4.2): how many batteries of the installation are below the limit, always there
+            await _optional_step("batteries", async_setup_batteries, hass, entry, async_add_entities)
             from .e32_boiler_settings_entities import async_setup_sensors as async_setup_boiler_settings
             # "Boiler settings writes", once the E32 sends fw/telemetry/boiler_settings (track W)
             await _optional_step("boiler settings", async_setup_boiler_settings, hass, entry, async_add_entities)
@@ -635,7 +651,7 @@ class HubMetric(SensorEntity):
         self._attr_device_class = device_class
         self._attr_native_unit_of_measurement = unit
         self._attr_state_class = state_class
-        # Named by translation key (EN/NL/PL): the boiler counters got short, plain names, the
+        # Named by translation key (EN/NL): the boiler counters got short, plain names, the
         # others kept their English names. An existing entity keeps its entity_id (the registry holds it).
         self._attr_translation_key = f"hub_{metric}"
         versioned = topic == "ems_metrics" and metric in VERSIONED_METRICS

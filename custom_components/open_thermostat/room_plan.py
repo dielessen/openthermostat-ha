@@ -16,6 +16,13 @@ the same writer. Plans read from or confirmed by the E32 remove the devices
 of rooms they no longer have once two reads at least a minute apart miss
 them; a plan without rooms never removes any
 (native_entity_cleanup.cleanup_removed_rooms).
+
+1.4.2 (HA-REREAD, plan 3.2, review HC-01/HC-16/A48/P5): a firmware update keeps the plan's revision, so the
+E32's abilities (the plan's ``features``) are read again after every E32 restart (``hub.boots``: an update from
+Home Assistant or from the E32 page, a downgrade, a power cut) and on ``request_refresh()`` (the Firmware entity
+after a confirmed install). The wish is sticky: only a successful read of GET /config/heating clears it, a failed
+one is retried after RETRY_SECONDS. That read also takes the firmware version (the device pages, HC-16) and the
+time zone (A48) in the same sign-in, and tells the hub's firmware-version observers.
 """
 from __future__ import annotations
 
@@ -38,7 +45,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .controller_link import (ControllerClient, ControllerLinkError, ControllerLoginRejected, HeatingPlanRejected,
                               SESSION_WAITS)
-from .heating_link import ROOM_ID, RoomEntity, add_options, heating_hub, track_entities
+from .heating_link import ROOM_ID, RoomEntity, add_options, heating_hub, hub_shape, track_entities
 from .room_levels import normalize
 
 _LOGGER = logging.getLogger(__name__)
@@ -240,6 +247,14 @@ class RoomPlanLink:
         self.session_waits = SESSION_WAITS
         self._newest = {}
         self._newer = asyncio.Event()
+        # HA-REREAD: the abilities are read again after an E32 restart or request_refresh(). _reread is the number
+        # of the newest wish (0: none), cleared only by a successful read that started for it; _reread_for is the
+        # version that wish names (request_refresh), _reread_started the hub clock when the last successful re-read
+        # began (a restart that read already followed needs no second one).
+        self._boots = getattr(hub, "boots", 0)
+        self._reread = self._wishes = 0
+        self._reread_for = None
+        self._reread_started = None
         self._remove = hub.add_listener(self._status_changed)
 
     @classmethod
@@ -283,6 +298,52 @@ class RoomPlanLink:
     def revision(self):
         return self.plan["revision"] if self.plan else None
 
+    @property
+    def features(self):
+        """The abilities the E32 named in the plan Home Assistant last read (``features`` of GET /config/heating),
+        as a tuple of names; () before the first read. Read live: fresh after every E32 restart (HA-REREAD), so a
+        caller that checks a flag here (``room.manual.v1``, ``house.mode.summer.v1``) follows an update or a
+        downgrade without a reload."""
+        features = self.plan.get("features") if type(self.plan) is dict else None
+        return tuple(f for f in features if type(f) is str) if type(features) is list else ()
+
+    @property
+    def reread_pending(self):
+        """True while Home Assistant still wants to read the E32's abilities again (after a restart or
+        request_refresh) and no read has succeeded since."""
+        return bool(self._reread)
+
+    @callback
+    def request_refresh(self, version=None):
+        """Read the E32's abilities again soon (features and plan, firmware version, time zone; one sign-in).
+
+        The hook for whoever knows the E32 changed: the Firmware entity calls it after a confirmed install
+        (firmware_update.E32FirmwareUpdate._abilities_read_again). Sticky until a read succeeds; a failure less
+        than RETRY_SECONDS ago does not hold it up. ``version``: the version that runs now; when the last re-read
+        already found exactly that one (and none is pending), nothing more is read.
+        """
+        if version is not None and not self._reread and version == getattr(self.hub, "firmware_version", None):
+            return
+        self._wish(version)
+        self._failed_at = None
+        self._status_changed()
+
+    def _wish(self, version=None):
+        self._wishes += 1
+        self._reread, self._reread_for = self._wishes, version
+
+    def _hub_clock(self):
+        clock = getattr(self.hub, "clock", None)
+        return clock() if callable(clock) else self.clock()
+
+    def _read_since_boot(self):
+        """True when the last successful re-read began after the E32's last start (the heartbeat's uptime says when)."""
+        beat, received = getattr(self.hub, "heartbeat", None), getattr(self.hub, "heartbeat_received", None)
+        uptime = beat.get("uptime_s") if type(beat) is dict else None
+        if self._reread_started is None or type(uptime) is not int or received is None:
+            return False
+        return self._reread_started >= received - uptime
+
     def room(self, room_id):
         return plan_room(self.plan, room_id)
 
@@ -301,15 +362,24 @@ class RoomPlanLink:
 
     @callback
     def _status_changed(self):
-        """Read the plan again when the telemetry reports a revision we have not read.
+        """Read the plan again when the telemetry reports a revision we have not read, or the E32 restarted.
 
         Each telemetry revision triggers at most one read (an E32 that restored
-        an older plan is read once too, not in a loop).
+        an older plan is read once too, not in a loop). An E32 restart (``hub.boots``)
+        or request_refresh() asks for a re-read of its abilities that stays asked
+        for until one succeeds (HA-REREAD): a failed read is tried again after
+        RETRY_SECONDS, also when the revision did not change.
         """
+        boots = getattr(self.hub, "boots", 0)
+        if boots != self._boots:
+            self._boots = boots
+            if not self._read_since_boot():
+                self._wish()
+                self._failed_at = None  # a read that failed while the E32 was away holds nothing up now
         if self.hub.status is None or (self._task is not None and not self._task.done()):
             return
         revision = self.hub.revision
-        if (self.plan is not None and not self._follow_up_failed
+        if (not self._reread and self.plan is not None and not self._follow_up_failed
                 and (revision is None or revision in (self.revision, self._seen_revision))):
             return
         if self.login_rejected or (self._failed_at is not None and self.clock() - self._failed_at < RETRY_SECONDS):
@@ -468,10 +538,58 @@ class RoomPlanLink:
             raise ControllerLinkError("controller_response_invalid")
         return plan
 
+    async def _async_reread(self):
+        """The E32's abilities in one sign-in: (version or None, plan, time zone or None).
+
+        The version first, so the plan read after it is that firmware's (a restart in between ends the sign-in).
+        Only the plan must be read; the version and the time zone are a bonus (older firmware, a busy E32).
+        """
+        from .e32_system import async_read_time_zone
+
+        async def read(client):
+            try:
+                answer = await client.async_read("/status/version")
+            except ControllerLinkError:
+                answer = None
+            version = answer.get("version") if type(answer) is dict else None
+            version = version if type(version) is str and 0 < len(version) <= 64 else None
+            plan = decode_plan(await client.async_read_heating_plan())
+            if plan is None:
+                raise ControllerLinkError("controller_response_invalid")
+            return version, plan, await async_read_time_zone(client)
+        return await self.async_call(read)
+
+    def _reread_done(self, wish, started, version):
+        """A re-read succeeded: the wish it started for (or a newer one naming the version it found) is done.
+
+        Before the plan is set: its listeners may start the next read (a task can run to its end before
+        async_create_task returns), and that one must not see the wish still open."""
+        if self._reread == wish or (self._reread_for is not None and self._reread_for == version):
+            self._reread, self._reread_for = 0, None
+        self._reread_started = started
+
+    @callback
+    def _abilities_read(self, version, zone):
+        """After a successful re-read: one log line; the time-zone check and the hub's firmware-version observers
+        hear the news."""
+        _LOGGER.info("E32 now %s: abilities read again.", version or "on an unknown version")
+        if zone is not None and self.entry is not None:
+            from .e32_system import check_time_zone
+            check_time_zone(self.hass, self.entry, zone)
+        firmware_read = getattr(self.hub, "firmware_read", None)
+        if firmware_read is not None:
+            firmware_read(version)
+
     async def async_refresh(self):
+        wish, started = self._reread, self._hub_clock()
+        version = zone = None
         try:
-            plan = await self._async_fetch()
+            if wish:
+                version, plan, zone = await self._async_reread()
+            else:
+                plan = await self._async_fetch()
         except ControllerLinkError as err:
+            # A wish to read the abilities again stays: the next telemetry after RETRY_SECONDS reads again.
             _LOGGER.debug("E32 room plan read failed: %s", err)
             self._failed_at, self._seen_revision = self.clock(), None
             if self.entry is not None:
@@ -480,6 +598,8 @@ class RoomPlanLink:
                     self._confirm_later(RETRY_SECONDS)  # a room missing from the plan still waits for its check
             return
         self._failed_at = None
+        if wish:
+            self._reread_done(wish, started, version)
         try:
             self._set(plan)
         except Exception:  # R-C-06: a background task, nobody retrieves its exception
@@ -487,6 +607,8 @@ class RoomPlanLink:
                 "OpenThermostat: the room clean-up after reading the E32 room plan failed; the plan is read "
                 "again in %d s", RETRY_SECONDS)
             self._failed_at, self._seen_revision, self._follow_up_failed = self.clock(), None, True
+        if wish:
+            self._abilities_read(version, zone)
 
     async def async_read(self):
         """The plan as the E32 holds it now; a clear error when it cannot be read."""
@@ -746,7 +868,8 @@ class RoomFallbackSetpoint(PlanRoomEntity, NumberEntity):
 
 def _wanted(factory):
     def wanted(hub):
-        for room_id, room in hub.rooms.items():
+        # 1.4.2 (HC-03): also the rooms known while the E32 is offline (heating_link.HeatingHub.known_rooms).
+        for room_id, room in hub.known_rooms.items():
             yield room_id, lambda room=room: factory(hub, room)
     return wanted
 
@@ -758,7 +881,9 @@ async def _async_setup(hass, entry, async_add_entities, factory):
     hub = heating_hub(hass, entry)
     if hub.plan is None:
         return  # No stored controller connection: the plan cannot be written.
-    entry.async_on_unload(track_entities(hub, async_add_entities, add_options(hass, entry), _wanted(factory)))
+    # Only the room ids decide: wanted() runs when hub_shape changed, not on every E32 message (HC-08).
+    entry.async_on_unload(track_entities(hub, async_add_entities, add_options(hass, entry), _wanted(factory),
+                                         hub_shape))
 
 
 async def async_setup_selects(hass, entry, async_add_entities):

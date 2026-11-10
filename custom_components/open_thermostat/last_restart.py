@@ -18,6 +18,19 @@ cause and the crash summary are attributes; the same object is in the diagnostic
 
 Firmware without the topic never creates the entity (nothing to go stale). Diagnostic.
 
+1.4.2 adds two things the boot record says:
+
+- ``"nvs_erased": true`` (E32 1.4.2, FW-SMALL; only in the record of the boot that found it): the E32 found its
+  settings memory wiped at start (no plan and no password while its marker says the previous boot had them). That
+  is a fault: the Repairs item ``nvs_erased`` says what to do (restore the backup, choose a password). The firmware
+  says it once, so the item stays until the user dismisses it, or until the E32 has rooms again in a plan it sent
+  after the item was raised and its password is no longer the factory one; never because a later record lacks the
+  key (nvs_erased.py; this module raises no Repairs item itself).
+- A new ``boot`` id is an E32 restart. Home Assistant sees a restart otherwise only as a falling heartbeat uptime,
+  which it misses when the broker or Home Assistant was away for longer than the E32's previous uptime; then the
+  E32's abilities would stay stale. A new boot id asks the room-plan link to read them again
+  (room_plan.RoomPlanLink.request_refresh, HA-REREAD), unless the heartbeat already showed that restart.
+
 1.4 (FW-LOG): the sensor "E32 errors" (below) lives here too: the error lines of the E32's system log since it
 started, from the heartbeat's ``errors``.
 """
@@ -68,7 +81,7 @@ def decode(payload):
         return None
     reset = value.get("reset") if value.get("reset") in RESETS else "unknown"
     report = {"boot": boot, "reset": reset, "reset_reason": _count(value.get("reset_reason"), 255),
-              "previous": None, "coredump": None}
+              "previous": None, "coredump": None, "nvs_erased": value.get("nvs_erased") is True}
     previous = value.get("previous")
     if type(previous) is dict:
         stack = previous.get("stack") if type(previous.get("stack")) is dict else {}
@@ -178,12 +191,18 @@ async def async_setup_sensor(hass, entry, async_add_entities):
     state = hass.data[DOMAIN][entry.entry_id]
     holder = {}
 
+    seen = {"boots": getattr(hub, "boots", 0)}
+
     @callback
     def received(message):
         report = decode(message.payload)
         if report is None:
             return
+        previous = state.get(STATE_KEY)
         state[STATE_KEY] = report
+        new_boot(hub, previous, report, seen)
+        from .nvs_erased import sync_nvs_erased
+        sync_nvs_erased(hass, entry, hub, report)
         sensor = holder.get("sensor")
         if sensor is None:
             sensor = holder["sensor"] = LastRestartSensor(prefix, hub)
@@ -196,10 +215,26 @@ async def async_setup_sensor(hass, entry, async_add_entities):
     def hub_changed():
         if (sensor := holder.get("sensor")) is not None and sensor.started is None:
             sensor.heartbeat()
+        from .nvs_erased import sync_nvs_erased
+        sync_nvs_erased(hass, entry, hub)
 
     entry.async_on_unload(hub.add_listener(hub_changed))
     await mqtt.async_wait_for_mqtt_client(hass)
     entry.async_on_unload(await mqtt.async_subscribe(hass, topic_base(hass, entry) + TOPIC, received))
+
+
+@callback
+def new_boot(hub, previous, report, seen):
+    """A boot report: another ``boot`` id than the last one is an E32 restart. Unless the heartbeat's falling uptime
+    showed it already (``hub.boots`` changed since the last report: the room-plan link reads again by itself), ask
+    the room-plan link to read the E32's abilities again. ``seen``: {"boots": hub.boots at the last report}."""
+    boots = getattr(hub, "boots", 0)
+    restarted = previous is not None and report["boot"] != previous["boot"]
+    if restarted and boots == seen.get("boots"):
+        link = getattr(hub, "plan", None)
+        if link is not None:
+            link.request_refresh()
+    seen["boots"] = boots
 
 
 def diagnostics(hass, entry):
@@ -331,3 +366,9 @@ async def async_setup_errors_sensor(hass, entry, async_add_entities):
 
     entry.async_on_unload(hub.add_listener(hub_changed))
     hub_changed()
+    # 1.4.2 (HC-03): a sensor that existed is there at once, unavailable until the E32's heartbeat (Home Assistant
+    # started while the E32 is offline), never "no longer provided".
+    from .heating_link import entity_was_there
+    if holder.get("sensor") is None and not getattr(hub, "closed", False) and entity_was_there(hub, "hub_e32_errors"):
+        holder["sensor"] = E32ErrorsSensor(prefix, hub)
+        async_add_entities([holder["sensor"]], **add_options(hass, entry))

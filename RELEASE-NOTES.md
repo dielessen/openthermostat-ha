@@ -1,3 +1,79 @@
+# HA 1.4.2 — recipients per room, every battery on one list, fewer Repairs
+<!-- user-release-notes:v2:en -->
+
+Companion of E32 1.4.2; also runs with E32 1.4.1 and older, with the limits
+under Updating. Needs Home Assistant 2026.10.0 or newer.
+
+## New
+
+- **Per room you choose who gets its messages,** on the room's screen. After
+  the update every room keeps the people it had.
+- **Every battery on one list** (Settings → Devices → Batteries) with one limit
+  you choose. A window or door contact, the setting device, a thermometer or a
+  valve that runs low gets its own message naming it, again after a week if it
+  stays low; a device silent for a day is reported as probably empty. The
+  Overview shows a line as soon as one runs low.
+- **A setting device works both ways,** also without a week program: what you
+  turn on it is a manual change of the room. A device is the room's setting
+  device or a valve the E32 drives, not both.
+- **A temperature never changes the room's state.** With a week program it
+  lasts until the next switch time; without one it is the room's temperature.
+  "Length of a manual change" is gone, and a room card says "Off until 14:00,
+  then on again".
+- **A room on Heat along only has one field, Heat along up to,** in General.
+  "Use one fixed temperature" removes its week program after a question.
+- **Heat along or a fixed temperature.** After two weeks the room screen says
+  up to which temperature a room can heat along for free, and what each degree
+  above that costs.
+- **Fewer Repairs, only faults.** Advice moved to "Worth checking" on the
+  Learning tab. A new item tells you when the E32 lost its stored settings.
+- **Bluetooth:** Search works whenever a search is possible, and a sensor's
+  screen says which room it measures for and lets you rename it.
+- **Home Assistant sees the E32's new abilities at once** after a firmware
+  update; no reload is needed. It also uses the E32's connection more sparingly,
+  so the E32's pages stay reachable during an update or a backup.
+- **Sensors stay available** when Home Assistant starts while the E32 is off.
+  A room on Heat along only or Off says "not measured", not Unknown. "Boiler
+  status bits (raw)" is off by default.
+- **Hot water.** "Gas per day" always shows hot water in total. With a hot
+  water tank you get "Charges today" and its taps from the hot water flow
+  (with litres); burner power above 100 % counts.
+- **The result you share with the tester program** now also tells how the E32
+  controlled the boiler and how that went.
+- **After an update the settings page asks you to reload** instead of mixing
+  old and new. Small buttons are easier to tap.
+
+## Fixed
+
+- **A removed room leaves nothing behind;** a room you add again with the same
+  name starts empty.
+- **Polish has been removed:** a Polish Home Assistant profile shows English.
+
+## Updating
+
+Update under Settings → Updates (Marketplace; HACS on Home Assistant 2026.10 and
+older) and restart Home Assistant. Then install E32 1.4.2 from its Firmware
+entity and confirm the takeover again.
+
+- Entities, IDs and history stay.
+- A valve that was also a setting device loses Valve control once, with a
+  Repairs item that goes when you save the room.
+- A battery that is already low sends one new message naming the device.
+- "Length of a manual change" disappears from Configure and the panel.
+- On a hot water tank the sensors Keeping warm today, Tapping gas and
+  Keeping-warm gas are removed after a day and replaced by Charges today.
+- With E32 1.4.1 a change "until the next switch point" still lasts at most 24
+  hours, and a hot water tank's taps are not counted.
+
+## Limitations
+
+- Sentences in sensors (what the E32 learned, the advice) are in Home
+  Assistant's language; the cards use yours.
+- Boiler settings stay a preview until a real boiler has confirmed them.
+- Radiator valve control has run on a few real valves only; a Sonoff TRV Gen2
+  reports no valve position.
+- After a firmware downgrade to 1.4.1 the hot water day of a tank starts at zero.
+
 # HA 1.4.1 — a calmer Settings tab with everything in it, summer mode and cards in the same look
 <!-- user-release-notes:v2:en -->
 

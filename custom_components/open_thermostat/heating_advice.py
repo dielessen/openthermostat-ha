@@ -10,10 +10,16 @@ reports what is missing instead of guessing.
 One sensor on the product device ("Heating advice" / "CV-advies") holds the
 current advice: its state is the number of items, the attribute ``items``
 the items ({id, severity, title, observed, why, action, where, confidence,
-since}) in the Home Assistant language (English, Dutch or Polish), and
+since}) in the Home Assistant language (English or Dutch), and
 ``not_evaluated`` the rules that lack data, with the reason. The attribute
 ``weekly_summary`` holds the last seven days (weekly_summary.py) for the
 opt-in weekly notification blueprint.
+
+1.4.2 (plan 3.14): each sample also carries every room's temperature, state,
+demand and valve opening (``rm``) and the outdoor temperature (``o``); the
+history folds them into per-room day records (room_advice.RoomRecords, kept in
+the same restore state) for the heat-along advice and the house model per room.
+The attribute ``rooms`` holds one line per room for the Learning view.
 """
 import math
 import time
@@ -406,7 +412,7 @@ def evaluate(samples, ctx):
     return items, missing
 
 
-# -- texts (English, Dutch and Polish; placeholders filled from the data) ------
+# -- texts (English and Dutch; placeholders filled from the data) ------
 #
 # Per rule: title, observed, why, action, where. "<field>+<part>" is appended
 # when the rule reports that part; "<field>@<part>" replaces the field.
@@ -771,209 +777,25 @@ TEXT = {
             "no_pump_run_on": "De ketel meldt zijn pompnaloop niet.",
         },
     },
-    # Polish: the terms of translations/pl.json and docs/UX-GLOSSARY.md; E32 page names stay English.
-    "pl": {
-        "rules": {
-            "short_cycling": {
-                "title": "Palnik zbyt często się włącza",
-                "observed": "Palnik uruchamiał się do ogrzewania nawet {starts} razy na godzinę, przez {hours} godz. "
-                            "(E32 liczy starty, które słyszy z kotła).",
-                "observed@flagonly": "E32 widział, że palnik zbyt często się włączał i wyłączał przez {hours} godz.",
-                "observed+mbp": " Przerwa palnika między startami (ustawienie kotła): {mbp} min.",
-                "observed+hyst": " Marginesy przełączania (histereza): włączenie {hyst_on} K, wyłączenie {hyst_off} K.",
-                "observed+maxch": " Maksimum kotła: {max_ch} °C.",
-                "why": "Każdy start kosztuje dodatkowy gaz (przedmuch i rozgrzewanie), zużywa zapłon i wentylator "
-                       "oraz sprawia, że temperatura w pomieszczeniu jest mniej stabilna.",
-                "action": "Niech palnik dłużej odpoczywa między startami: zwiększ w kotle przerwę "
-                          "palnika między startami, na przykład do {mbp_target} min. Rozważ też obniżenie "
-                          "maksimum kotła, aby wolniej dochodził do punktu wyłączenia.",
-                "action@mbpmax": "Palnik już długo odpoczywa między startami; rozważ obniżenie "
-                                 "maksimum kotła, aby wolniej dochodził do punktu wyłączenia.",
-                "action+hyst": " Szerszy margines przełączania (histereza, o około 2 K więcej) też zmniejsza liczbę startów.",
-                "where": "Menu serwisowe kotła (poziom instalatora). Maksimum kotła: w wielu modelach "
-                         "pokrętło, w innych menu kotła lub jego aplikacja.",
-            },
-            "max_ch_high": {
-                "title": "Maksimum kotła jest wyższe, niż trzeba",
-                "observed": "Maksimum kotła wynosi {max_ch} °C, ale w ciągu ostatnich {days} dni "
-                            "z ogrzewaniem najwyższa temperatura wody żądana od kotła (termostat i E32) wynosiła {peak} °C.",
-                "why": "Niższe maksimum utrzymuje chłodniejszą wodę powrotną, więc kocioł lepiej kondensuje (mniej "
-                       "gazu), i ogranicza przegrzewanie oraz taktowanie. Ogrzewanie podłogowe ma zwykle własny "
-                       "zawór, który ogranicza jego wodę do około 50 °C, więc wyższe maksimum kotła służy tylko "
-                       "grzejnikom.",
-                "action": "Obniż maksimum kotła do {suggest} °C — w wielu modelach pokrętłem, "
-                          "w innych w menu kotła lub w jego aplikacji. E32 nigdy nie żąda więcej niż to maksimum. "
-                          "Jeśli w zimne dni jakieś pomieszczenie przestanie się nagrzewać, podnieś je znów o 5 °C.",
-                "where": "Na kotle: w wielu modelach pokrętło, w innych menu kotła lub jego aplikacja.",
-            },
-            "return_too_warm": {
-                "title": "Woda wraca zbyt ciepła, by kocioł oszczędzał gaz",
-                "observed": "Podczas grzania woda wracająca do kotła (powrót) miała zwykle {median} °C, "
-                            "przez {hours} godz. grzania.",
-                "observed+flow": " Woda wychodząca (zasilanie) miała zwykle {flow} °C.",
-                "why": "Kocioł kondensacyjny kondensuje (odzyskuje ciepło ze spalin, około 10% wyższa sprawność) "
-                       "tylko wtedy, gdy woda powrotna pozostaje poniżej około 55 °C.",
-                "action": "Obniż temperaturę wody do ogrzewania: maksimum kotła lub kompensację pogodową "
-                          "w kotle albo najwyższą temperaturę wody w E32. Jeśli woda wychodząca i wracająca mają "
-                          "zbliżone temperatury, niższa prędkość pompy sprawi, że woda powrotna będzie chłodniejsza.",
-                "where": "Na kotle: w wielu modelach pokrętło, w innych menu kotła lub jego aplikacja. Home Assistant: "
-                         "OpenThermostat → Konfiguruj → Ogrzewanie i kocioł (lub na E32: Home → Water temperature limits).",
-            },
-            "flow_higher_wasteful": {
-                "title": "{room}: wystarczy chłodniejsza woda",
-                "observed": "E32 nauczył się, że woda o temperaturze {need} °C nagrzewa pomieszczenie {room} o 1 °C "
-                            "na czas; regulacja pokojowa żądałaby teraz {rule} °C.",
-                "observed@norule": "E32 nauczył się, że woda o temperaturze {need} °C nagrzewa pomieszczenie {room} "
-                                   "o 1 °C na czas, mniej, niż regulacja pokojowa żąda teraz.",
-                "why": "Chłodniejsza woda do ogrzewania wraca chłodniejsza, więc kocioł lepiej kondensuje i pracuje "
-                       "równiej: mniej gazu przy tym samym komforcie.",
-                "action": "Na razie nic nie trzeba robić. Gdy E32 będzie sterował kotłem, sam zażąda tej niższej "
-                          "temperatury. Jeśli każde pomieszczenie pokazuje tę poradę, możesz już teraz obniżyć "
-                          "najwyższą temperaturę wody w E32 o około {lower_by} °C.",
-                "action@norule": "Na razie nic nie trzeba robić. Gdy E32 będzie sterował kotłem, sam zażąda tej "
-                                 "niższej temperatury.",
-                "action+maxflow": " Teraz wynosi ona {max_flow} °C.",
-                "where": "Home Assistant: OpenThermostat → Konfiguruj → Ogrzewanie i kocioł (lub na E32: Home → "
-                         "Water temperature limits).",
-            },
-            "flow_lower_too_slow": {
-                "title": "{room}: potrzeba cieplejszej wody",
-                "observed": "E32 nauczył się, że pomieszczenie {room} potrzebuje wody o temperaturze {need} °C, aby "
-                            "nagrzać się o 1 °C na czas; regulacja pokojowa żądałaby tylko {rule} °C.",
-                "observed@norule": "E32 nauczył się, że pomieszczenie {room} potrzebuje wody o temperaturze {need} °C, "
-                                   "aby nagrzać się o 1 °C na czas, więcej, niż regulacja pokojowa żąda teraz.",
-                "why": "Przy zbyt chłodnej wodzie pomieszczenie po chłodniejszym okresie nagrzewa się powoli, więc "
-                       "osiąga temperaturę komfortu za późno.",
-                "action": "Sprawdź, czy najwyższa temperatura wody w E32 i maksimum kotła "
-                          "pozwalają na {need} °C, albo zacznij grzać wcześniej w programie tygodniowym.",
-                "action+cap": " Najwyższa temperatura wody w E32 ({max_flow} °C) jest niższa, niż potrzebuje to "
-                              "pomieszczenie.",
-                "where": "Home Assistant: OpenThermostat → Konfiguruj → Ogrzewanie i kocioł (lub na E32: Home → "
-                         "Water temperature limits). Program tygodniowy: Konfiguruj → Pomieszczenia → Edytuj lub "
-                         "usuń pomieszczenie.",
-            },
-            "night_setback": {
-                "title": "{room}: inna temperatura nocna oszczędza gaz",
-                "observed": "E32 szacuje, że temperatura nocna {night} °C oszczędza około {saving_m3} m³ gazu na noc, "
-                            "a pomieszczenie i tak jest ciepłe na czas.",
-                "observed@kwh": "E32 szacuje, że temperatura nocna {night} °C oszczędza około {saving_kwh} kWh na noc, "
-                                "a pomieszczenie i tak jest ciepłe na czas.",
-                "observed+money": " To około {saving_money} {currency} na noc.",
-                "why": "Nocne obniżenie oszczędza gaz, ale zbyt głębokie kosztuje rano dodatkowo przy ponownym "
-                       "nagrzewaniu; E32 porównał możliwości z tym, czego nauczył się o tym pomieszczeniu.",
-                "action": "Ustaw temperaturę nocną pomieszczenia {room} na {night} °C w programie tygodniowym.",
-                "action+no_gas": " To szacunek z mocy palnika zgłaszanej przez kocioł i mocy grzewczej kotła, a nie "
-                                 "z licznika gazu: dodaj licznik gazu w sekcji Energia i temperatura zewnętrzna, "
-                                 "aby go skalibrować.",
-                "action+calibrating": " E32 skalibruje szacunek, gdy zobaczy kilka odczytów licznika gazu.",
-                "action+rough": " Bez mocy Twojego kotła to tylko zgrubny szacunek: ustaw ją w sekcji Energia "
-                                "i temperatura zewnętrzna.",
-                "where": "Home Assistant: OpenThermostat → Konfiguruj → Pomieszczenia → program tygodniowy "
-                         "pomieszczenia.",
-            },
-            "dhw_high": {
-                "title": "Ciepła woda gorętsza, niż trzeba",
-                "observed": "Wybrana temperatura ciepłej wody wynosi {dhw} °C.",
-                "observed+disinfection": " Cotygodniowa dezynfekcja: {disinfection} °C.",
-                "why": "Każdy stopień powyżej około 55 °C kosztuje gaz na utrzymanie ciepła wody, zwiększa osadzanie "
-                       "kamienia i ryzyko poparzenia.",
-                "action": "Ustaw temperaturę ciepłej wody na {suggest} °C. Przy zasobniku c.w.u. pozostaw włączoną "
-                          "cotygodniową dezynfekcję kotła (termiczną ochronę przed Legionellą).",
-                "where": "Wyświetlacz kotła (temperatura ciepłej wody) lub ustawienie ciepłej wody w "
-                         "termostacie, który ją ustawia, jeśli go masz.",
-            },
-            "dhw_low": {
-                "title": "Ciepła woda poniżej 50 °C",
-                "observed": "Wybrana temperatura ciepłej wody wynosi {dhw} °C.",
-                "observed+disinfection": " Cotygodniowa dezynfekcja: {disinfection} °C.",
-                "why": "Bakterie Legionella mogą się namnażać w stojącej wodzie w zakresie około 25–50 °C. Przy "
-                       "kotle dwufunkcyjnym bez zasobnika ryzyko jest małe; przy zasobniku c.w.u. ma znaczenie.",
-                "action": "Przy zasobniku c.w.u. ustaw co najmniej {suggest} °C lub upewnij się, że działa "
-                          "cotygodniowa dezynfekcja (60 °C lub więcej). Przy kotle dwufunkcyjnym bez zasobnika "
-                          "możesz zostawić to ustawienie.",
-                "where": "Wyświetlacz kotła (temperatura ciepłej wody) lub ustawienie ciepłej wody w "
-                         "termostacie, który ją ustawia, jeśli go masz.",
-            },
-            "pressure_low": {
-                "title": "Niskie ciśnienie wody",
-                "observed": "Ciśnienie w instalacji wynosi {pressure} bar od co najmniej {minutes} min.",
-                "why": "Poniżej około 1 bar kocioł może się zablokować, a do najwyżej położonych grzejników może "
-                       "dostać się powietrze.",
-                "action": "Uzupełnij wodę w instalacji zaworem napełniającym do 1,5–2,0 bar (przy zimnej instalacji). "
-                          "Jeśli musisz często uzupełniać, poszukaj wycieku lub zleć sprawdzenie naczynia wzbiorczego.",
-                "where": "Zawór napełniający lub wężyk napełniający przy kotle.",
-            },
-            "pressure_high": {
-                "title": "Wysokie ciśnienie wody",
-                "observed": "Ciśnienie w instalacji wynosi {pressure} bar od co najmniej {minutes} min.",
-                "why": "Przy około 3 bar otwiera się zawór bezpieczeństwa. Wysokie ciśnienie przy ciepłej instalacji "
-                       "zwykle oznacza, że naczynie wzbiorcze straciło ciśnienie wstępne.",
-                "action": "Zleć sprawdzenie naczynia wzbiorczego i zaworu bezpieczeństwa. Zimna instalacja powinna "
-                          "mieć 1,5–2,0 bar; jeśli na zimno jest dużo wyżej, spuść trochę wody przy grzejniku.",
-                "where": "Naczynie wzbiorcze i zawór bezpieczeństwa przy kotle (instalator).",
-            },
-            "pump_run_on_long": {
-                "title": "Pompa długo pracuje po zakończeniu grzania",
-                "observed": "Wybieg pompy kotła wynosi {run_on} min.",
-                "why": "Ogrzewanie podłogowe ma zwykle własną pompę przy rozdzielaczu; długi wybieg pompy kotła "
-                       "kosztuje wtedy głównie prąd i przetłacza letnią wodę po zakończeniu zapotrzebowania na ciepło.",
-                "action": "Skróć wybieg pompy do około 3–5 min.",
-                "where": "Menu serwisowe kotła (poziom instalatora).",
-            },
-            "pump_run_on_short": {
-                "title": "Pompa zatrzymuje się zaraz po palniku",
-                "observed": "Wybieg pompy kotła wynosi {run_on} min, a palnik zbyt często się włącza.",
-                "why": "Gdy pompa staje zaraz po palniku, ciepło pozostaje w kotle i kocioł szybko znów się nagrzewa; "
-                       "to nasila taktowanie.",
-                "action": "Wydłuż wybieg pompy do około 3–5 min.",
-                "where": "Menu serwisowe kotła (poziom instalatora).",
-            },
-            "boiler_power_missing": {
-                "title": "Szacunki używają mocy kotła {kw} kW",
-                "observed": "Nie ustawiono mocy kotła, więc E32 używa wartości domyślnej {kw} kW do szacunków ciepła "
-                            "i gazu.",
-                "observed@gas_meter": "Nie ustawiono mocy kotła; {kw} kW to wartość zmierzona przez E32 licznikiem gazu.",
-                "observed@boiler": "Nie ustawiono mocy kotła; {kw} kW zgłasza sam kocioł.",
-                "observed@product": "Nie ustawiono mocy kotła; {kw} kW to wartość znana dla tego typu kotła.",
-                "why": "Szacunki zasilania i nocy zależą od mocy kotła; błędna moc daje błędne oszczędności.",
-                "action": "Sprawdź znamionową moc grzewczą na tabliczce znamionowej kotła i wpisz ją tylko wtedy, "
-                          "gdy jest inna.",
-                "where": "Home Assistant: OpenThermostat → Konfiguruj → Energia i temperatura zewnętrzna.",
-            },
-        },
-        "missing": {
-            "no_burner_count": "E32 nie zgłasza jeszcze startów palnika (wymaga oprogramowania E32, które je liczy).",
-            "no_max_ch": "Kocioł nie zgłasza swojego maksimum.",
-            "few_days": "Wymaga co najmniej {needed} dni z ogrzewaniem; dotąd {days}.",
-            "no_return": "Kocioł nie zgłasza temperatury powrotu podczas grzania.",
-            "few_heating": "Wymaga co najmniej 1 godz. grzania z temperaturą powrotu.",
-            "no_learning": "E32 nie zgłasza wyuczonych pomieszczeń (wymaga oprogramowania E32, które się uczy).",
-            "not_learned": "Żadne pomieszczenie nie jest jeszcze wyuczone.",
-            "no_plans": "E32 nie ma jeszcze szacunku nocnego (wymaga wiarygodnego zegara i wyuczonych pomieszczeń).",
-            "no_dhw": "Kocioł nie zgłasza temperatury ciepłej wody.",
-            "no_pressure": "Kocioł nie zgłasza ciśnienia wody.",
-            "no_pump_run_on": "Kocioł nie zgłasza wybiegu pompy.",
-        },
-    },
 }
 FIELDS = ("title", "observed", "why", "action", "where")
 
 
 def language(hass):
-    """English, Dutch or Polish by the Home Assistant language (English otherwise, like the dashboard)."""
+    """English or Dutch by the Home Assistant language (English otherwise, like the dashboard)."""
     value = (getattr(hass.config, "language", None) or "en").lower().replace("_", "-").split("-")[0]
     return value if value in TEXT else "en"
 
 
 def fmt(value, lang):
-    """A figure for a text: a decimal comma in Dutch and Polish."""
+    """A figure for a text: a decimal comma in Dutch."""
     if type(value) is float:
         text = f"{value:g}"
     elif type(value) is int:
         text = str(value)
     else:
         return "?" if value is None else str(value)
-    return text.replace(".", ",") if lang in ("nl", "pl") else text
+    return text.replace(".", ",") if lang == "nl" else text
 
 
 def render(item, lang):
@@ -1052,9 +874,12 @@ def take_sample(hub, client, now):
               "pr": boiler_field(client, "pump_run_on", 0, 1440),
               "ds": boiler_field(client, "dhw_disinfection_temperature", 40, 90)}
     if hub is not None and hub.fresh:
+        from .room_advice import room_sample
         status = hub.status
         request = status["request"]
         sample["re"] = request["flow_c"] if request["heat"] else 0
+        sample["o"] = number(request.get("outdoor_c"), -60, 60)  # the outdoor temperature the E32 used (E32 SL-A)
+        sample["rm"] = room_sample(hub)
         burner = burner_status(status) or {}
         sample["sc"] = burner.get("short_cycling") if type(burner.get("short_cycling")) is bool else None
         sample["hs"] = _count(burner.get("heating_starts_last_hour"))
@@ -1102,10 +927,13 @@ class AdviceHistory:
     """The bounded window of samples (24 h, memory) and per-day aggregates (14 days, restored)."""
 
     def __init__(self):
+        from .room_advice import RoomRecords
         self.samples = []
         self.days = {}
+        self.rooms = RoomRecords()  # per room and day (1.4.2, plan 3.14)
 
     def add(self, sample, day):
+        self.rooms.add(sample, day)
         self.samples.append(sample)
         cutoff = sample["t"] - HISTORY_SECONDS
         self.samples = [s for s in self.samples if s["t"] > cutoff][-MAX_SAMPLES:]
@@ -1120,10 +948,14 @@ class AdviceHistory:
             del self.days[key]
 
     def export(self):
-        return {"schema": 1, "days": {key: dict(value) for key, value in self.days.items()}}
+        # "rooms" (1.4.2) next to the schema 1 days: an older Home Assistant restores the days and ignores it.
+        return {"schema": 1, "days": {key: dict(value) for key, value in self.days.items()},
+                "rooms": self.rooms.export()}
 
     def restore(self, data):
         days = data.get("days") if type(data) is dict and data.get("schema") == 1 else None
+        if days is not None:
+            self.rooms.restore(data.get("rooms"))
         for key, value in (days.items() if type(days) is dict else ()):
             try:
                 date.fromisoformat(key)
@@ -1151,7 +983,7 @@ class HeatingAdviceSensor(RestoreEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "heating_advice"
     # The texts are shown, not kept in the history.
-    _unrecorded_attributes = frozenset({"items", "not_evaluated", "weekly_summary"})
+    _unrecorded_attributes = frozenset({"items", "not_evaluated", "weekly_summary", "rooms"})
 
     def __init__(self, entry, hub, connection, clock=time.time, local_date=None):
         self.entry, self.hub, self.connection, self.clock = entry, hub, connection, clock
@@ -1170,6 +1002,10 @@ class HeatingAdviceSensor(RestoreEntity, SensorEntity):
             return self._local_date(now)
         from homeassistant.util import dt as dt_util
         return dt_util.as_local(datetime.fromtimestamp(now, timezone.utc)).date()
+
+    def today(self):
+        """Home Assistant's local date now (room_advice reads the records up to it)."""
+        return self._today(self.clock())
 
     def context(self, now):
         options = energy_options(self.entry)
@@ -1196,8 +1032,24 @@ class HeatingAdviceSensor(RestoreEntity, SensorEntity):
         """Take one sample and evaluate the rules again."""
         now = self.clock()
         self._last = now
-        self.history.add(take_sample(self.hub, getattr(self.connection, "client", None), now), self._today(now))
+        sample = take_sample(self.hub, getattr(self.connection, "client", None), now)
+        if "rm" in sample and "o" not in sample:
+            outdoor = self._outdoor()
+            if outdoor is not None:
+                sample["o"] = outdoor
+        self.history.add(sample, self._today(now))
         self.reevaluate()
+
+    def _outdoor(self):
+        """The outdoor temperature the E32 uses, as Home Assistant sees it (firmware without ``outdoor_c``)."""
+        hass = getattr(self, "hass", None)
+        if hass is None:
+            return None
+        from .e32_flow import curve_outdoor
+        try:
+            return curve_outdoor(hass, self.entry, self.hub)
+        except (AttributeError, KeyError, TypeError, ValueError):
+            return None
 
     @callback
     def reevaluate(self):
@@ -1252,7 +1104,22 @@ class HeatingAdviceSensor(RestoreEntity, SensorEntity):
         return {"items": items, "not_evaluated": [render_missing(name, missing, lang) for name, missing in self.missing],
                 "advice_only": True, "observed_hours": round(len(self.history.samples) * SAMPLE_SECONDS / 3600, 1),
                 "observed_days": len(self.history.days),
-                "weekly_summary": self.weekly_summary(lang, [item["title"] for item in items])}
+                "weekly_summary": self.weekly_summary(lang, [item["title"] for item in items]),
+                "rooms": self.room_lines(lang)}
+
+    def room_lines(self, lang):
+        """The Learning view's line per room (room_advice.learning_lines): heat along or a fixed temperature, and how
+        fast the room cools down and warms up."""
+        hass = getattr(self, "hass", None)
+        if hass is None:
+            return []
+        from .room_advice import learning_lines
+        try:
+            return learning_lines(hass, self.entry, self.hub, self.history, self.today(), lang)
+        except Exception:  # noqa: BLE001 - the room lines never take the boiler advice down with them
+            import logging
+            logging.getLogger(__name__).exception("The heat-along advice per room could not be worked out")
+            return []
 
     def weekly_summary(self, lang, titles):
         """The last seven days for the weekly notification (blueprint weekly_summary.yaml)."""

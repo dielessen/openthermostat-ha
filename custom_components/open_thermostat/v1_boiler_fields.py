@@ -13,8 +13,8 @@ from homeassistant.const import EntityCategory
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
-from .boiler_fields import (BoilerFieldCache, CATALOG_BASE, CATALOG_COUNTERS, INDEX_BY_NAME, INDEXES, concept,
-                            quality, request_only, spec)
+from .boiler_fields import (BoilerFieldCache, CATALOG_BASE, CATALOG_COUNTERS, INDEX_BY_NAME, INDEXES,
+                            RAW_OFF_BY_DEFAULT, concept, off_by_default, request_only, spec)
 from .const import DOMAIN, CONF_TOPIC_PREFIX
 
 _LOGGER = logging.getLogger(__name__)
@@ -277,7 +277,8 @@ def confirm_reported(hass, prefix, indexes, cache=None):
             registry.async_update_entity_options(
                 entity_id, DOMAIN, {**{k: v for k, v in options.items() if k != PLACEHOLDER}, REPORTED: True})
         reporting = [m for m in concept(index) if cache is not None and plausible(cache, m)]
-        reliable = any(quality(m) != 1 for m in reporting) if reporting else quality(index) != 1
+        # 1.4.2 (P7): a raw field that is off by default stays off as well (boiler_fields.off_by_default).
+        reliable = any(not off_by_default(m) for m in reporting) if reporting else not off_by_default(index)
         # A record the boiler profile hid comes back through apply_boiler_profile (rate limited).
         if (reliable and record.disabled_by is er.RegistryEntryDisabler.INTEGRATION
                 and not options.get(PROFILE_HIDDEN)):
@@ -385,7 +386,7 @@ def apply_boiler_profile(hass, entry, prefix, cache, limiter=None):
         if supported:
             # An unreliable field (quality 1: adapters such as EasyControl zero-fill it)
             # stays disabled by default; it is only shown (unhidden) again.
-            enable = quality(index) != 1
+            enable = not off_by_default(index)  # 1.4.2 (P7): also a raw field that is off by default
             if options.get(PROFILE_HIDDEN) or options.get(PLACEHOLDER) or (
                     record.disabled_by is _INTEGRATION and enable):
                 # Only what this integration did is undone (never the user's own disable or hide).
@@ -426,6 +427,37 @@ def apply_boiler_profile(hass, entry, prefix, cache, limiter=None):
     return frozenset(gone)
 
 
+# Registry option (under our domain): the one-time 1.4.2 migration (P7) looked at this raw field's record.
+RAW_OFF_DONE = "raw_off_by_default_v1"
+
+
+def disable_raw_once(hass, entry, prefix):
+    """1.4.2 (P7): "Boiler status bits (raw)" was the only raw field enabled by default. New records are created
+    disabled now; an existing record that is enabled is disabled once (by the integration), marked RAW_OFF_DONE so
+    a user who enables it again keeps it. Home Assistant cannot tell whether the user enabled it before, so every
+    enabled record is disabled once (the release notes say so). The dashboard's "Raw boiler data" section goes with
+    it (dashboard: a disabled entity is no entry). Returns the entity IDs it disabled."""
+    registry = er.async_get(hass)
+    disabled = []
+    for name in sorted(RAW_OFF_BY_DEFAULT):
+        index = INDEX_BY_NAME.get(name)
+        entity_id = registry.async_get_entity_id("sensor", DOMAIN, field_unique_id(prefix, index)) if index is not None else None
+        record = registry.async_get(entity_id) if entity_id is not None else None
+        if record is None or record.config_entry_id != entry.entry_id:
+            continue
+        options = record.options.get(DOMAIN, {})
+        if options.get(RAW_OFF_DONE):
+            continue
+        if record.disabled_by is None:
+            registry.async_update_entity(entity_id, disabled_by=_INTEGRATION)
+            disabled.append(entity_id)
+        registry.async_update_entity_options(entity_id, DOMAIN, {**options, RAW_OFF_DONE: True})
+    if disabled:
+        _LOGGER.info("OpenThermostat 1.4.2: raw boiler values are off by default now; disabled %s (enable it again "
+                     "under its entity settings if you use it)", ", ".join(disabled))
+    return disabled
+
+
 def mark_placeholders(hass, prefix, indexes):
     """Mark the new disabled records of not-reported values (PLACEHOLDER); the
     indexes whose record does not exist yet are returned, retried later."""
@@ -457,6 +489,7 @@ async def async_setup_boiler_fields(hass, entry, async_add_entities):
         client = await _async_retained_source(hass, entry, state)
         add_listener = client.add_listener
     prefix = entry.data[CONF_TOPIC_PREFIX]
+    disable_raw_once(hass, entry, prefix)  # 1.4.2 (P7): before any entity of this run is added
     translated = await hass.async_add_executor_job(translated_fields)
     entities = []
     last_profile = None
@@ -653,7 +686,7 @@ class BoilerFieldEntity(SensorEntity):
         if translated is not None and shown not in translated:
             self._attr_name = ("Boiler " + shown.replace("_", " ") if INDEX_BY_NAME[shown] < CATALOG_BASE
                                else shown.replace("_", " ").capitalize())
-        if quality(index) == 1:
+        if off_by_default(index):  # quality 1, or (1.4.2, P7) a raw field that is off by default
             self._attr_entity_registry_enabled_default = False
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
         elif secondary_field(shown):

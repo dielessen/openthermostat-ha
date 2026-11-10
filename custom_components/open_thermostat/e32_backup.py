@@ -24,6 +24,11 @@ test runs.
 
 The passphrase, the E32 password and the secrets never reach a log, an error
 message, the diagnostics download or an entity attribute.
+
+Every sign-in here (the daily backup, a check, a restore and the wait for the
+restarted E32) passes the integration's session gate (controller_link.SessionGate,
+1.4.2): together with the room-plan link and the firmware entity, Home Assistant
+never holds more than two of the E32's four web sessions.
 """
 from __future__ import annotations
 
@@ -637,139 +642,120 @@ async def async_remove_backups(hass, entry_id):
     await Store(hass, STORE_VERSION, store_key(entry_id), private=True).async_remove()
 
 
-# -- texts of the restore summary (EN/NL/PL) ---------------------------------
+# -- texts of the restore summary (EN/NL) ---------------------------------
 
 _SECTIONS = {
-    "network": ("Network", "Netwerk", "Sieć"),
-    "bluetooth": ("Bluetooth sensors", "Bluetooth-sensoren", "Czujniki Bluetooth"),
-    "heating": ("Rooms", "Ruimtes", "Pomieszczenia"),
-    "flow": ("Water temperature", "Watertemperatuur", "Temperatura wody"),
-    "boiler_display": ("Boiler model", "Ketelmodel", "Model kotła"),
-    "learned": ("What the E32 has learned", "Wat de E32 heeft geleerd", "Czego nauczył się E32"),
+    "network": ("Network", "Netwerk"),
+    "bluetooth": ("Bluetooth sensors", "Bluetooth-sensoren"),
+    "heating": ("Rooms", "Ruimtes"),
+    "flow": ("Water temperature", "Watertemperatuur"),
+    "boiler_display": ("Boiler model", "Ketelmodel"),
+    "learned": ("What the E32 has learned", "Wat de E32 heeft geleerd"),
 }
 _FIELDS = {
-    "hostname": ("Device name", "Apparaatnaam", "Nazwa urządzenia"),
-    "interface_mode": ("Connection", "Verbinding", "Połączenie"),
-    "listenPort": ("Web page port", "Poort van de webpagina", "Port strony"),
-    "emsEnabled": ("EMS bus", "EMS-bus", "Magistrala EMS"),
-    "emsForwarderEnabled": ("EMS forwarder", "EMS-doorsturing", "Przekazywanie EMS"),
-    "rtcEnabled": ("Clock chip", "Klokchip", "Układ zegara"),
-    "ntpEnabled": ("Time from the internet", "Tijd van internet", "Czas z internetu"),
-    "ntpHost": ("Time server", "Tijdserver", "Serwer czasu"),
-    "ntpUtcOffset": ("UTC offset", "Verschil met UTC", "Przesunięcie względem UTC"),
-    "ntpDaylightUtcOffset": ("Daylight saving offset", "Verschil zomertijd", "Przesunięcie czasu letniego"),
-    "timeZone": ("Time zone", "Tijdzone", "Strefa czasowa"),
-    "loggerEnabled": ("Debugging over socket", "Foutopsporing via socket", "Debugowanie przez gniazdo"),
-    "loggerHost": ("Debugging over socket", "Foutopsporing via socket", "Debugowanie przez gniazdo"),
-    "loggerPort": ("Debugging over socket", "Foutopsporing via socket", "Debugowanie przez gniazdo"),
-    "loggerTimeoutMs": ("Debugging over socket", "Foutopsporing via socket", "Debugowanie przez gniazdo"),
-    "mqtt.enabled": ("MQTT", "MQTT", "MQTT"),
-    "mqtt.modern_shadow": ("Home Assistant link", "Koppeling met Home Assistant", "Połączenie z Home Assistant"),
-    "mqtt.adapter_id": ("Home Assistant adapter ID", "Adapter-ID van Home Assistant", "ID adaptera Home Assistant"),
-    "mqtt.publishHomeAssistantDiscovery": ("MQTT discovery", "MQTT-discovery", "Wykrywanie MQTT"),
-    "mqtt.brokerAddress": ("MQTT broker", "MQTT-broker", "Broker MQTT"),
-    "mqtt.brokerPort": ("MQTT port", "MQTT-poort", "Port MQTT"),
-    "mqtt.username": ("MQTT user", "MQTT-gebruiker", "Użytkownik MQTT"),
-    "mqtt.password": ("MQTT password", "MQTT-wachtwoord", "Hasło MQTT"),
-    "mqtt.clientId": ("MQTT client ID", "MQTT-client-ID", "ID klienta MQTT"),
-    "mqtt.base": ("MQTT topic", "MQTT-topic", "Temat MQTT"),
-    "mqtt.keepAlive": ("MQTT keep-alive", "MQTT-keep-alive", "Keep-alive MQTT"),
-    "mqtt.interval": ("MQTT interval", "MQTT-interval", "Interwał MQTT"),
-    "openweather.enabled": ("OpenWeather", "OpenWeather", "OpenWeather"),
-    "openweather.latitude": ("OpenWeather", "OpenWeather", "OpenWeather"),
-    "openweather.longitude": ("OpenWeather", "OpenWeather", "OpenWeather"),
-    "openweather.interval": ("OpenWeather", "OpenWeather", "OpenWeather"),
-    "openweather.appid": ("OpenWeather API key", "OpenWeather-API-sleutel", "Klucz API OpenWeather"),
-    "bt.scanTime": ("Bluetooth listening time", "Luistertijd Bluetooth", "Czas nasłuchu Bluetooth"),
-    "bt.scanInterval": ("Bluetooth pause", "Pauze Bluetooth", "Przerwa Bluetooth"),
-    "devices": ("Sensors", "Sensoren", "Czujniki"),
-    "rooms": ("Rooms", "Ruimtes", "Pomieszczenia"),
-    "room_settings": ("Room settings", "Instellingen van de ruimtes", "Ustawienia pomieszczeń"),
-    "minimum_flow_c": ("Lowest water temperature", "Laagste watertemperatuur", "Najniższa temperatura wody"),
-    "minimum_flow_automatic": ("Lowest water temperature: automatic", "Laagste watertemperatuur: automatisch",
-                               "Najniższa temperatura wody: automatycznie"),
-    "maximum_flow_c": ("Highest water temperature", "Hoogste watertemperatuur", "Najwyższa temperatura wody"),
-    "weather_curve": ("Weather compensation", "Weerafhankelijke regeling", "Kompensacja pogodowa"),
-    "apply_learned": ("Smart warm-up", "Slim opwarmen", "Inteligentne nagrzewanie"),
-    "curve_design_flow_c": ("Water temperature in hard frost (−10 °C)", "Watertemperatuur bij strenge vorst (−10 °C)",
-                            "Temperatura wody przy silnym mrozie (−10 °C)"),
-    "model": ("Boiler model", "Ketelmodel", "Model kotła"),
-    "tuning": ("Comfort and boiler care", "Comfort en zorg voor de ketel", "Komfort i dbałość o kocioł"),
-    "tuning_manual": ("Comfort and boiler care: set by you", "Comfort en zorg voor de ketel: door jou ingesteld",
-                      "Komfort i dbałość o kocioł: ustawione przez ciebie"),
-    "learned": ("What the E32 has learned", "Wat de E32 heeft geleerd", "Czego nauczył się E32"),
+    "hostname": ("Device name", "Apparaatnaam"),
+    "interface_mode": ("Connection", "Verbinding"),
+    "listenPort": ("Web page port", "Poort van de webpagina"),
+    "emsEnabled": ("EMS bus", "EMS-bus"),
+    "emsForwarderEnabled": ("EMS forwarder", "EMS-doorsturing"),
+    "rtcEnabled": ("Clock chip", "Klokchip"),
+    "ntpEnabled": ("Time from the internet", "Tijd van internet"),
+    "ntpHost": ("Time server", "Tijdserver"),
+    "ntpUtcOffset": ("UTC offset", "Verschil met UTC"),
+    "ntpDaylightUtcOffset": ("Daylight saving offset", "Verschil zomertijd"),
+    "timeZone": ("Time zone", "Tijdzone"),
+    "loggerEnabled": ("Debugging over socket", "Foutopsporing via socket"),
+    "loggerHost": ("Debugging over socket", "Foutopsporing via socket"),
+    "loggerPort": ("Debugging over socket", "Foutopsporing via socket"),
+    "loggerTimeoutMs": ("Debugging over socket", "Foutopsporing via socket"),
+    "mqtt.enabled": ("MQTT", "MQTT"),
+    "mqtt.modern_shadow": ("Home Assistant link", "Koppeling met Home Assistant"),
+    "mqtt.adapter_id": ("Home Assistant adapter ID", "Adapter-ID van Home Assistant"),
+    "mqtt.publishHomeAssistantDiscovery": ("MQTT discovery", "MQTT-discovery"),
+    "mqtt.brokerAddress": ("MQTT broker", "MQTT-broker"),
+    "mqtt.brokerPort": ("MQTT port", "MQTT-poort"),
+    "mqtt.username": ("MQTT user", "MQTT-gebruiker"),
+    "mqtt.password": ("MQTT password", "MQTT-wachtwoord"),
+    "mqtt.clientId": ("MQTT client ID", "MQTT-client-ID"),
+    "mqtt.base": ("MQTT topic", "MQTT-topic"),
+    "mqtt.keepAlive": ("MQTT keep-alive", "MQTT-keep-alive"),
+    "mqtt.interval": ("MQTT interval", "MQTT-interval"),
+    "openweather.enabled": ("OpenWeather", "OpenWeather"),
+    "openweather.latitude": ("OpenWeather", "OpenWeather"),
+    "openweather.longitude": ("OpenWeather", "OpenWeather"),
+    "openweather.interval": ("OpenWeather", "OpenWeather"),
+    "openweather.appid": ("OpenWeather API key", "OpenWeather-API-sleutel"),
+    "bt.scanTime": ("Bluetooth listening time", "Luistertijd Bluetooth"),
+    "bt.scanInterval": ("Bluetooth pause", "Pauze Bluetooth"),
+    "devices": ("Sensors", "Sensoren"),
+    "rooms": ("Rooms", "Ruimtes"),
+    "room_settings": ("Room settings", "Instellingen van de ruimtes"),
+    "minimum_flow_c": ("Lowest water temperature", "Laagste watertemperatuur"),
+    "minimum_flow_automatic": ("Lowest water temperature: automatic", "Laagste watertemperatuur: automatisch"),
+    "maximum_flow_c": ("Highest water temperature", "Hoogste watertemperatuur"),
+    "weather_curve": ("Weather compensation", "Weerafhankelijke regeling"),
+    "apply_learned": ("Smart warm-up", "Slim opwarmen"),
+    "curve_design_flow_c": ("Water temperature in hard frost (−10 °C)", "Watertemperatuur bij strenge vorst (−10 °C)"),
+    "model": ("Boiler model", "Ketelmodel"),
+    "tuning": ("Comfort and boiler care", "Comfort en zorg voor de ketel"),
+    "tuning_manual": ("Comfort and boiler care: set by you", "Comfort en zorg voor de ketel: door jou ingesteld"),
+    "learned": ("What the E32 has learned", "Wat de E32 heeft geleerd"),
 }
 _REENTER = {
-    "wifi_password": ("Wi-Fi password", "Wifi-wachtwoord", "Hasło Wi-Fi"),
-    "web_password": ("Web page password", "Wachtwoord van de webpagina", "Hasło strony"),
-    "mqtt_password": ("MQTT password", "MQTT-wachtwoord", "Hasło MQTT"),
-    "openweather_key": ("OpenWeather API key", "OpenWeather-API-sleutel", "Klucz API OpenWeather"),
-    "bluetooth_keys": ("Bluetooth sensor keys", "Sleutels van Bluetooth-sensoren", "Klucze czujników Bluetooth"),
-    "bluetooth_key": ("Bluetooth key for {v}", "Bluetooth-sleutel van {v}", "Klucz Bluetooth dla {v}"),
+    "wifi_password": ("Wi-Fi password", "Wifi-wachtwoord"),
+    "web_password": ("Web page password", "Wachtwoord van de webpagina"),
+    "mqtt_password": ("MQTT password", "MQTT-wachtwoord"),
+    "openweather_key": ("OpenWeather API key", "OpenWeather-API-sleutel"),
+    "bluetooth_keys": ("Bluetooth sensor keys", "Sleutels van Bluetooth-sensoren"),
+    "bluetooth_key": ("Bluetooth key for {v}", "Bluetooth-sleutel van {v}"),
 }
 _WARNINGS = {
-    "other_firmware": ("Made with firmware {v}.", "Gemaakt met firmware {v}.", "Utworzona z oprogramowaniem {v}."),
-    "unknown_key": ("Skipped, not known by this firmware: {v}", "Overgeslagen, onbekend voor deze firmware: {v}",
-                    "Pominięto, nieznane dla tego oprogramowania: {v}"),
-    "invalid_value": ("Invalid value: {v}", "Ongeldige waarde: {v}", "Nieprawidłowa wartość: {v}"),
+    "other_firmware": ("Made with firmware {v}.", "Gemaakt met firmware {v}."),
+    "unknown_key": ("Skipped, not known by this firmware: {v}", "Overgeslagen, onbekend voor deze firmware: {v}"),
+    "invalid_value": ("Invalid value: {v}", "Ongeldige waarde: {v}"),
     "learned_skipped": ("What the E32 learned could not be read from this backup; it keeps learning from what it has.",
-                        "Wat de E32 geleerd heeft kon niet uit deze back-up worden gelezen; hij leert verder met wat hij al weet.",
-                        "Nie udało się odczytać z kopii tego, czego nauczył się E32; uczy się dalej na podstawie tego, co już wie."),
-    "interface_kept": ("The connection type stays as it is.", "Het verbindingstype blijft zoals het is.",
-                       "Typ połączenia pozostaje bez zmian."),
-    "listen_port_kept": ("The web page port stays the same.", "De poort van de webpagina blijft gelijk.",
-                         "Port strony pozostaje bez zmian."),
+                        "Wat de E32 geleerd heeft kon niet uit deze back-up worden gelezen; hij leert verder met wat hij al weet."),
+    "interface_kept": ("The connection type stays as it is.", "Het verbindingstype blijft zoals het is."),
+    "listen_port_kept": ("The web page port stays the same.", "De poort van de webpagina blijft gelijk."),
     "mqtt_off_until_password": ("MQTT stays off until you enter the MQTT password.",
-                                "MQTT blijft uit tot je het MQTT-wachtwoord invoert.",
-                                "MQTT pozostaje wyłączone, dopóki nie wpiszesz hasła MQTT."),
+                                "MQTT blijft uit tot je het MQTT-wachtwoord invoert."),
     "native_source_cleared": ("The room profile of this E32 is cleared because the Home Assistant link changes.",
-                              "Het ruimteprofiel van deze E32 wordt gewist omdat de koppeling met Home Assistant verandert.",
-                              "Profil pomieszczeń tego E32 zostanie usunięty, bo zmienia się połączenie z Home Assistant."),
+                              "Het ruimteprofiel van deze E32 wordt gewist omdat de koppeling met Home Assistant verandert."),
     "weather_managed_kept": ("Weather settings are managed by Home Assistant and stay as they are.",
-                             "De weerinstellingen worden door Home Assistant beheerd en blijven zoals ze zijn.",
-                             "Ustawieniami pogody zarządza Home Assistant; pozostają bez zmian."),
+                             "De weerinstellingen worden door Home Assistant beheerd en blijven zoals ze zijn."),
     # E32 before rc.2: the rooms always came back in the trial run.
-    "plan_mode_shadow": ("The rooms are restored in the trial run.", "De ruimtes worden teruggezet in de proefperiode.",
-                         "Pomieszczenia zostaną przywrócone w okresie próbnym."),
+    "plan_mode_shadow": ("The rooms are restored in the trial run.", "De ruimtes worden teruggezet in de proefperiode."),
     # rc.2: an active plan stays active; the takeover is confirmed on the E32 itself.
     "plan_takeover_confirm": ("The rooms keep E32 control from the backup. A new or reset E32 sends nothing to the boiler "
                               "until you confirm the takeover on its Rooms page.",
                               "De ruimtes houden de regeling door de E32 uit de back-up. Een nieuwe of gewiste E32 stuurt "
-                              "niets naar de ketel tot je de overname bevestigt op zijn pagina Ruimtes.",
-                              "Pomieszczenia zachowają sterowanie przez E32 z kopii. Nowy lub zresetowany E32 nic nie "
-                              "wysyła do kotła, dopóki nie potwierdzisz przejęcia na jego stronie „Rooms”."),
-    "wifi_not_restored": ("Wi-Fi is not changed by a restore.", "Terugzetten verandert de wifi niet.",
-                          "Przywracanie nie zmienia Wi-Fi."),
+                              "niets naar de ketel tot je de overname bevestigt op zijn pagina Ruimtes."),
+    "wifi_not_restored": ("Wi-Fi is not changed by a restore.", "Terugzetten verandert de wifi niet."),
     "secrets_skipped": ("Passwords and keys in the backup are skipped.",
-                        "Wachtwoorden en sleutels in de back-up worden overgeslagen.",
-                        "Hasła i klucze z kopii zostaną pominięte."),
+                        "Wachtwoorden en sleutels in de back-up worden overgeslagen."),
     # rc.2: a backup made before it carries its secrets without the binding to its network settings.
     "secrets_unbound": ("This backup was made before 1.0 rc.2; make a new backup after the restore.",
-                        "Deze back-up is van vóór 1.0 rc.2; maak na het terugzetten een nieuwe back-up.",
-                        "Ta kopia powstała przed 1.0 rc.2; po przywróceniu utwórz nową kopię."),
-    "unknown_boiler_model": ("Unknown boiler model skipped: {v}", "Onbekend ketelmodel overgeslagen: {v}",
-                             "Pominięto nieznany model kotła: {v}"),
-    "unknown_language": ("Unknown language skipped.", "Onbekende taal overgeslagen.", "Pominięto nieznany język."),
-    "heating": ("Rooms: {v}", "Ruimtes: {v}", "Pomieszczenia: {v}"),
-    "bluetooth": ("Bluetooth sensors: {v}", "Bluetooth-sensoren: {v}", "Czujniki Bluetooth: {v}"),
+                        "Deze back-up is van vóór 1.0 rc.2; maak na het terugzetten een nieuwe back-up."),
+    "unknown_boiler_model": ("Unknown boiler model skipped: {v}", "Onbekend ketelmodel overgeslagen: {v}"),
+    "unknown_language": ("Unknown language skipped.", "Onbekende taal overgeslagen."),
+    "heating": ("Rooms: {v}", "Ruimtes: {v}"),
+    "bluetooth": ("Bluetooth sensors: {v}", "Bluetooth-sensoren: {v}"),
 }
 _WORDS = {
-    "on": ("On", "Aan", "Włączone"), "off": ("Off", "Uit", "Wyłączone"), "hidden": ("will change", "verandert", "zmieni się"),
-    "changes": ("These settings change:", "Deze instellingen veranderen:", "Te ustawienia się zmienią:"),
-    "notes": ("Notes, and what is skipped:", "Opmerkingen, en wat wordt overgeslagen:", "Uwagi i to, co zostanie pominięte:"),
-    "reenter": ("Enter these again on the E32 page afterwards:", "Voer dit daarna opnieuw in op de E32-pagina:",
-                "Wpisz to potem ponownie na stronie E32:"),
+    "on": ("On", "Aan"), "off": ("Off", "Uit"), "hidden": ("will change", "verandert"),
+    "changes": ("These settings change:", "Deze instellingen veranderen:"),
+    "notes": ("Notes, and what is skipped:", "Opmerkingen, en wat wordt overgeslagen:"),
+    "reenter": ("Enter these again on the E32 page afterwards:", "Voer dit daarna opnieuw in op de E32-pagina:"),
     "restart": ("The E32 restarts after the restore; Home Assistant waits until it answers again.",
-                "De E32 start na het terugzetten opnieuw op; Home Assistant wacht tot hij weer antwoordt.",
-                "E32 uruchomi się ponownie po przywróceniu; Home Assistant poczeka, aż znów odpowie."),
-    "daily": ("daily", "dagelijks", "codzienna"), "manual": ("manual", "handmatig", "ręczna"),
-    "pre_restore": ("before a restore", "vóór terugzetten", "przed przywróceniem"),
-    "secrets": ("with passwords and keys", "met wachtwoorden en sleutels", "z hasłami i kluczami"),
+                "De E32 start na het terugzetten opnieuw op; Home Assistant wacht tot hij weer antwoordt."),
+    "daily": ("daily", "dagelijks"), "manual": ("manual", "handmatig"),
+    "pre_restore": ("before a restore", "vóór terugzetten"),
+    "secrets": ("with passwords and keys", "met wachtwoorden en sleutels"),
 }
 
 
 def _language(language):
-    return {"nl": 1, "pl": 2}.get(str(language or "en").split("-")[0], 0)
+    return {"nl": 1}.get(str(language or "en").split("-")[0], 0)
 
 
 def _text(table, key, language, detail=""):
@@ -798,7 +784,7 @@ def _tuning_lines(change, label, language):
     """Comfort and boiler care: one line per changed setting, by its plain name and with its value
     in words as the E32's Home page shows it (tuning), or who set it (tuning_manual)."""
     from .learned_overview import KNOB, TEXT, knob_value
-    lang = ("en", "nl", "pl")[_language(language)]
+    lang = ("en", "nl")[_language(language)]
     words = TEXT[lang]
     care = _text(_FIELDS, "tuning", language)
     was, now = change.get("from"), change.get("to")

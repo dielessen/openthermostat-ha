@@ -73,12 +73,6 @@ COUNTS_TEXT = {
                   "geteld door de E32. Een te late ochtend telt ook mee.",
            "rooms": "Minuten dat een ruimte om warmte vroeg terwijl ze meer dan 0,5 °C onder haar streeftemperatuur was, "
                     "na de eerste 2 uur. Werk de E32 bij voor zijn eigen, strengere telling."},
-    "pl": {"e32": "Minuty, zsumowane dla pomieszczeń, w których pomieszczenie było o ponad 0,3 °C poniżej temperatury "
-                  "docelowej, gdy było używane (bez pauzy z powodu nieobecności, urlopu lub otwartego okna), "
-                  "liczone przez E32. Spóźniony poranek też się liczy.",
-           "rooms": "Minuty, w których pomieszczenie żądało ciepła, będąc o ponad 0,5 °C poniżej temperatury "
-                    "docelowej, po pierwszych 2 godzinach. Zaktualizuj E32, aby mieć jego własne, dokładniejsze "
-                    "liczenie."},
 }
 
 

@@ -41,7 +41,8 @@ the shape of ``/status/heating``), so a restarted Home Assistant is complete at
 once from the retained messages. Values stay available until the E32 says it
 is offline or three heartbeats are missed (``STALE_SECONDS``). HA forwards
 exactly the listed entities' temperature and target to ``ha/heating_input`` on
-every change and every five minutes, so a steady thermostat stays fresh. Every
+every change and every five minutes, so a steady thermostat stays fresh (1.4.2:
+never the target of a room's setting device, ``target_kept``). Every
 message goes through the entry's ``HeatingInputLink``; ``HeatingInputWatch``
 checks against the E32's ``ha.input_age_s`` that they arrive (P22).
 
@@ -491,24 +492,44 @@ def ble_broadcast_name(sensor):
     return match is not None and sensor["id"].endswith(match.group(1).lower())
 
 
-def ble_device_name(sensor, rooms, current=None):
+# 1.4.2 (plan 3.9 item 6b): a sensor no room uses keeps its "Thermometer <room>" name this long (lost, fallback), then
+# it goes back to its own or broadcast name: a thermometer moved elsewhere no longer carries its old room's name.
+BLE_NAME_KEEP_S = 3600
+BLE_CLOCK = time.monotonic  # the clock of BLE_NAME_KEEP_S (a test moves it)
+
+
+def ble_device_name(sensor, rooms, current=None, planned=(), unused_s=0):
     """The device name of a Bluetooth sensor, or None to keep ``current``.
 
     A name given on the E32 wins. A sensor with its broadcast name that exactly
-    one room measures with reads "Thermometer <room>". While no room reports it
-    as its source for a moment (lost, fallback), a "Thermometer <room>" name of
-    a room that still exists stays, so the name never flips back and forth.
-    A name the user gives in Home Assistant (name_by_user) is never touched.
+    one room measures with reads "Thermometer <room>"; while no room reports it
+    as its source, the one room whose temperature sources in the room plan list
+    it (``planned``: their names) names it the same way. While no room uses it
+    for a moment (lost, fallback), a "Thermometer <room>" name of a room that
+    still exists stays, so the name never flips back and forth, but only for
+    BLE_NAME_KEEP_S (``unused_s``: seconds since a room last used it): then the
+    sensor's own (broadcast) name. A name the user gives in Home Assistant
+    (name_by_user) is never touched.
     """
     if not ble_broadcast_name(sensor):
         return label(sensor)
     using = [room for room in rooms.values() if room.get("source") == sensor["id"]]
     if len(using) == 1:
         return (_THERMOMETER + label(using[0]))[:64]
-    if (not using and type(current) is str and current.startswith(_THERMOMETER)
+    if not using and len(planned) == 1:
+        return (_THERMOMETER + planned[0])[:64]
+    if (not using and unused_s < BLE_NAME_KEEP_S and type(current) is str and current.startswith(_THERMOMETER)
             and any(_THERMOMETER + label(room) == current for room in rooms.values())):
         return None
     return label(sensor)
+
+
+def ble_planned_rooms(hub, sensor_id):
+    """The names of the rooms whose temperature sources in the room plan Home Assistant last read list the sensor."""
+    plan = getattr(getattr(hub, "plan", None), "plan", None)
+    rooms = plan.get("rooms") if type(plan) is dict else None
+    return tuple(label(room) for room in rooms or () if type(room) is dict and type(room.get("id")) is str and any(
+        type(s) is dict and s.get("type") == "ble" and s.get("id") == sensor_id for s in room.get("sources") or ()))
 
 
 TEMPERATURE_UNITS = (UnitOfTemperature.CELSIUS, UnitOfTemperature.FAHRENHEIT, UnitOfTemperature.KELVIN)
@@ -525,27 +546,50 @@ def celsius(value, unit, low, high):
                   low, high)
 
 
-def input_payload(state, temperature_unit=UnitOfTemperature.CELSIUS):
+def input_payload(state, temperature_unit=UnitOfTemperature.CELSIUS, target=True):
     """{"entity","temperature","target"} in °C for a climate, temperature sensor or setpoint number state.
 
     An input_number/number is only ever a room's setpoint entity: its value is the target.
     Climate attributes are in Home Assistant's unit system (``temperature_unit``);
     sensors and numbers carry their own ``unit_of_measurement``. The E32 works in °C.
+    ``target`` False (1.4.2, ``target_kept``): the target stays with Home Assistant and goes as null; a climate
+    then sends only its temperature, and a number nothing at all (None).
     """
     if state is None or state.state in ("unavailable", "unknown"):
         return None
     if state.domain == "climate":
         temperature = celsius(state.attributes.get("current_temperature"), temperature_unit, -40, 85)
-        target = celsius(state.attributes.get("temperature"), temperature_unit, 5, 30)
+        value = celsius(state.attributes.get("temperature"), temperature_unit, 5, 30)
     elif state.domain in ("input_number", "number"):
         unit = state.attributes.get("unit_of_measurement")
-        temperature, target = None, celsius(state.state, unit, 5, 30)
+        temperature, value = None, celsius(state.state, unit, 5, 30)
     else:
         unit = state.attributes.get("unit_of_measurement")
-        temperature, target = celsius(state.state, unit, -40, 85), None
-    if temperature is None and target is None:
+        temperature, value = celsius(state.state, unit, -40, 85), None
+    if not target:
+        value = None
+    if temperature is None and value is None:
         return None
-    return json.dumps({"entity": state.entity_id, "temperature": temperature, "target": target})
+    return json.dumps({"entity": state.entity_id, "temperature": temperature, "target": value})
+
+
+def target_kept(hass, entry, entity_id):
+    """True when Home Assistant keeps this entity's target to itself (1.4.2, HA-SETDEV; plan 3.1).
+
+    A room's setting device (the plan's ``setpoint_entity``) works both ways through the setting-device link
+    (e32_setting_device.SettingDevicePusher): the room's target is written to it, and a turn of its knob becomes a
+    manual change. Its target therefore never goes to the E32 as the room's base (the firmware's source "ha", which
+    would let an away ceiling or a reset temperature written to the device become the room's new base); its
+    temperature still goes when it is also a source of a room. Only the plan's setting devices: the E32 uses a
+    forwarded target for nothing else (RoomEngine::haState). Every target goes as before 1.4.2 when that link does
+    not run (an entry that is not a product entry) or has not read the plan yet: then nothing else can carry the
+    device's target to the room.
+    """
+    state = ((hass.data.get(DOMAIN) or {}).get(entry.entry_id) or {}) if hass is not None else {}
+    pusher = state.get("setting_device_pusher") if type(state) is dict else None
+    devices = getattr(pusher, "setting_devices", None)
+    found = devices() if callable(devices) else None
+    return found is not None and entity_id in found
 
 
 def silent_source(state, now):
@@ -570,11 +614,15 @@ class HeatingHub:
         # has_record(domain, unique_id): whether this entry's entity registry holds that record of ours, so an
         # entity that exists only once its figure came keeps existing (entity_was_there); set by heating_hub.
         self.has_record = lambda domain, unique_id: False
+        # devices(kind): {id: device name} of this entry's E32 room ("room") or Bluetooth ("ble") devices, so the
+        # trackers know them while nothing of the E32 is known yet (known_rooms, 1.4.2 HC-03); set by heating_hub.
+        self.devices = lambda kind: {}
         self.status = None
         # The E32's active-control block (``fw/state/heating`` ``active``), or None (heating_problem reads it).
         self.active = None
         self.rooms = {}
         self.ble = {}
+        self.ble_unused_since = {}  # {sensor id: monotonic time no room used it since} (ble_device_name)
         self.valves = {}  # {room id: fw/state/trv/<room>}, empty without radiator valves
         self.ha_valves = None  # ha_valves.HaValveDriver: Home Assistant's own valves (e32_valves.watch)
         self.learned = {}
@@ -639,7 +687,17 @@ class HeatingHub:
         self.online = None  # fw/availability: None until known
         self.heartbeat = None
         self.boots = 0  # E32 restarts seen as a falling heartbeat uptime (DhwCarry)
+        # 1.4.2 (HA-REREAD, plan 3.2): the E32's firmware version as the room-plan link last read it together with
+        # its abilities (RoomPlanLink re-read after a restart or request_refresh), None before; firmware_read tells
+        # the firmware-version observers (add_firmware_listener) after each such read, with what that read found.
+        self.firmware_version = None
+        self._firmware_listeners = []
         self._dhw_carry = None
+        # 1.4.2 (HA-DHW): whether this installation's hot water is a storage tank, as DhwTankWatch decided it (True: a
+        # tank, False: decided back to no tank, None: never decided, the default of a combi) and since when (unix
+        # time) the E32 has said the opposite of that decision.
+        self.dhw_tank = None
+        self.dhw_tank_since = None
         self.heartbeat_received = None
         self.started = clock()
         self._listeners = []
@@ -660,6 +718,30 @@ class HeatingHub:
     @property
     def fresh(self):
         return self.status is not None
+
+    def _known(self, kind, live, states, pattern):
+        """{id: item} the trackers create entities for (known_rooms, known_ble)."""
+        if self.status is not None:
+            return live
+        names = {i: n for i, n in self.devices(kind).items() if type(i) is str and pattern.fullmatch(i)}
+        ids = self.config["rooms" if kind == "room" else "ble"] if self.config is not None else sorted(names)
+        # No retained document: the device's own name, so adding the entity never renames the device.
+        return {i: states.get(i) or ({"id": i, "name": names[i]} if names.get(i) else {"id": i}) for i in ids}
+
+    @property
+    def known_rooms(self):
+        """{room id: room} of every room whose entities exist (1.4.2, HC-03): the live status's rooms; while the E32
+        status is not known (Home Assistant started while the E32 is offline or stalled, or before its first
+        message), the rooms of the retained plan (``fw/config/plan``) with their retained room documents, and
+        without a retained plan the room devices of this entry (their name kept). Their entities then exist and are
+        unavailable until the E32 reports, never "no longer provided". A room the E32 no longer has goes with its
+        device (native_entity_cleanup.cleanup_removed_rooms)."""
+        return self._known("room", self.rooms, self.room_states, ROOM_ID)
+
+    @property
+    def known_ble(self):
+        """{sensor id: sensor} of the Bluetooth sensors, the same way as known_rooms."""
+        return self._known("ble", self.ble, self.ble_states, BLE_ID)
 
     @property
     def circuits(self):
@@ -716,13 +798,13 @@ class HeatingHub:
         return dhw if dhw is not None else dhw_status(self.status)
 
     def dhw_today(self):
-        """Today's hot-water counts carried over E32 restarts (DhwCarry), or None without them."""
+        """Today's hot-water counts held over E32 restarts (DhwCarry), or None without them."""
         dhw = self.dhw
         if dhw is None:
             return None
         if self._dhw_carry is None:
             self._dhw_carry = DhwCarry(clock=self.clock)
-        return self._dhw_carry.apply(dhw["today"], self.boots)
+        return self._dhw_carry.apply(dhw["today"], self.boots, clock_known=dhw.get("clock_known") is not False)
 
     @callback
     def add_listener(self, listener, first=False):
@@ -738,6 +820,33 @@ class HeatingHub:
                 self._listeners.remove(listener)
             self._failures_logged.pop(listener, None)
         return remove
+
+    @callback
+    def add_firmware_listener(self, listener):
+        """listener(version) after every read of the E32's abilities that follows a restart or request_refresh
+        (HA-REREAD): ``version`` is what the E32 reported in that read, None when it could not be read (then
+        ``firmware_version`` keeps the last one). Returns the undo. Observers: the Firmware entity (its installed
+        version, HC-16) and the flow options link (``link.settings`` read again)."""
+        self._firmware_listeners.append(listener)
+
+        @callback
+        def remove():
+            if listener in self._firmware_listeners:
+                self._firmware_listeners.remove(listener)
+        return remove
+
+    @callback
+    def firmware_read(self, version):
+        """The room-plan link read the E32's abilities again (features and plan, version, time zone): tell the
+        firmware-version observers; one failing observer never stops the others."""
+        version = version if type(version) is str and version else None
+        if version is not None:
+            self.firmware_version = version
+        for listener in list(self._firmware_listeners):
+            try:
+                listener(version)
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("OpenThermostat: an E32 firmware-version observer failed")
 
     @callback
     def notify(self):
@@ -1067,6 +1176,7 @@ class HeatingHub:
         if self.plan is not None:
             self.plan.stop()
         self._listeners.clear()
+        self._firmware_listeners.clear()
 
 
 # Every ha/heating_input message of an entry goes out through its HeatingInputLink (P22). At most
@@ -1097,14 +1207,7 @@ INPUT_CAUSES = {
            "too_large": "het bericht was te lang", "invalid_json": "hij kon het bericht niet lezen",
            "no_entity": "het bericht noemde geen Home Assistant-entiteit",
            "unknown_kind": "hij kent dat soort waarde niet; werk de E32 bij",
-           "invalid_value": "de waarde lag buiten wat hij aanneemt", "unknown_room": "hij kent die ruimte niet"},
-    "pl": {"refused": "E32 je odrzucił: {reason}.", "timeout": "Broker MQTT nie przyjmuje ich na czas.",
-           "unreachable": "Home Assistant nie może połączyć się z brokerem MQTT.",
-           "waiting": "Zbyt wiele wiadomości czeka na broker MQTT.",
-           "too_large": "wiadomość była za długa", "invalid_json": "nie mógł odczytać wiadomości",
-           "no_entity": "wiadomość nie wskazywała encji Home Assistant",
-           "unknown_kind": "nie zna tego rodzaju wartości; zaktualizuj E32",
-           "invalid_value": "wartość była poza dopuszczalnym zakresem", "unknown_room": "nie zna tego pomieszczenia"}}
+           "invalid_value": "de waarde lag buiten wat hij aanneemt", "unknown_room": "hij kent die ruimte niet"}}
 REFUSAL_REASONS = ("too_large", "invalid_json", "no_entity", "unknown_kind", "invalid_value", "unknown_room")
 
 
@@ -1310,9 +1413,12 @@ class HeatingInputWatch:
         if self.link.attempted is not None and now - self.link.attempted <= REFRESH_SECONDS + 60:
             return True
         unit, wall = self.hass.config.units.temperature_unit, dt_util.utcnow()
-        states = [self.hass.states.get(entity_id) for entity_id in (self.hub.status or {}).get("ha_entities") or []]
-        # A frozen source is not sent (silent_source): nothing for the E32 to accept, so no repair for it.
-        return any(input_payload(state, unit) is not None and not silent_source(state, wall) for state in states)
+        entities = (self.hub.status or {}).get("ha_entities") or []
+        # A frozen source is not sent (silent_source), nor the target of a setting device (target_kept, 1.4.2):
+        # nothing for the E32 to accept, so no repair for it. The same rule as the forwarding (publish).
+        return any(input_payload(state, unit, not target_kept(self.hass, self.entry, entity_id)) is not None
+                   and not silent_source(state, wall)
+                   for entity_id, state in ((e, self.hass.states.get(e)) for e in entities))
 
     def state(self, age):
         if self.lost_since is not None:
@@ -1457,6 +1563,7 @@ def heating_hub(hass, entry):
     if hub is None:
         hub = state["heating_hub"] = HeatingHub(entry.data[CONF_TOPIC_PREFIX])
         hub.has_record = registry_records(hass, entry)
+        hub.devices = registry_devices(hass, entry)
         from .room_plan import RoomPlanLink
         hub.plan = RoomPlanLink.for_entry(hass, entry, hub)
         entry.async_on_unload(hub.stop)
@@ -1465,6 +1572,114 @@ def heating_hub(hass, entry):
         from .e32_access import clear
         entry.async_on_unload(lambda: clear(hass, entry))
     return hub
+
+
+class RegistryViews:
+    """Registry reads for work that runs on every E32 message, read once and kept until the registry changes.
+
+    HC-08 (1.4.2): the setting-device pusher walked Home Assistant's whole issue registry twice per message, the
+    valve driver looked up each valve's device and its entities per message, and the notifier listed every update
+    entity of Home Assistant per hub change. These views answer the same questions from a copy that Home
+    Assistant's own registry events (issues, entities, devices) empty, so the answer is never older than the
+    registry. One per entry (registry_views), made on first use and stopped with the entry.
+    """
+
+    def __init__(self, hass):
+        self.hass = hass
+        self._issues = None   # this integration's issue ids (DOMAIN), as a tuple
+        self._devices = {}    # entity id: the other entity registry entries on its device
+        self._updates = None  # entity ids of the update entities of other integrations
+        self._unsubscribe = []
+        self.reads = 0        # how often a view was read from the registry itself (tests, diagnostics)
+
+    @callback
+    def start(self):
+        from homeassistant.helpers import entity_registry as er, issue_registry as ir
+        bus = self.hass.bus
+        self._unsubscribe = [
+            bus.async_listen(ir.EVENT_REPAIRS_ISSUE_REGISTRY_UPDATED, self._issues_changed),
+            bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, self._entities_changed),
+            bus.async_listen(dr.EVENT_DEVICE_REGISTRY_UPDATED, self._entities_changed),
+        ]
+        return self.stop
+
+    @callback
+    def stop(self):
+        for unsubscribe in self._unsubscribe:
+            unsubscribe()
+        self._unsubscribe = []
+        self._issues, self._updates = None, None
+        self._devices.clear()
+
+    @callback
+    def _issues_changed(self, _event=None):
+        self._issues = None
+
+    @callback
+    def _entities_changed(self, _event=None):
+        self._devices.clear()
+        self._updates = None
+
+    def _listening(self):
+        return bool(self._unsubscribe)  # not started (or stopped): never keep a copy nobody empties
+
+    @callback
+    def issue_ids(self, head=""):
+        """This integration's Repairs issue ids that start with ``head`` (ir.async_get(hass).issues, filtered)."""
+        issues = self._issues
+        if issues is None:
+            from homeassistant.helpers import issue_registry as ir
+            self.reads += 1
+            issues = tuple(issue for domain, issue in ir.async_get(self.hass).issues if domain == DOMAIN)
+            if self._listening():
+                self._issues = issues
+        return [issue for issue in issues if issue.startswith(head)]
+
+    @callback
+    def device_entities(self, entity_id):
+        """The entity registry entries on ``entity_id``'s device, itself left out; [] without a device."""
+        found = self._devices.get(entity_id)
+        if found is None:
+            from homeassistant.helpers import entity_registry as er
+            self.reads += 1
+            registry = er.async_get(self.hass)
+            entry = registry.async_get(entity_id)
+            found = () if entry is None or entry.device_id is None else tuple(
+                e for e in er.async_entries_for_device(registry, entry.device_id) if e.entity_id != entity_id)
+            if self._listening():
+                self._devices[entity_id] = found
+        return list(found)
+
+    @callback
+    def foreign_updates(self):
+        """The entity ids of the update entities of other integrations (Home Assistant itself, add-ons, HACS), in
+        place of hass.states.async_all("update") with a registry lookup per state; the caller reads their states."""
+        updates = self._updates
+        if updates is None:
+            from homeassistant.helpers import entity_registry as er
+            self.reads += 1
+            updates = tuple(e.entity_id for e in er.async_get(self.hass).entities.values()
+                            if e.domain == "update" and e.platform != DOMAIN)
+            if self._listening():
+                self._updates = updates
+        return updates
+
+
+VIEWS_KEY = "registry_views"
+
+
+@callback
+def registry_views(hass, entry):
+    """The entry's RegistryViews (made and started on first use, stopped with the entry); for an entry that is not
+    set up, views that read the registry every time."""
+    state = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if type(state) is not dict:
+        return RegistryViews(hass)
+    views = state.get(VIEWS_KEY)
+    if views is None:
+        views = state[VIEWS_KEY] = RegistryViews(hass)
+        entry.async_on_unload(views.start())
+    return views
 
 
 def registry_records(hass, entry):
@@ -1482,6 +1697,25 @@ def registry_records(hass, entry):
     return has_record
 
 
+def registry_devices(hass, entry):
+    """devices(kind): {id: name} of this entry's E32 room ("room") or Bluetooth sensor ("ble") devices.
+
+    Read live from Home Assistant's device registry (HeatingHub.known_rooms uses it while nothing of the E32 is
+    known yet). The name is the device's own (never the user's name_by_user).
+    """
+    from homeassistant.helpers import device_registry as dr
+
+    def devices(kind):
+        head = f"{entry.data[CONF_TOPIC_PREFIX]}_e32_{kind}_"
+        found = {}
+        for device in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id):
+            for domain, identifier in device.identifiers:
+                if domain == DOMAIN and type(identifier) is str and identifier.startswith(head):
+                    found[identifier.removeprefix(head)] = device.name
+        return found
+    return devices
+
+
 def entity_was_there(hub, suffix, domain="sensor"):
     """Whether the entity with unique ID f"{hub.prefix}_{suffix}" existed before: its registry record is there.
 
@@ -1494,6 +1728,17 @@ def entity_was_there(hub, suffix, domain="sensor"):
     return hub.has_record(domain, f"{hub.prefix}_{suffix}")
 
 
+def kept_while_unknown(hub, suffix, domain="sensor"):
+    """An E32 hub entity that existed (entity_was_there) while the E32's status is not known (1.4.2, HC-03).
+
+    The burner, boiler activity, readiness, hot water and flow entities are made from the E32's status or summary.
+    When Home Assistant starts while the E32 is offline or stalled there is none, and their records would stand
+    "no longer provided" until the E32 returns; with this they exist at once, unavailable until it reports. Once
+    the status is known again, what it reports decides as before.
+    """
+    return hub.status is None and entity_was_there(hub, suffix, domain)
+
+
 def add_options(hass, entry, options=None):
     """Product entities belong to the installation group, like the hub device."""
     options = dict(options or {})
@@ -1504,8 +1749,40 @@ def add_options(hass, entry, options=None):
     return options
 
 
+# The parts of the status that are readings of one room, sensor or valve (they have their own topics and change
+# with nearly every message); hub_shape leaves them out.
+_READINGS = ("rooms", "ble_sensors", "trv", "ha_entities")
+
+
+def hub_shape(hub):
+    """A value that changes whenever a tracker's wanted(hub) may yield other keys (HC-08, 1.4.2).
+
+    It holds what those decide on: the status without the per-room and per-sensor readings (mode, burner, shadow,
+    readiness, away, the heating document's flags), the plan topic, the summary (scoreboard, hot water, flow),
+    the heating plan, the room, learned and warm-up ids, which readings each Bluetooth sensor reports and which
+    rooms have valves. A message that only brings a room's or a sensor's new values (most of them) leaves it
+    unchanged, and track_entities then does not run wanted(hub). Compared with == (identity first, so an unchanged
+    document costs nothing). A wanted(hub) that reads anything else (a room's own values, the circuits, a link's
+    settings) must not pass this as its shape, or must add that here.
+    """
+    status = hub.status if type(hub.status) is dict else None
+    head = None if status is None else {key: value for key, value in status.items() if key not in _READINGS}
+    ble = getattr(hub, "ble", None) or {}
+    valves = getattr(hub, "valves", None) or {}
+    return (head, getattr(hub, "config", None), getattr(hub, "summary", None), getattr(hub, "heating_plan", None),
+            tuple(hub.rooms), tuple(getattr(hub, "learned", None) or ()), tuple(getattr(hub, "warmup", None) or ()),
+            tuple((sensor_id, tuple(metric for metric in BLE_METRICS if sensor.get(metric) is not None))
+                  for sensor_id, sensor in ble.items()),
+            tuple((room_id, bool(item.get("valves"))) for room_id, item in valves.items() if type(item) is dict),
+            # 1.4.2 (HA-DHW): a storage tank or not (DhwTankWatch decides it without a new summary).
+            getattr(hub, "dhw_tank", None))
+
+
+_UNSEEN = object()
+
+
 @callback
-def track_entities(hub, async_add_entities, options, wanted):
+def track_entities(hub, async_add_entities, options, wanted, shape=None):
     """Add each entity wanted(hub) yields ((key, factory) pairs) once, when first seen.
 
     A key whose entity was removed from Home Assistant (its room left the plan,
@@ -1514,12 +1791,18 @@ def track_entities(hub, async_add_entities, options, wanted):
     a new entity, without a reload. While the E32 still reports it (its status
     trails a plan change), a removed entity is not created again;
     hub.forget_removed_rooms() adds the rooms that are back in the plan.
+
+    ``shape``: shape(hub) changes whenever wanted(hub) may yield other keys (hub_shape); wanted(hub) then runs only
+    when it changed, not on every E32 message (HC-08, 1.4.2). Without it wanted(hub) runs on every hub change. A
+    removed entity and forget_rooms always run it.
     """
     known, current = set(), set()
     removed = {}  # key: the removed entity, while wanted(hub) still yields the key
+    seen = [_UNSEEN]  # the shape wanted(hub) last ran for
 
     @callback
     def forget(key, entity):
+        seen[0] = _UNSEEN  # the next hub change runs wanted(hub) again
         if key in current:
             removed[key] = entity
         else:
@@ -1530,6 +1813,11 @@ def track_entities(hub, async_add_entities, options, wanted):
         nonlocal current
         if getattr(hub, "closed", False):
             return  # the entry is unloading (HeatingHub.close): an entity added now would outlive its platform
+        if shape is not None:
+            now = shape(hub)
+            if seen[0] is not _UNSEEN and now == seen[0]:
+                return
+            seen[0] = now
         new, keys = [], set()
         for key, factory in wanted(hub):
             keys.add(key)
@@ -1553,6 +1841,7 @@ def track_entities(hub, async_add_entities, options, wanted):
             del removed[key]
             known.discard(key)
         if returned:
+            seen[0] = _UNSEEN
             refresh()
 
     remove_listener = hub.add_listener(refresh)
@@ -1616,27 +1905,47 @@ class HubEntity:
         await super().async_added_to_hass()
         self.async_on_remove(self.hub.add_listener(self._hub_changed))
 
-    # The last _write_token written (R4-08); a sentinel until the first write.
+    # The token of the last state written through _hub_changed (R4-08, HC-08); a sentinel until then and after
+    # any other write (an action's own async_write_ha_state), so the next E32 message compares afresh.
     _written = object()
 
     def _write_token(self):
         """Everything this entity's state, attributes, availability and device name depend on, or None.
 
-        One E32 message notifies every hub entity; an entity with a token writes its state only when the token
-        changed (R4-08: a message about one room writes only that room's entities). None: always write (the
-        default, for entities that read more of the hub than a small part).
+        One E32 message notifies every hub entity; an entity writes its state only when its token changed (R4-08:
+        a message about one room writes only that room's entities). A cheap token of its own (the room's values,
+        a sensor's reading) saves computing the state on every message. None (the default): the token is the state
+        and attributes the write would give (state_token, 1.4.2 HC-08), so the entity still writes only what
+        changed.
         """
         return None
 
+    def _device_token(self):
+        """What the device name (and a room device's model) follows (_follow_name): its item's name."""
+        item = self._named_item()
+        return label(item) if item is not None else None
+
     @callback
     def _hub_changed(self):
-        if self.hass is not None and self.entity_id:
-            token = self._write_token()
-            if token is not None and token == self._written:
-                return
-            self._written = token if token is not None else HubEntity._written
-            self._follow_name()
-            self.async_write_ha_state()
+        if self.hass is None or not self.entity_id:
+            return
+        token = self._write_token()
+        if token is None:
+            token = state_token(self)
+            if token is not None:
+                token = (token, self._device_token())
+        if token is not None and token == self._written:
+            return
+        self._follow_name()
+        self.async_write_ha_state()
+        self._written = token if token is not None else HubEntity._written
+
+    @callback
+    def _async_write_ha_state(self):
+        # Any write that does not come from _hub_changed (an action shows its new value at once): the next E32
+        # message compares with what is shown now, never with an older token.
+        self._written = HubEntity._written
+        super()._async_write_ha_state()
 
     @callback
     def _follow_name(self):
@@ -1657,6 +1966,22 @@ class HubEntity:
     def _device_name(self, item, current):
         """The device's own name for ``item`` (None: keep ``current``); name_by_user is never changed."""
         return label(item)
+
+
+@callback
+def state_token(entity):
+    """(state, attributes) as Home Assistant would write them for ``entity`` now, or None when that cannot be
+    computed (an entity not on a platform yet): its caller then writes as before.
+
+    HC-08 (1.4.2): an entity without a cheap write token of its own (_write_token) writes only when this changed,
+    not on every E32 message; Home Assistant itself would not store an unchanged state either. Any entity that
+    is notified on every message can use it (the learned overview: its own _hub_changed).
+    """
+    try:
+        calculated = entity._async_calculate_state()
+    except Exception:  # noqa: BLE001 - a token only: the write itself shows any real fault as before
+        return None
+    return calculated.state, calculated.attributes
 
 
 def _own_device(identifier, item):
@@ -1760,6 +2085,13 @@ class RoomEntity(HubEntity):
 
     def _named_item(self):
         return self.room
+
+    def _device_token(self):
+        """The room's name and emitter (the device's model, room_device); the E32's version follows through the
+        Firmware entity (_sync_device_version)."""
+        from .room_device import room_emitter
+        room = self.room
+        return (label(room) if room is not None else None), room_emitter(self.hub, self.room_id)
 
     @property
     def room(self):
@@ -1925,19 +2257,36 @@ class BleSensor(HubEntity, SensorEntity):
     def __init__(self, hub, sensor, metric):
         self.sensor_id, self.metric = sensor["id"], metric
         device = _own_device(ble_device_identifier(hub.prefix, self.sensor_id), sensor)
-        device["name"] = ble_device_name(sensor, hub.rooms) or label(sensor)  # a new device's first name
+        # A new device's first name (the rooms known while the E32 is offline, so the name stays: HC-03; the plan's
+        # rooms that list it, plan 3.9).
+        device["name"] = ble_device_name(sensor, hub.known_rooms,
+                                         planned=ble_planned_rooms(hub, self.sensor_id)) or label(sensor)
         self._attach(hub, f"e32_ble_{self.sensor_id}_{metric}", device)
         self._attr_device_class, self._attr_native_unit_of_measurement, self._low, self._high = BLE_METRICS[metric]
         self._attr_suggested_display_precision = BLE_PRECISION[metric]
         self._attr_translation_key = f"ble_{metric}"
 
     def _device_name(self, item, current):
-        return ble_device_name(item, self.hub.rooms, current)
+        return ble_device_name(item, self.hub.rooms, current, ble_planned_rooms(self.hub, self.sensor_id),
+                               self._unused_s())
+
+    def _unused_s(self):
+        """Seconds since a room last reported this sensor as its source (0 while one does); the clock starts when
+        Home Assistant first sees it unused."""
+        since, now = getattr(self.hub, "ble_unused_since", None), BLE_CLOCK()
+        if since is None:
+            since = self.hub.ble_unused_since = {}
+        if any(room.get("source") == self.sensor_id for room in self.hub.rooms.values()):
+            since.pop(self.sensor_id, None)
+            return 0
+        return now - since.setdefault(self.sensor_id, now)
 
     def _write_token(self):
-        # The device name follows the rooms that measure with this sensor (ble_device_name).
+        # The device name follows the rooms that measure with this sensor (ble_device_name), the plan's rooms that
+        # list it, and the hour an unused sensor keeps its room's name.
         rooms = tuple((room.get("source"), label(room)) for room in self.hub.rooms.values())
-        return self.hub.fresh, self.sensor, rooms
+        return (self.hub.fresh, self.sensor, rooms, ble_planned_rooms(self.hub, self.sensor_id),
+                self._unused_s() >= BLE_NAME_KEEP_S)
 
     def _named_item(self):
         return self.sensor
@@ -2106,6 +2455,14 @@ class BoilerActivitySensor(HubEntity, SensorEntity):
         burner = burner_status(self.hub.status)
         value = burner.get("activity") if burner else None
         return value if value in BOILER_ACTIVITIES else None
+
+    @property
+    def extra_state_attributes(self):
+        """``hot_water_tank``: the hot water is a storage tank (dhw_tank), so the house card's legend names
+        charging the tank instead of keeping warm (1.4.2); None while the E32 sends no hot-water summary."""
+        if not self.hub.fresh:
+            return None
+        return {"hot_water_tank": dhw_tank(self.hub) if self.hub.dhw is not None else None}
 
 
 class BurnerEntity(HubEntity):
@@ -2385,41 +2742,198 @@ def dhw_status(status):
     return dhw if type(dhw) is dict and type(dhw.get("today")) is dict else None
 
 
-DHW_SENSORS = ("dhw_taps_today", "dhw_keep_warm_today", "dhw_burner_time_today")
-DHW_KINDS = {"dhw_taps_today": "tapping", "dhw_keep_warm_today": "keep_warm"}
-DHW_EPISODE_KINDS = ("tapping", "keep_warm", "charging", "unknown")
+# Today's hot water as the E32 counts it: the taps and the burner time on every boiler, keeping warm on a boiler
+# without a tank, the charges of a storage tank (1.4.2, HA-DHW).
+DHW_SENSORS = ("dhw_taps_today", "dhw_keep_warm_today", "dhw_charges_today", "dhw_burner_time_today")
+DHW_KINDS = {"dhw_taps_today": "tapping", "dhw_keep_warm_today": "keep_warm", "dhw_charges_today": "charging"}
+# The E32's counts per kind of hot-water episode; "tap_flow" (E32 1.4.2, dhw.storage.v2): the taps counted from the
+# boiler's hot water flow, on a tank the only taps (never in "tapping"), with about how many litres.
+DHW_EPISODE_KINDS = ("tapping", "keep_warm", "charging", "unknown", "tap_flow")
+DHW_METHODS = ("storage", "flow", "dhw_temperature_fall")
+# What only a boiler without a tank has (keeping warm and the gas split into tapping and keeping warm, energy_use),
+# and what only a tank has (its charges): unique ID after f"{prefix}_".
+DHW_COMBI_ONLY = ("hub_dhw_keep_warm_today", "hub_tapping_gas", "hub_keep_warm_gas")
+DHW_TANK_ONLY = ("hub_dhw_charges_today",)
+# The E32 must say for this long (a full E32 day) that the hot water is (or no longer is) a tank before the decision
+# changes and the other kind's entities go (DhwTankWatch).
+DHW_TANK_DAY_S = 24 * 3600
+# Registry option (under DOMAIN) of "Hot water taps today" that keeps the decision over Home Assistant restarts:
+# {"tank": true/false/null, "since": unix time or null}.
+DHW_TANK_OPTION = "dhw_tank"
+# Today's figures reach Home Assistant within five minutes after a hot-water period ends: the E32 counts an episode
+# when it ends and sends its summary every 300 s (attribute ``updates``).
+DHW_UPDATES = "within_5_min_after_hot_water"
+_wall_clock = time.time  # the decision's "since" outlives a restart: wall time, not monotonic
+
+
+def dhw_method(hub):
+    """How the E32 sorts its hot water now (storage, flow or dhw_temperature_fall), only once its clock is known (a
+    summary before that can name a method its boiler has not shown yet), else None."""
+    dhw = getattr(hub, "dhw", None) if hub is not None and getattr(hub, "fresh", False) else None
+    if type(dhw) is not dict or dhw.get("clock_known") is not True:
+        return None
+    method = dhw.get("method")
+    return method if method in DHW_METHODS else None
+
+
+def dhw_tank(hub):
+    """Whether the hot water is a storage tank: decided (DhwTankWatch), or what the E32 says now before a decision."""
+    decided = getattr(hub, "dhw_tank", None)
+    if hub is None or decided is not None:
+        return decided is True
+    return dhw_method(hub) == "storage"
+
+
+def dhw_entity_wanted(hub, suffix):
+    """Whether the hot-water entity with unique ID f"{prefix}_{suffix}" belongs to this installation.
+
+    One that exists stays (a customised record DhwTankWatch kept, or one before the decision). A new one only when it
+    fits: a tank's charges once the E32 says tank, keeping warm and the gas split once it says another method (never
+    on a decided tank).
+    """
+    if entity_was_there(hub, suffix):
+        return True
+    if suffix in DHW_TANK_ONLY:
+        return dhw_tank(hub)
+    return hub.dhw_tank is not True and dhw_method(hub) not in (None, "storage")
+
+
+class DhwTankWatch:
+    """Decides once whether this installation's hot water is a storage tank, and tidies the entities that do not fit.
+
+    The E32 names its method in every summary, but just after its start it may name another one until its boiler
+    has reported its hot water type, and a summary goes out only every five minutes. So the decision changes only
+    after the E32 has said the opposite for DHW_TANK_DAY_S (a full E32 day), summaries with a known clock only; one
+    summary that agrees again starts over. Then the entities of the other kind go from the registry (only this
+    entry's, only while untouched: a record the user customised stays, with its entity): on a tank "Keeping hot
+    water warm today", "Gas for tapping hot water" and "Gas for keeping hot water warm"; back to no tank "Charges
+    today". The decision and its "since" live in a registry option of "Hot water taps today", so a Home Assistant
+    restart keeps them (without that record, in memory until it exists). A missing or stale summary changes
+    nothing. Removing a record keeps its history and long-term statistics.
+    """
+
+    def __init__(self, hass, entry, hub, clock=None):
+        self.hass, self.entry, self.hub = hass, entry, hub
+        self.clock = clock or (lambda: _wall_clock())
+        self._unsaved = False
+        stored = self._stored()
+        if stored is not None:
+            tank, since = stored.get("tank"), number(stored.get("since"), 0, 4.2e9)
+            hub.dhw_tank = tank if type(tank) is bool else None
+            hub.dhw_tank_since = since
+
+    def _record(self):
+        from homeassistant.helpers import entity_registry as er
+        registry = er.async_get(self.hass)
+        entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{self.hub.prefix}_hub_dhw_taps_today")
+        record = registry.async_get(entity_id) if entity_id is not None else None
+        return (registry, record) if record is not None and record.config_entry_id == self.entry.entry_id else (
+            registry, None)
+
+    def _stored(self):
+        _, record = self._record()
+        value = record.options.get(DOMAIN, {}).get(DHW_TANK_OPTION) if record is not None else None
+        return value if type(value) is dict else None
+
+    def _save(self):
+        registry, record = self._record()
+        if record is None:
+            self._unsaved = True  # the taps record comes with its entity: saved at the next summary
+            return
+        self._unsaved = False
+        options = dict(record.options.get(DOMAIN, {}))
+        value = {"tank": self.hub.dhw_tank, "since": self.hub.dhw_tank_since}
+        if options.get(DHW_TANK_OPTION) != value:
+            registry.async_update_entity_options(record.entity_id, DOMAIN, {**options, DHW_TANK_OPTION: value})
+
+    @callback
+    def note(self):
+        """Every hub update: follow what the E32 says about its hot water."""
+        hub, method = self.hub, dhw_method(self.hub)
+        if method is None:
+            if self._unsaved:
+                self._save()
+            return
+        tank, now = method == "storage", self.clock()
+        if tank == (hub.dhw_tank is True):  # it agrees with the decision (never decided: no tank)
+            if hub.dhw_tank_since is not None:
+                hub.dhw_tank_since = None
+                self._save()
+            elif self._unsaved:
+                self._save()
+            return
+        if hub.dhw_tank_since is None or hub.dhw_tank_since > now:
+            hub.dhw_tank_since = now
+            self._save()
+            return
+        if now - hub.dhw_tank_since < DHW_TANK_DAY_S:
+            if self._unsaved:
+                self._save()
+            return
+        hub.dhw_tank, hub.dhw_tank_since = tank, None
+        self._save()
+        retire_dhw_entities(self.hass, self.entry, hub.prefix, DHW_COMBI_ONLY if tank else DHW_TANK_ONLY, tank)
+
+
+def retire_dhw_entities(hass, entry, prefix, suffixes, tank):
+    """Remove this entry's untouched records of these hot-water entities; returns their entity IDs."""
+    from homeassistant.helpers import entity_registry as er
+    from .native_entity_cleanup import untouched
+    registry = er.async_get(hass)
+    removed = []
+    for suffix in suffixes:
+        entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{prefix}_{suffix}")
+        record = registry.async_get(entity_id) if entity_id is not None else None
+        if record is not None and record.config_entry_id == entry.entry_id and untouched(record):
+            registry.async_remove(entity_id)
+            removed.append(entity_id)
+    if removed:
+        _LOGGER.info("Removed %s: the E32 has reported %s for a full day. Their history and long-term statistics "
+                     "are kept", ", ".join(removed), "a hot water tank" if tank else "hot water without a tank")
+    return removed
+
+
+def _amount(value):
+    """A count, a duration or litres of the E32: a finite number >= 0 (litres have a decimal), else None."""
+    if type(value) is int:
+        return value if value >= 0 else None
+    return value if type(value) is float and math.isfinite(value) and value >= 0 else None
 
 
 class DhwCarry:
-    """Today's hot-water counts across E32 restarts.
+    """Today's hot-water counts held over E32 restarts.
 
-    The E32 counts its episodes per day in memory, so an update or any other
-    restart starts them at 0 again (31 Oct 2026: two updates left the owner's
-    "keeping warm today" at a few rounds). A count that goes down while the E32
-    restarted (its heartbeat uptime fell within RESTART_WINDOW_S of the drop)
-    keeps what it had reached and adds from there; any other drop is the E32's
-    new day. The two may arrive in either order. Home Assistant keeps this in
-    memory only; after a Home Assistant restart the E32's own counts carry on.
+    Since E32 1.0.0rc.4 the E32 keeps today's counts itself over a restart (its stored record). A planned restart
+    stores them first, so they come back as they were; after a power cut the record can be up to an hour old, so
+    they come back lower. Home Assistant then holds what it showed until the E32's own counts pass it, and never adds
+    the two (before 1.4.2 it added them: 5 taps became 8 after a power cut, 10 after a summary sent before the E32
+    knew the time; review R142 F4). A count that goes down while the E32 restarted (its heartbeat uptime fell within
+    RESTART_WINDOW_S of the drop) is held; meanwhile, until the window has passed, Home Assistant also holds the
+    value, so a total_increasing sensor never dips. Any other drop is the E32's new day. A summary sent before the
+    E32 knows the time (``clock_known`` false) is not today's yet: it changes nothing (before anything was shown its
+    counts are unknown). Home Assistant keeps this in memory only and uses its own day (dt_util); after a Home
+    Assistant restart the E32's own counts carry on.
     """
 
     RESTART_WINDOW_S = 120
 
     def __init__(self, today=None, clock=time.monotonic):
-        self._today = today or (lambda: __import__("datetime").date.today())
+        self._today = today or _ha_today
         self.clock = clock
-        self.day, self.last, self.base, self.dropped, self.dropped_at = None, {}, {}, {}, None
+        self.day, self.last, self.shown, self.floor, self.dropped, self.dropped_at = None, {}, {}, {}, {}, None
         self.boot, self.restart_seen = None, None  # restart_seen: when a restart came before its drop
 
     def _recent(self, since, now):
         return since is not None and now - since <= self.RESTART_WINDOW_S
 
-    def apply(self, today, boot=None):
-        """A copy of the E32's ``today`` with every count and duration carried over its restarts.
+    def apply(self, today, boot=None, clock_known=True):
+        """A copy of the E32's ``today`` with every count, duration and litres held over its restarts.
 
         boot: a number that changes when the E32 restarts (HeatingHub.boots)."""
         day, now = self._today(), self.clock()
         if day != self.day:
-            self.day, self.last, self.base, self.dropped, self.restart_seen = day, {}, {}, {}, None
+            self.day, self.last, self.shown, self.floor, self.dropped = day, {}, {}, {}, {}
+            self.restart_seen = None
         if self.dropped and not self._recent(self.dropped_at, now):
             self.dropped = {}  # no restart followed the drop: it was the E32's new day
         if not self._recent(self.restart_seen, now):
@@ -2427,40 +2941,53 @@ class DhwCarry:
         if boot is not None and self.boot is not None and boot != self.boot:
             if self.dropped:
                 for key, value in self.dropped.items():
-                    self.base[key] = self.base.get(key, 0) + value
+                    self.floor[key] = max(self.floor.get(key, 0), value)
                 self.dropped = {}
             else:
                 self.restart_seen = now
         if boot is not None:
             self.boot = boot
         result = dict(today)
-        carried = False
-        keys = [(kind, field) for kind in DHW_EPISODE_KINDS for field in ("count", "s")] + [(None, "burner_s")]
+        held = False
+        keys = [(kind, field) for kind in DHW_EPISODE_KINDS for field in ("count", "s")] + [
+            ("tap_flow", "litres"), (None, "burner_s")]
         for kind, field in keys:
             source = today.get(kind) if kind else today
-            value = _count(source.get(field)) if type(source) is dict else None
+            value = _amount(source.get(field)) if type(source) is dict else None
             if value is None:
                 continue
             key = f"{kind}.{field}" if kind else field
-            if key in self.last and value < self.last[key]:
-                if self.restart_seen is not None:
-                    self.base[key] = self.base.get(key, 0) + self.last[key]
-                    carried = True
-                else:
-                    if not self.dropped:
-                        self.dropped_at = now
-                    self.dropped[key] = self.last[key]
-            elif key in self.last and value > self.last[key]:
-                self.dropped.pop(key, None)  # counting again after the drop: that was the E32's new day
-            self.last[key] = value
-            total = value + self.base.get(key, 0)
+            if not clock_known:
+                total = self.shown.get(key)  # not today's counts yet: what was shown, else unknown
+            else:
+                if key in self.last and value < self.last[key]:
+                    if self.restart_seen is not None:
+                        self.floor[key] = max(self.floor.get(key, 0), self.shown.get(key, 0))
+                        held = True
+                    else:
+                        if not self.dropped:
+                            self.dropped_at = now
+                        self.dropped[key] = self.shown.get(key, self.last[key])
+                        self.floor.pop(key, None)
+                elif key in self.last and value > self.last[key]:
+                    self.dropped.pop(key, None)  # counting again after the drop: that was the E32's new day
+                self.last[key] = value
+                # While a drop waits for its restart, what was shown stays (a total never dips and comes back).
+                total = max(value, self.floor.get(key, 0), self.dropped.get(key, 0))
+                self.shown[key] = total
             if kind:
                 result[kind] = {**(result[kind] if result.get(kind) is not source else source), field: total}
             else:
                 result[field] = total
-        if carried:
+        if held:
             self.restart_seen = None
         return result
+
+
+def _ha_today():
+    """Home Assistant's own date (its time zone, not the process's: review R142 F10)."""
+    from homeassistant.util import dt as dt_util
+    return dt_util.now().date()
 
 
 def _minutes(seconds):
@@ -2468,9 +2995,12 @@ def _minutes(seconds):
 
 
 class DhwTodaySensor(HubEntity, SensorEntity):
-    """Today's hot water as the E32 sees it on the bus: taps, keeping warm, burner time.
+    """Today's hot water as the E32 sees it on the bus: taps, keeping warm (no tank), a tank's charges, burner time.
 
-    The counters restart every day (and when the E32 restarts): total_increasing.
+    The counters restart every day: total_increasing. With a tank (E32 1.4.2) the taps come from the boiler's hot
+    water flow (``tap_flow``, with about how many litres); with older firmware a tank has no taps (0, attribute
+    ``taps_counted`` "needs_e32_update"). Each figure reaches Home Assistant within five minutes after a hot-water
+    period ends (attribute ``updates``): Home Assistant entities have no description.
     """
 
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
@@ -2488,7 +3018,7 @@ class DhwTodaySensor(HubEntity, SensorEntity):
 
     @property
     def dhw(self):
-        """The hub's hot-water summary with today's counts carried over E32 restarts."""
+        """The hub's hot-water summary with today's counts held over E32 restarts."""
         dhw = self.hub.dhw if self.hub.fresh else None
         return None if dhw is None else {**dhw, "today": self.hub.dhw_today()}
 
@@ -2496,29 +3026,46 @@ class DhwTodaySensor(HubEntity, SensorEntity):
     def available(self):
         return self.dhw is not None
 
+    def _tank_taps(self, today):
+        """A tank's taps (count, seconds, litres) from ``tap_flow``, or None on firmware without it."""
+        flow = today.get("tap_flow")
+        return flow if type(flow) is dict else None
+
     @property
     def native_value(self):
         dhw = self.dhw
         if dhw is None:
             return None
+        today = dhw["today"]
         if self.key == "dhw_burner_time_today":
-            return _minutes(_count(dhw["today"].get("burner_s")))
-        return _count(_dict(dhw["today"], DHW_KINDS[self.key]).get("count"))
+            return _minutes(_amount(today.get("burner_s")))
+        if self.key == "dhw_taps_today" and dhw_tank(self.hub):
+            flow = self._tank_taps(today)
+            return _count(flow.get("count")) if flow is not None else 0
+        return _count(_dict(today, DHW_KINDS[self.key]).get("count"))
 
     @property
     def extra_state_attributes(self):
         dhw = self.dhw
         if dhw is None:
             return None
-        today, week = dhw["today"], _dict(dhw, "last_7_days")
-        result = {"method": _text(dhw, "method"), "baseline": _text(dhw, "baseline"), "clock_known": _flag(dhw, "clock_known")}
+        today, tank = dhw["today"], dhw_tank(self.hub)
+        result = {"method": _text(dhw, "method"), "clock_known": _flag(dhw, "clock_known"), "updates": DHW_UPDATES}
         if self.key == "dhw_burner_time_today":
-            return {**result, "tapping_minutes": _minutes(_count(_dict(today, "tapping").get("s"))),
-                    "keep_warm_minutes": _minutes(_count(_dict(today, "keep_warm").get("s"))),
-                    "last_7_days_minutes": _minutes(_count(week.get("burner_s")))}
-        kind = DHW_KINDS[self.key]
-        result.update(minutes=_minutes(_count(_dict(today, kind).get("s"))),
-                      last_7_days=_count(_dict(week, kind).get("count")))
+            if tank:
+                flow = self._tank_taps(today) or {}
+                return {**result, "tapping_minutes": _minutes(_amount(flow.get("s"))),
+                        "charging_minutes": _minutes(_amount(_dict(today, "charging").get("s")))}
+            return {**result, "tapping_minutes": _minutes(_amount(_dict(today, "tapping").get("s"))),
+                    "keep_warm_minutes": _minutes(_amount(_dict(today, "keep_warm").get("s")))}
+        if self.key == "dhw_taps_today" and tank:
+            flow = self._tank_taps(today)
+            litres = _amount(flow.get("litres")) if flow is not None else None
+            return {**result, "minutes": _minutes(_amount(flow.get("s"))) if flow is not None else 0,
+                    "litres": round(litres, 1) if litres is not None else None,
+                    "peak_flow_l_min": number(today.get("peak_flow_l_min"), 0, 60),
+                    "taps_counted": "water_flow" if flow is not None else "needs_e32_update"}
+        result["minutes"] = _minutes(_amount(_dict(today, DHW_KINDS[self.key]).get("s")))
         if self.key == "dhw_taps_today":
             result.update(peak_flow_l_min=number(today.get("peak_flow_l_min"), 0, 60),
                           unknown_count=_count(_dict(today, "unknown").get("count")),
@@ -2527,28 +3074,39 @@ class DhwTodaySensor(HubEntity, SensorEntity):
 
 
 def wanted_sensors(hub):
+    # Runs only when hub_shape(hub) changed (HC-08): a new condition here that reads anything hub_shape does not
+    # hold (a room's own values, for instance) goes into hub_shape too, or its entity would appear late.
     # Firmware that compares (E32 beta.18), and only once a thermostat to compare with shows up.
     # In active mode without one they are removed (native_entity_cleanup.note_heating_status); a
     # removed one is forgotten (track_entities) and comes again with a thermostat in a trial run.
     # In a trial run one that existed stays on a day the thermostat is not heard (yet) (entity_was_there).
+    # While the status is not known (HA started with the E32 offline, 1.4.2 HC-03) they stay too; once it is
+    # known in active mode, note_heating_status removes them as before.
     trial = type(hub.status) is dict and hub.status.get("mode") == "shadow"
     for key in SHADOW_SENSORS:
-        if shadow_has_thermostat(hub.status) or (trial and entity_was_there(hub, f"hub_shadow_{key}")):
+        if shadow_has_thermostat(hub.status) or ((trial or hub.status is None)
+                                                 and entity_was_there(hub, f"hub_shadow_{key}")):
             yield ("shadow", key), lambda key=key: ShadowSensor(hub, key)
     from .native_entity_cleanup import readiness_over
     from .takeover_readiness import TakeoverReadinessSensor, readiness_status
     # Firmware that judges "ready to take over?" (1.0), until the E32 controls the boiler (1.1.1, Q4: then
     # native_entity_cleanup removes it; it comes back in a trial run).
-    if readiness_status(hub.status) is not None and not readiness_over(hub.status):
+    # 1.4.2 (HC-03): each of these also while the E32's status is not known yet, when it existed before.
+    if ((readiness_status(hub.status) is not None and not readiness_over(hub.status))
+            or kept_while_unknown(hub, "hub_takeover_readiness")):
         yield ("readiness",), lambda: TakeoverReadinessSensor(hub)
-    if burner_status(hub.status) is not None:  # firmware that counts burner starts
-        yield ("burner",), lambda: BurnerStartsSensor(hub)
-    if "activity" in (burner_status(hub.status) or {}):  # firmware that says what the boiler does (beta.23)
-        yield ("activity",), lambda: BoilerActivitySensor(hub)
-    if hub.dhw is not None:  # firmware that sorts the hot-water episodes
-        for key in DHW_SENSORS:
-            yield ("dhw", key), lambda key=key: DhwTodaySensor(hub, key)
-    for room_id, room in hub.rooms.items():
+    if burner_status(hub.status) is not None or kept_while_unknown(hub, "hub_burner_starts_last_hour"):
+        yield ("burner",), lambda: BurnerStartsSensor(hub)  # firmware that counts burner starts
+    if "activity" in (burner_status(hub.status) or {}) or kept_while_unknown(hub, "hub_boiler_activity"):
+        yield ("activity",), lambda: BoilerActivitySensor(hub)  # firmware that says what the boiler does (beta.23)
+    for key in DHW_SENSORS:  # firmware that sorts the hot-water episodes; per kind of hot water (DhwTankWatch)
+        if hub.dhw is None and not kept_while_unknown(hub, f"hub_{key}"):
+            continue
+        if (hub.dhw is not None and f"hub_{key}" in DHW_COMBI_ONLY + DHW_TANK_ONLY
+                and not dhw_entity_wanted(hub, f"hub_{key}")):
+            continue
+        yield ("dhw", key), lambda key=key: DhwTodaySensor(hub, key)
+    for room_id, room in hub.known_rooms.items():
         yield ("room", room_id, "temperature"), lambda room=room: RoomTemperatureSensor(hub, room)
         yield ("room", room_id, "setpoint"), lambda room=room: RoomTemperatureSensor(hub, room, "setpoint", 5, 30)
         yield ("room", room_id, "status"), lambda room=room: RoomStatusSensor(hub, room)
@@ -2562,7 +3120,7 @@ def wanted_sensors(hub):
                                      ("heating_start", RoomHeatingStartSensor, room_id in hub.warmup)):
             if wanted or entity_was_there(hub, f"e32_room_{room_id}_{key}"):
                 yield ("room", room_id, key), lambda room=room, factory=factory: factory(hub, room)
-    for sensor_id, sensor in hub.ble.items():
+    for sensor_id, sensor in hub.known_ble.items():
         for metric in BLE_METRICS:
             # Only readings the sensor actually reports (not every profile has humidity); one it reported before
             # stays ("unknown" until the next reading after an E32 restart).
@@ -2577,9 +3135,9 @@ def wanted_sensors(hub):
 
 
 def wanted_demand(hub):
-    if burner_status(hub.status) is not None:
+    if burner_status(hub.status) is not None or kept_while_unknown(hub, "hub_burner_short_cycling", "binary_sensor"):
         yield ("burner",), lambda: BurnerShortCyclingBinarySensor(hub)
-    for room_id, room in hub.rooms.items():
+    for room_id, room in hub.known_rooms.items():
         yield room_id, lambda room=room: RoomDemandBinarySensor(hub, room)
 
 
@@ -2611,12 +3169,24 @@ async def async_setup_demand(hass, entry, async_add_entities):
     options = add_options(hass, entry)
     from .heating_problem import HeatingProblemSensor
     async_add_entities([HeatingProblemSensor(entry, hub)], **options)  # "is my heating OK?"
-    entry.async_on_unload(track_entities(hub, async_add_entities, options, wanted_demand))
+    entry.async_on_unload(track_entities(hub, async_add_entities, options, wanted_demand, hub_shape))
     from .notifications import async_setup_notifications
     try:
         await async_setup_notifications(hass, entry, hub)  # Configure → Notifications (1.1.1)
     except Exception:  # noqa: BLE001 - optional; the heating and its entities stay
         _LOGGER.exception("OpenThermostat: setting up the notifications failed")
+
+
+async def async_subscribe_all(hass, entry, topics, receive):
+    """Subscribe to every topic at once (HC-17, 1.4.2: twenty one after the other made a slow broker's delay
+    twenty times as long). Every subscription that succeeded ends with the entry; the first failure is raised after
+    that, as before (the loop stopped there)."""
+    async def one(topic):
+        entry.async_on_unload(await mqtt.async_subscribe(hass, topic, receive))  # registered as soon as it holds
+    results = await asyncio.gather(*(one(topic) for topic in topics), return_exceptions=True)
+    failed = next((result for result in results if isinstance(result, BaseException)), None)
+    if failed is not None:
+        raise failed
 
 
 async def async_setup_heating_link(hass, entry, async_add_entities, **options):
@@ -2641,7 +3211,11 @@ async def async_setup_heating_link(hass, entry, async_add_entities, **options):
     options = add_options(hass, entry, options)
     sensor = HeatRequestSensor(hub)
     async_add_entities([sensor], **options)
-    entry.async_on_unload(track_entities(hub, async_add_entities, options, wanted_sensors))
+    # 1.4.2 (HA-DHW): a storage tank or not, decided before the first entities are wanted (its decision comes from
+    # the registry) and followed before them on every update (the forwarding alone goes first).
+    watch = DhwTankWatch(hass, entry, hub)
+    entry.async_on_unload(hub.add_listener(watch.note, first=True))
+    entry.async_on_unload(track_entities(hub, async_add_entities, options, wanted_sensors, hub_shape))
     # The comparison sensors go once the E32 controls the boiler and hears no thermostat to compare
     # with for a while; wanted_sensors creates them again in a trial run with a thermostat on the bus.
     from .native_entity_cleanup import note_heating_status
@@ -2673,7 +3247,9 @@ async def async_setup_heating_link(hass, entry, async_add_entities, **options):
         state = hass.states.get(entity_id)
         if now is not None and silent_source(state, now):
             return
-        payload = input_payload(state, hass.config.units.temperature_unit)
+        # 1.4.2: a room's setting device sends its temperature only (target_kept); the link writes the room's target
+        # to it and takes its knob as a manual change.
+        payload = input_payload(state, hass.config.units.temperature_unit, not target_kept(hass, entry, entity_id))
         if payload is not None:
             send(payload)
 
@@ -2767,10 +3343,10 @@ async def async_setup_heating_link(hass, entry, async_add_entities, **options):
 
     await mqtt.async_wait_for_mqtt_client(hass)
     entry.async_on_unload(hub.add_listener(follow, first=True))
-    for topic in (AVAILABILITY_TOPIC, HEARTBEAT_TOPIC, HEATING_TOPIC, ROOM_TOPIC + "+", BLE_TOPIC + "+", TRV_TOPIC + "+", PLAN_TOPIC,
-                  ENTITIES_TOPIC, ENTITIES_TOPIC + "/+", LEARNED_TOPIC + "+", SUMMARY_TOPIC, FLOW_TOPIC, TUNING_TOPIC, SCOREBOARD_TOPIC,
-                  INSIGHT_TOPIC, SHADOW_TOPIC, READINESS_TOPIC, CIRCUIT_TOPIC + "+", PROBES_TOPIC, HEATING_PLAN_TOPIC):
-        entry.async_on_unload(await mqtt.async_subscribe(hass, base + topic, receive))
+    await async_subscribe_all(hass, entry, [base + topic for topic in (
+        AVAILABILITY_TOPIC, HEARTBEAT_TOPIC, HEATING_TOPIC, ROOM_TOPIC + "+", BLE_TOPIC + "+", TRV_TOPIC + "+", PLAN_TOPIC,
+        ENTITIES_TOPIC, ENTITIES_TOPIC + "/+", LEARNED_TOPIC + "+", SUMMARY_TOPIC, FLOW_TOPIC, TUNING_TOPIC, SCOREBOARD_TOPIC,
+        INSIGHT_TOPIC, SHADOW_TOPIC, READINESS_TOPIC, CIRCUIT_TOPIC + "+", PROBES_TOPIC, HEATING_PLAN_TOPIC)], receive)
     entry.async_on_unload(async_track_time_interval(hass, refresh, timedelta(seconds=REFRESH_SECONDS)))
     entry.async_on_unload(async_track_time_interval(hass, hub.check_stale, STALE_CHECK))
     entry.async_on_unload(unload)

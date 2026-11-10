@@ -71,7 +71,7 @@ Rows, tiles and graphs without a value stay hidden until they have one, so a
 boiler that never reports a value shows no "Unknown" for it.
 
 A stored Lovelace config has no per-viewer language, so the few fixed
-headings follow the Home Assistant language (English, Dutch or Polish) and the
+headings follow the Home Assistant language (English or Dutch) and the
 dashboard is rebuilt when that changes. Entity names come from Home
 Assistant's own translations.
 """
@@ -153,8 +153,8 @@ ROOM_KEYS = ("valve_position", "valve_battery", "valve_problem", "valve_control"
              "setpoint", "status", "demand", "state")
 # Yesterday's scoreboard of the house (scoreboard.py, E32 rc.4): unique ID f"{prefix}_hub_{key}".
 SCOREBOARD_HOUSE = ("burner_starts_per_heating_hour", "short_cycling_hours", "heating_gas_yesterday", "gas_per_degree_day")
-# Today's hot water from the E32 (unique ID f"{prefix}_hub_{key}").
-DHW_TODAY = ("dhw_taps_today", "dhw_keep_warm_today", "dhw_burner_time_today")
+# Today's hot water from the E32 (unique ID f"{prefix}_hub_{key}"): keeping warm without a tank, the charges with one.
+DHW_TODAY = ("dhw_taps_today", "dhw_keep_warm_today", "dhw_charges_today", "dhw_burner_time_today")
 BLE_KEYS = ("temperature", "humidity", "battery")
 
 # Boiler essentials: (key, boiler field, older hub metric).
@@ -221,6 +221,7 @@ TEXT = {
         "compare_starts": "Burner starts today", "heating_per_day": "Heating time per day",
         "boiler": "Boiler", "bluetooth": "Bluetooth sensors", "temperature": "Temperature",
         "humidity": "Humidity", "battery": "Battery",
+        "bluetooth_unassigned": "Not assigned to a room yet: choose the room in Settings → Devices",
         "shadow": "Trial run: the E32 calculates along but does not control the boiler yet; your current "
                   "thermostat or the boiler's own control stays in charge.",
         "active": "The E32 controls the boiler.",
@@ -236,6 +237,12 @@ TEXT = {
         "smart_heating": "Smart warm-up and weather compensation",
         # 1.1.1 stage B: the E32's heating plan (heating_plan.py) and the comfort style (e32_flow.py).
         "plan_today": "Today's plan", "plan_why": "Why", "comfort_style": "Comfort style",
+        # 1.4.2 (HA-LIFETIME): the one confirmation under Today's plan (no Repairs item any more), the advice lines
+        # that were Repairs items, and a room's figures while it heats along only or is off (F16).
+        "plan_confirm": "Let the E32 plan the heating", "plan_confirm_ask": "Let the E32 plan the heating from now on?",
+        "worth_checking": "Worth checking",
+        "scoreboard_heat_along": "not measured: the room heats along only",
+        "scoreboard_room_off": "not measured: the room is off",
         "cycling_ok": "The burner runs calmly.",
         "cycling_info": "The E32 lengthens the burner rest step by step.",
         "burner": "Burner",
@@ -325,15 +332,23 @@ TEXT = {
                                  "and boiler care (or the E32 page, Home).",
         "confidence_low": "low", "confidence_medium": "medium", "confidence_high": "high",
         "gas_heating": "Heating", "gas_hot_water": "Hot water", "gas_keep_warm": "Of which keeping hot water warm",
-        "gas_tapping": "Tapping", "gas_keeping_warm": "Keeping warm",
+        "gas_tapping": "Tapping", "gas_keeping_warm": "Keeping warm", "gas_hot_water_total": "Hot water (total)",
         "activity_timeline": "What the boiler does (24 hours)", "activity": "Boiler",
         "dhw_use_note": "Tapping is hot water used at a tap; keeping warm is the boiler reheating its store or "
-                        "exchanger without a tap, nothing more; a cylinder shows as charging. The E32 tells them apart "
-                        "with the most direct signal your boiler reports.",
-        "gas_per_day": "Gas per day",
+                        "exchanger without a tap, nothing more. The E32 tells them apart with the most direct signal "
+                        "your boiler reports. Today's figures follow within five minutes after a hot water period ends.",
+        "dhw_use_note_tank": "Tapping is hot water drawn from the tank, counted from the boiler's hot water flow, so the "
+                             "litres are approximate; charging the tank is the boiler heating it again. Today's figures "
+                             "follow within five minutes after a hot water period ends.",
+        "gas_per_day": "Gas per day", "gas_split_per_day": "Hot water: tapping and keeping warm",
         "gas_measured": "Measured with your gas meter, split by what the boiler did.",
         "gas_estimate": "Estimated from the burner power and the boiler's heating power (no gas meter).",
-        "gas_note": "Add heating and hot water to the Energy dashboard under Gas consumption; keeping warm is a part of hot water, so leave it out there.",
+        "gas_note": "Add heating and hot water to the Energy dashboard under Gas consumption; tapping and keeping warm "
+                    "are parts of hot water, so leave them out there. A gas meter that reports once an hour can put the "
+                    "last hour's gas on the next day.",
+        "gas_note_tank": "Add heating and hot water to the Energy dashboard under Gas consumption. With a hot water tank "
+                         "all its gas is hot water: a tap and the charge after it often run together. A gas meter that "
+                         "reports once an hour can put the last hour's gas on the next day.",
         "yesterday": "Yesterday", "burner_per_day": "Burner hours per day",
         "missed_per_day": "Missed comfort per day (minutes)",
         "missed_series": "Missed comfort",
@@ -437,13 +452,15 @@ TEXT = {
         "boiler_lowest_plan_plain": "Lowest water temperature: your boiler already heats at the lowest the E32 asks.",
         "boiler_learning": "Still being learned: {items}.", "learning_ceiling": "the highest water temperature",
         "learning_rest": "the rest", "learning_and": " and ",
-        "minute_one": "{n} minute", "minute_few": "{n} minutes", "minute_other": "{n} minutes",
+        "minute_one": "{n} minute", "minute_other": "{n} minutes",
         "curve_title": "Water temperature by outdoor temperature", "noticed": "Noticed",
         # E32 1.3: under the chart while the learned steady-burn floor decides the water temperature (owner's wish).
         "curve_floor": "The lowest water temperature decides here: weather compensation would ask for {curve} °C, but your "
                        "boiler burns steadily only from about {floor} °C water, so the E32 asks for {floor} °C.",
         "noticed_note": "Yesterday is compared with your house's own usual days; that is information and changes nothing.",
         "free_heat": "Free heat",
+        # 1.4.2 (plan 3.14, HA-ADVICE): per room up to which temperature it heats along for free, and its model.
+        "room_advice": "Heat along or a fixed temperature",
         # rc.5 (P18): the Overview's Today (when each room warms up, what weather compensation asks) and House rows.
         "today": "Today", "home_or_away": "Home or away", "holiday": "Holiday", "plan": "Plan",
         "when_today": "Today", "when_tomorrow": "Tomorrow", "when_date": "On {date}",
@@ -472,7 +489,6 @@ TEXT = {
         "scoreboard_short_none": "Short burner runs: none",
         "figures_day": "These figures are from {date}: the E32 has no newer full day.",
         "holiday_hint": "To plan a holiday: Configure → House → House mode and holiday.",
-        "holiday_hint_settings": "To plan a holiday: Settings → House → House mode and holiday.",
         "dur_h_m": "{h} h {m} min",
         "dur_h": "{h} h",
         "warm_up_now_estimate": "{room} is warming up now (estimate) to be {target} °C at **{time}**.",
@@ -516,6 +532,7 @@ TEXT = {
         "compare_starts": "Branderstarts vandaag", "heating_per_day": "Verwarmingstijd per dag",
         "boiler": "Ketel", "bluetooth": "Bluetooth-sensoren", "temperature": "Temperatuur",
         "humidity": "Luchtvochtigheid", "battery": "Batterij",
+        "bluetooth_unassigned": "Nog aan geen ruimte toegewezen: kies de ruimte bij Instellen → Apparaten",
         "shadow": "Proefperiode: de E32 rekent mee maar stuurt de ketel nog niet; je huidige thermostaat of de "
                   "eigen regeling van de ketel blijft de baas.",
         "active": "De E32 regelt de ketel.",
@@ -530,6 +547,11 @@ TEXT = {
         "sensors_presence": "Sensoren, ramen en personen",
         "smart_heating": "Slim opwarmen en weerafhankelijke regeling",
         "plan_today": "Plan voor vandaag", "plan_why": "Waarom", "comfort_style": "Comfortstijl",
+        "plan_confirm": "Laat de E32 de verwarming plannen",
+        "plan_confirm_ask": "Mag de E32 de verwarming voortaan plannen?",
+        "worth_checking": "Het nakijken waard",
+        "scoreboard_heat_along": "niet gemeten: de ruimte verwarmt alleen mee",
+        "scoreboard_room_off": "niet gemeten: de ruimte staat uit",
         "cycling_ok": "De brander loopt rustig.",
         "cycling_info": "De E32 verlengt de rusttijd van de brander stap voor stap.",
         "burner": "Brander",
@@ -618,15 +640,24 @@ TEXT = {
                                  "Comfort en zorg voor de ketel (of op de E32-pagina, Huis).",
         "confidence_low": "laag", "confidence_medium": "middel", "confidence_high": "hoog",
         "gas_heating": "Verwarming", "gas_hot_water": "Warm water", "gas_keep_warm": "Waarvan warm water warmhouden",
-        "gas_tapping": "Tappen", "gas_keeping_warm": "Warmhouden",
+        "gas_tapping": "Tappen", "gas_keeping_warm": "Warmhouden", "gas_hot_water_total": "Warm water (totaal)",
         "activity_timeline": "Wat de ketel doet (24 uur)", "activity": "Ketel",
         "dhw_use_note": "Tappen is warm water uit een kraan; warmhouden is de ketel die zijn voorraad of "
-                        "warmtewisselaar opwarmt zonder dat er getapt wordt, meer niet; een boiler toont als laden. De E32 "
-                        "houdt ze uit elkaar met het meest directe signaal dat je ketel geeft.",
-        "gas_per_day": "Gas per dag",
+                        "warmtewisselaar opwarmt zonder dat er getapt wordt, meer niet. De E32 houdt ze uit elkaar met "
+                        "het meest directe signaal dat je ketel geeft. De cijfers van vandaag volgen binnen vijf minuten "
+                        "na het einde van een warmwaterperiode.",
+        "dhw_use_note_tank": "Tappen is warm water uit het vat, geteld aan het warmwaterdebiet van de ketel, dus de "
+                             "liters zijn bij benadering; vat opwarmen is de ketel die het vat weer opwarmt. De cijfers "
+                             "van vandaag volgen binnen vijf minuten na het einde van een warmwaterperiode.",
+        "gas_per_day": "Gas per dag", "gas_split_per_day": "Warm water: tappen en warmhouden",
         "gas_measured": "Gemeten met je gasmeter, verdeeld naar wat de ketel deed.",
         "gas_estimate": "Geschat uit het brandervermogen en het vermogen van de ketel (geen gasmeter).",
-        "gas_note": "Voeg verwarmen en warm water toe aan het energiedashboard onder Gasverbruik; warmhouden is een deel van warm water, laat dat daar weg.",
+        "gas_note": "Voeg verwarmen en warm water toe aan het energiedashboard onder Gasverbruik; tappen en warmhouden "
+                    "zijn delen van warm water, laat die daar weg. Een gasmeter die eens per uur meldt, kan het gas van het "
+                    "laatste uur op de volgende dag zetten.",
+        "gas_note_tank": "Voeg verwarmen en warm water toe aan het energiedashboard onder Gasverbruik. Met een "
+                         "warmwatervat is al zijn gas warm water: een tap en de lading erna lopen vaak samen. Een gasmeter "
+                         "die eens per uur meldt, kan het gas van het laatste uur op de volgende dag zetten.",
         "yesterday": "Gisteren", "burner_per_day": "Branderuren per dag",
         "missed_per_day": "Gemist comfort per dag (minuten)",
         "missed_series": "Gemist comfort",
@@ -723,13 +754,14 @@ TEXT = {
         "boiler_lowest_plan_plain": "Laagste watertemperatuur: je ketel verwarmt al bij het laagste dat de E32 vraagt.",
         "boiler_learning": "Wordt nog geleerd: {items}.", "learning_ceiling": "de hoogste watertemperatuur",
         "learning_rest": "de rust", "learning_and": " en ",
-        "minute_one": "{n} minuut", "minute_few": "{n} minuten", "minute_other": "{n} minuten",
+        "minute_one": "{n} minuut", "minute_other": "{n} minuten",
         "curve_title": "Watertemperatuur bij buitentemperatuur", "noticed": "Opgevallen",
         "curve_floor": "De laagste watertemperatuur beslist hier: de weerafhankelijke regeling zou {curve} °C vragen, maar je "
                        "ketel brandt pas rustig door vanaf water van ongeveer {floor} °C, dus de E32 vraagt {floor} °C.",
         "noticed_note": "Gisteren wordt vergeleken met de gewone dagen van je eigen huis; dat is informatie en verandert "
                         "niets.",
         "free_heat": "Gratis warmte",
+        "room_advice": "Meeverwarmen of een vaste temperatuur",
         "today": "Vandaag", "home_or_away": "Thuis of weg", "holiday": "Vakantie", "plan": "Plannen",
         "when_today": "Vandaag", "when_tomorrow": "Morgen", "when_date": "Op {date}",
         "warm_up_at": "{when} begint {room} om **{start}** met opwarmen, zodat het om **{time}** {target} °C is.",
@@ -758,7 +790,6 @@ TEXT = {
         "scoreboard_short_none": "Korte brandtijden: geen",
         "figures_day": "Deze cijfers zijn van {date}: de E32 heeft geen nieuwere volledige dag.",
         "holiday_hint": "Vakantie plannen: Configureren → Huis → Huismodus en vakantie.",
-        "holiday_hint_settings": "Vakantie plannen: Instellen → Huis → Huismodus en vakantie.",
         "dur_h_m": "{h} u {m} min",
         "dur_h": "{h} u",
         "warm_up_now_estimate": "{room} warmt nu op (schatting), zodat het om **{time}** {target} °C is.",
@@ -785,303 +816,11 @@ TEXT = {
         "correction_up": "de lijn geeft {base} °C, de ruimtecorrectie doet er {extra} °C bij",
         "line_gives": "de lijn geeft {base} °C",
     },
-    # Polish: the terms of translations/pl.json and docs/UX-GLOSSARY.md; E32 page names stay English.
-    "pl": {
-        "heating": "Ogrzewanie", "boiler_view": "Kocioł", "diagnostics": "Diagnostyka", "settings_view": "Ustawienia",
-        "room_settings": "Ustawienia pomieszczeń", "now": "Teraz", "rooms": "Pomieszczenia",
-        "set_up_rooms": "Skonfiguruj pomieszczenia",
-        "settings": "Ustawienia: {room}",
-        "boiler_request": "Żądanie do kotła", "flow": "Woda do ogrzewania", "return": "Woda powrotna",
-        "modulation": "Moc palnika", "pressure": "Ciśnienie", "dhw": "Ciepła woda", "code": "Kod wyświetlacza",
-        "max_ch": "Maksimum kotła", "status": "Stan", "problem": "Ogrzewanie",
-        "starts_hour": "Starty na godzinę", "short_cycling": "Palnik zbyt często się włącza",
-        "agreement": "Zgodność z termostatem", "measured": "Zmierzona przez E32", "target": "Temperatura docelowa",
-        "valve_position": "Otwarcie zaworów", "valves": "Zawory",
-        "mode": "Tryb", "off_until": "Wyłączone do", "without_ha": "Temperatura bez programu tygodniowego",
-        "compare": "E32 i termostat", "e32_request": "Żądanie do kotła E32",
-        "thermostat_request": "Żądanie termostatu", "compare_heating_time": "Czas grzania dziś",
-        "compare_starts": "Starty palnika dziś", "heating_per_day": "Czas grzania na dzień",
-        "boiler": "Kocioł", "bluetooth": "Czujniki Bluetooth", "temperature": "Temperatura",
-        "humidity": "Wilgotność", "battery": "Bateria",
-        "shadow": "Okres próbny: E32 liczy równolegle, ale jeszcze nie steruje kotłem; decyduje nadal Twój "
-                  "obecny termostat lub własna regulacja kotła.",
-        "active": "E32 steruje kotłem.",
-        "next": "Następny krok: wykonaj test kotła na stronie kotła w E32 i potwierdź przejęcie na stronie pomieszczeń "
-                "(„Active control”). Do tego czasu E32 nic nie wysyła do kotła.",
-        "how": "E32 utrzymuje temperaturę w pomieszczeniach, także bez Home Assistant.",
-        "overview": "Przegląd",
-        "room_nothing": "Jeszcze niczego się nie nauczył.",
-        "house": "Dom",
-        "learning_view": "Uczenie i ustawienia",
-        "more": "Więcej",
-        "sensors_presence": "Czujniki, okna i osoby",
-        "smart_heating": "Inteligentne nagrzewanie i kompensacja pogodowa",
-        "plan_today": "Plan na dziś", "plan_why": "Dlaczego", "comfort_style": "Styl komfortu",
-        "cycling_ok": "Palnik pracuje spokojnie.",
-        "cycling_info": "E32 stopniowo wydłuża przerwę palnika.",
-        "burner": "Palnik",
-        "problem_more": "Wszystkie powody",
-        "legacy_rooms": "Pomieszczenia (starsza konfiguracja)",
-        "group_heating": "Ogrzewanie", "group_dhw": "Ciepła woda", "group_status": "Stan i usterki",
-        "group_counters": "Liczniki", "group_settings": "Ustawienia kotła",
-        "group_thermostat": "Termostat na magistrali", "history_24h": "Ostatnie 24 godziny",
-        "boiler_note": "Wartości tak, jak zgłasza je kocioł; wartości, której kocioł nie wysyła, tu nie ma. "
-                       "Moc palnika to procent maksimum kotła, a nie kW; \"aktywny\" to to, co zgłasza kocioł, "
-                       "a nie osobne sprawdzenie.",
-        "settings_note": "Ustawienia, które kocioł zgłasza tylko na żądanie, E32 odczytuje przy uruchomieniu, a potem "
-                         "co sześć godzin; czas ostatniego odczytu jest podany na czujniku.",
-        "raw": "Surowe dane kotła",
-        "raw_note": "Do szukania usterek: wartości dokładnie tak, jak wysyła je kocioł, niesprawdzane przez E32.",
-        "e32_device": "E32",
-        "connection": "Połączenie z E32",
-        "link_heard_yes": "E32 zgłasza się do Home Assistant: tak, ostatnio o {at}.",
-        "link_heard_no": "E32 zgłasza się do Home Assistant: nie, cisza od {at}.",
-        "link_heard_never": "E32 zgłasza się do Home Assistant: jeszcze nie.",
-        "link_heard_fix": "Sprawdź, czy E32 ma zasilanie i Wi-Fi oraz czy działa broker MQTT. W tym czasie E32 sam dalej "
-                          "ogrzewa pomieszczenia.",
-        "link_input_yes": "Wartości pomieszczeń docierają do E32: tak, ostatnio o {at}.",
-        "link_input_quiet": "Wartości pomieszczeń docierają do E32: brak w ostatnich 15 minutach; ostatnia o {at}.",
-        "link_input_no": "Wartości pomieszczeń docierają do E32: nie, od {at}.",
-        "link_input_no_plain": "Wartości pomieszczeń docierają do E32: nie.",
-        "link_input_unknown": "Wartości pomieszczeń docierają do E32: E32 tego nie podaje (starsze oprogramowanie).",
-        "link_refused": "E32 odrzucił ostatnią wartość o {at}: {why}.",
-        "link_refused_earlier": "E32 ostatnio odrzucił wartość o {at}: {why}.",
-        "link_input_fix": "Dopóki nie dotrą, E32 steruje pomieszczeniami według własnych czujników i programów "
-                          "tygodniowych. Home Assistant nadal je wysyła; jeśli tak zostanie, uruchom ponownie Home "
-                          "Assistant.",
-        "link_broker_ok": "Broker MQTT: E32 i Home Assistant łączą się z nim.",
-        "link_broker_failed": "Broker MQTT: Home Assistant nie mógł przez niego wysłać o {at}: {error}.",
-        "send_timeout": "broker nie przyjął wartości na czas",
-        "send_unreachable": "Home Assistant nie mógł połączyć się z brokerem",
-        "send_waiting": "zbyt wiele wiadomości czekało na broker",
-        "link_firmware": "Oprogramowanie układowe: {version}, aktualne.",
-        "link_firmware_new": "Oprogramowanie układowe: {version}; {latest} jest dostępne w Ustawienia → Aktualizacje.",
-        "link_firmware_skipped": "Oprogramowanie układowe: {version}; pominięto {latest}.",
-        "link_firmware_installing": "Oprogramowanie układowe: trwa instalacja {latest}.",
-        "link_sent": "Home Assistant wysłał ostatnią wartość o {at}.",
-        "link_error": "Ostatni błąd wysyłania o {at}: {error}.",
-        "link_dropped": "Wartości pominięte, gdy broker nie odpowiadał: {n}.",
-        "why_too_large": "wiadomość była za długa", "why_invalid_json": "nie mógł odczytać wiadomości",
-        "why_no_entity": "wiadomość nie wskazywała encji Home Assistant",
-        "why_unknown_kind": "nie zna tego rodzaju wartości; zaktualizuj E32",
-        "why_invalid_value": "wartość była poza dopuszczalnym zakresem", "why_unknown_room": "nie zna tego pomieszczenia",
-        "estimates": "Liczniki energii i ciepłej wody",
-        "estimates_empty": "Ten kocioł nie zgłasza jeszcze liczników energii ani ciepłej wody; kotły, które to "
-                           "robią (EMS+), pokazują je tutaj. Karta Kocioł i strona Dom w E32 szacują gaz na dzień "
-                           "z mocy palnika i mocy kotła.",
-        "older_rooms": "Pomieszczenia (starsza konfiguracja)",
-        "legacy_boiler_note": "To, co kocioł zgłasza przez swoją magistralę (EMS), a nie dowód polecenia E32. "
-                              "Nieznane lub stare wartości to nie zero. Moc palnika to procent maksimum kotła, a nie kW.",
-        "flow_graph": "Temperatury wody: docelowa, do ogrzewania i powrotna", "flow_selection": "Docelowa (kocioł)",
-        "measured_flow": "Woda do ogrzewania", "measured_return": "Woda powrotna",
-        "current_flow": "Do ogrzewania, według kotła",
-        "modulation_graph": "Moc palnika (%)", "modulation_series": "Moc palnika (%)",
-        "dhw_graph": "Temperatury ciepłej wody", "dhw_selected": "Ustawiona",
-        "dhw_measured": "Zmierzona", "dhw_target": "Docelowa",
-        "states_graph": "Zgłoszone ogrzewanie / ciepła woda / płomień / pompa", "state_heating": "Zgłoszone ogrzewanie",
-        "state_dhw": "Zgłoszona ciepła woda", "state_flame": "Zgłoszony bit płomienia", "state_pump": "Zgłoszony bit pompy",
-        "dhw_card": "Możliwości i jakość ciepłej wody",
-        "dhw_note": "Ciepła woda, tylko podgląd: ostatnie wartości zgłoszone przez kocioł (ich wiek nie jest "
-                    "sprawdzany); nic nie jest wysyłane do kotła.",
-        "dhw_profile": "Profil", "dhw_status": "stan", "unknown": "Nieznane",
-        "estimates_note": "Energia i objętość to szacunki ze zgłoszonych wartości, a nie liczniki gazu lub ciepła.",
-        "energy_chart": "Szacowana energia na dzień (nie licznik)", "volume_chart": "Objętość ciepłej wody na dzień",
-        "flame_chart": "Obserwowany czas płomienia na dzień",
-        "models_note": "Modele cieplne pomieszczeń to szacunki, a nie zmierzone ciepło; nieznane lub nieaktualne "
-                       "dane zostawiają luki.",
-        "room_history": "{room}: docelowa i zmierzona", "room_measured": "Zmierzona", "room_target": "Docelowa",
-        "learning": "Nauka", "flow_advice": "Zalecana temperatura wody", "heating_start": "Start inteligentnego nagrzewania",
-        "learning_note": "E32 uczy się też, jak szybko nagrzewa się każde pomieszczenie, i wylicza najchłodniejszą "
-                         "wodę, która wciąż nagrzeje je o 1 °C na czas (zalecana temperatura wody).",
-        "advice_only": "Inteligentne nagrzewanie jest wyłączone, więc to tylko porada; E32 nadal używa regulacji pokojowej.",
-        "dhw_taps": "Pobory dziś", "dhw_today": "Ciepła woda dziś",
-        "advice": "Porady", "advice_where": "Gdzie", "advice_confidence": "Pewność",
-        "advice_note": "Tylko porada: nic nie jest zmieniane automatycznie.",
-        "learned": "Czego nauczył się E32", "learned_house": "Dom i kocioł",
-        "learned_changes": "Co zmienił sam",
-        "learned_note": "E32 sam dostosowuje te ustawienia; aby zmienić jedno z nich: Konfiguruj → Ogrzewanie i kocioł → Komfort i "
-                        "dbałość o kocioł (lub strona E32, Dom).",
-        "learned_note_settings": "E32 sam dostosowuje te ustawienia; aby zmienić jedno z nich: Ustawienia → Ogrzewanie i kocioł → "
-                                 "Komfort i dbałość o kocioł (lub strona E32, Dom).",
-        "confidence_low": "niska", "confidence_medium": "średnia", "confidence_high": "wysoka",
-        "gas_heating": "Ogrzewanie", "gas_hot_water": "Ciepła woda", "gas_keep_warm": "W tym podtrzymanie ciepłej wody",
-        "gas_tapping": "Pobór", "gas_keeping_warm": "Podtrzymanie",
-        "activity_timeline": "Co robi kocioł (24 godziny)", "activity": "Kocioł",
-        "dhw_use_note": "Pobór to ciepła woda z kranu; podtrzymanie to kocioł, który dogrzewa swój zasobnik lub "
-                        "wymiennik bez otwartego kranu, nic więcej; zasobnik c.w.u. jest pokazywany jako ładowanie. "
-                        "E32 rozróżnia je po najbardziej bezpośrednim sygnale, jaki zgłasza Twój kocioł.",
-        "gas_per_day": "Gaz na dzień",
-        "gas_measured": "Zmierzony licznikiem gazu, podzielony według tego, co robił kocioł.",
-        "gas_estimate": "Oszacowany z mocy palnika i mocy grzewczej kotła (bez licznika gazu).",
-        "gas_note": "Dodaj ogrzewanie i ciepłą wodę do panelu Energia w sekcji Zużycie gazu; podtrzymanie jest "
-                    "częścią ciepłej wody, więc tam je pomiń.",
-        "yesterday": "Wczoraj", "burner_per_day": "Godziny pracy palnika na dzień",
-        "missed_per_day": "Utracony komfort na dzień (minuty)",
-        "missed_series": "Utracony komfort",
-        "day_burner": "Palnik: {h} godz., {starts}{short}.",
-        "day_gas": "Gaz: ogrzewanie {heating}, ciepła woda {hot_water}.",
-        "day_room": "{room}: żądanie ciepła przez {h} godz.; ciepło średnio po {ttt} min; utracony komfort {missed} min.",
-        "day_room_no_step": "{room}: żądanie ciepła przez {h} godz.; utracony komfort {missed} min.",
-        "day_room_plain": "{room}: żądanie ciepła przez {h} godz.; ciepło średnio po {ttt} min.",
-        "day_room_no_step_plain": "{room}: żądanie ciepła przez {h} godz.",
-        "day_missed": "Utracony komfort: {missed} min, zsumowane dla pomieszczeń, które były o ponad 0,3 °C poniżej temperatury docelowej, gdy były używane.",
-        "day_outdoor": "Na zewnątrz od {low} do {high} °C.", "day_outdoor_one": "Na zewnątrz {low} °C.",
-        "day_partial": "Niepełny dzień: E32 nie był słyszalny przez cały dzień, więc dane są niekompletne.",
-        "scoreboard_on_time": "ciepło na czas",
-        "scoreboard_late": "ciepło {d} za późno",
-        "scoreboard_early": "ciepło {d} za wcześnie",
-        "scoreboard_overshoot": "{c} °C za ciepło",
-        "scoreboard_hours": "Czas grzania: {h} godz.",
-        "scoreboard_burner": "Starty palnika na godzinę grzania: {n}",
-        "scoreboard_short": "Krótkie cykle palnika: {h} godz.",
-        "scoreboard_gas": "Gaz na ogrzewanie (szacunek kotła): {kwh} kWh",
-        "scoreboard_degree_days": "Stopniodni: {d}",
-        "scoreboard_degree_day": "{v} kWh na stopniodzień",
-        "scoreboard_note": "Każdego dnia E32 sprawdza, czy każde pomieszczenie było ciepłe na czas i nie za ciepłe, jak często startował palnik i ile gazu poszło na ogrzewanie. Uczy się z tego; każda liczba ma swoją historię na własnym czujniku.",
-        "day_none": "Pierwszy dzień pojawi się tu jutro.",
-        "outdoor": "Na zewnątrz",
-        "flow_settings": "Kompensacja pogodowa i nauka",
-        "flow_source": "Temperatura wody ustalana przez",
-        "weather_curve": "Kompensacja pogodowa",
-        "design_flow": "Temperatura wody przy silnym mrozie (−10 °C)",
-        "apply_learned": "Inteligentne nagrzewanie",
-        "house_mode": "Tryb domu", "boiler_now": "Kocioł",
-        "holiday_next": "Urlop od {from} do {until}", "holiday_now": "Urlop do {until}",
-        "holiday_day": "Urlop {from}",
-        "months": "sty,lut,mar,kwi,maj,cze,lip,sie,wrz,paź,lis,gru",
-        "learned_latest": "Ostatnia zmiana",
-        "learned_latest_many": "Ostatnie zmiany",
-        "learned_latest_more": "I jeszcze {n} tego samego dnia; strona Dom w E32 pokazuje je wszystkie.",
-        "compare_link": "E32 w porównaniu z Twoim termostatem",
-        "no_request": "Brak żądania do kotła",
-        "wanting_one": "1 pomieszczenie potrzebuje ciepła", "wanting_many": "Pomieszczenia potrzebujące ciepła: {n}",
-        "wanting_none": "Żadne pomieszczenie nie potrzebuje ciepła", "decimal": ",",
-        "flow_short": "Woda do ogrzewania", "return_short": "Woda powrotna",
-        "e32": "E32", "thermostat": "Termostat",
-        "comparison_view": "Porównanie",
-        "room_off": "To pomieszczenie jest wyłączone: chroni je tylko ochrona przed mrozem.",
-        "room_off_now": "Wyłączone", "bluetooth_sensor": "czujnik Bluetooth",
-        "room_no_source": "Pomieszczenie {room} jest wyłączone i nie ma działającego źródła temperatury. Wybierz "
-            "źródło, aby znów z niego korzystać, albo usuń pomieszczenie, jeśli nie jest już potrzebne.",
-        "choose_source": "Wybierz źródło",
-        "remove_room": "Usuń pomieszczenie",
-        "readiness": "Gotowość do przejęcia?",
-        "ready_ready": "Gotowe: wykonaj kroki przełączenia.",
-        "ready_waiting": "Jeszcze nie: E32 nadal zbiera dane w okresie próbnym.",
-        "ready_not_ready": "Niegotowe: najpierw usuń problemy oznaczone na czerwono.",
-        "ready_no_comparison": "Na magistrali kotła nie ma termostatu do porównania, więc sprawdzane są tylko E32 "
-            "i kocioł.",
-        "ready_stable": "Stabilność: {stable_hours} z {stable_hours_needed} godz. bez zawieszenia i nieoczekiwanego "
-            "restartu",
-        "ready_periods": "Porównane okresy grzania: {periods_compared} z {periods_needed}, w tym nocne obniżenie, "
-            "poranne nagrzewanie i okres bez zapotrzebowania",
-        "ready_timing": "Ciepło w tych samych momentach: {timing_events} z {timing_events_needed} startów i zatrzymań",
-        "ready_flow_limit": "Żądana temperatura wody nigdy powyżej limitu: najwyżej {flow_max_c} °C, limit {flow_limit_c} °C",
-        "ready_cycling": "Nie więcej okresów grzania niż termostat: E32 {heating_periods_e32}, "
-            "termostat {heating_periods_thermostat}",
-        "ready_sources": "Źródła temperatury w pomieszczeniach działają, a czujnik zapasowy przejął pomiar",
-        "ready_boiler": "Kocioł słyszalny na magistrali",
-        "ready_boiler_limit": "Maksimum kotła znane: {boiler_limit_c} °C",
-        "fix_timing": "E32 grzeje w innych momentach niż Twój termostat: sprawdź temperatury docelowe pomieszczeń "
-            "i program tygodniowy.",
-        "fix_flow_limit": "Żądanie przekroczyło twardy limit: sprawdź limity temperatury wody.",
-        "fix_cycling": "E32 uruchamiałby palnik częściej: sprawdź limity temperatury wody.",
-        "fix_sources": "Sprawdź czujniki w pomieszczeniach (bateria, zasięg) i dodaj pomieszczeniu drugie źródło.",
-        "fix_boiler": "E32 nic nie słyszy z kotła: sprawdź kabel magistrali.",
-        "fix_boiler_limit": "Kocioł nie zgłosił swojego maksimum: sprawdź połączenie z magistralą.",
-        "today_week": "Dziś i w tym tygodniu", "gas_heating_today": "Gaz: ogrzewanie",
-        "gas_hot_water_today": "Gaz: ciepła woda", "starts_today": "Starty palnika",
-        "burner_today": "Praca palnika", "boiler_values": "Co zgłasza Twój kocioł",
-        "who_controls": "Kto steruje kotłem", "yesterday_figures": "Wczoraj w liczbach",
-        "dhw_target_short": "Cel ciepłej wody",
-        "knowledge": "Co wie E32", "your_boiler": "Twój kocioł",
-        "boiler_ceiling": "Najwyższa temperatura wody: {when} Twój kocioł sam nie podnosi wody powyżej około {held} °C, "
-                          "więc blisko temperatury docelowej E32 żąda najwyżej {asks} °C.",
-        "boiler_ceiling_off": "Najwyższa temperatura wody: {when} Twój kocioł sam nie podnosi wody powyżej około {held} "
-                              "°C; z włączonym Inteligentnym nagrzewaniem E32 żądałby blisko temperatury docelowej "
-                              "najwyżej {asks} °C.",
-        "band_low": "przy temperaturze zewnętrznej poniżej {high} °C",
-        "band": "przy temperaturze zewnętrznej od {low} do {high} °C",
-        "band_high": "przy temperaturze zewnętrznej {low} °C i wyższej", "band_none": "przy obecnej temperaturze zewnętrznej",
-        "boiler_rest": "Przerwa: Twój kocioł odpoczywa {rest} za każdym razem, gdy osiągnie swoją temperaturę; E32 czeka "
-                       "tyle samo, zanim znów zażąda ciepła, chyba że któreś pomieszczenie jest zimne.",
-        "boiler_rest_long": "Przerwa: Twój kocioł odpoczywa {rest} za każdym razem, gdy osiągnie swoją temperaturę; E32 "
-                            "czeka 15 minut, zanim znów zażąda ciepła, chyba że któreś pomieszczenie jest zimne.",
-        "boiler_lowest": "Najniższa temperatura wody: Twój kocioł zaczyna grzać dopiero od około {flow} °C, więc E32 "
-                         "żąda co najmniej tyle.",
-        "boiler_lowest_plan": "Najniższa temperatura wody: Twój kocioł grzeje już przy najniższej temperaturze, jakiej "
-                              "żąda E32 ({flow} °C).",
-        "boiler_lowest_plan_plain": "Najniższa temperatura wody: Twój kocioł grzeje już przy najniższej temperaturze, jakiej "
-                                    "żąda E32.",
-        "boiler_learning": "W trakcie nauki: {items}.", "learning_ceiling": "najwyższa temperatura wody",
-        "learning_rest": "przerwa", "learning_and": " i ",
-        "minute_one": "{n} minutę", "minute_few": "{n} minuty", "minute_other": "{n} minut",
-        "curve_title": "Temperatura wody a temperatura zewnętrzna", "noticed": "Spostrzeżenia",
-        "curve_floor": "Tutaj decyduje najniższa temperatura wody: kompensacja pogodowa żądałaby {curve} °C, ale Twój kocioł "
-                       "pali równo dopiero od wody o temperaturze około {floor} °C, więc E32 żąda {floor} °C.",
-        "noticed_note": "Wczoraj jest porównywane ze zwykłymi dniami Twojego domu; to tylko informacja i niczego nie "
-                        "zmienia.",
-        "free_heat": "Darmowe ciepło",
-        # The room name before a colon, so the sentence fits any name (docs/UX-GLOSSARY.md, Room).
-        "today": "Dziś", "home_or_away": "W domu czy poza domem", "holiday": "Urlop", "plan": "Zaplanuj",
-        "when_today": "dziś", "when_tomorrow": "jutro", "when_date": "{date}",
-        "warm_up_at": "{room}: {when} nagrzewanie od **{start}**, aby o **{time}** było {target} °C.",
-        "warm_up_estimate": "{room}: {when} nagrzewanie od **{start}** (szacunek), aby o **{time}** było {target} °C.",
-        "warm_up_ready": "{room}: {when} jest dość ciepło na {target} °C o **{time}**; jeśli pomieszczenie wcześniej "
-                         "się wychłodzi, nagrzewanie zacznie się wcześniej.",
-        "warm_up_now": "{room}: nagrzewanie trwa, aby o **{time}** było {target} °C.",
-        "warm_up_from": "{room}: {when} nagrzewanie od **{start}**.",
-        "warm_up_off": "{room}: {when} grzanie od **{time}**, temperatura docelowa {target} °C (Inteligentne nagrzewanie wyłączone).",
-        "arrived_late": "{day} ciepło {m} min za późno.", "arrived_late_one": "{day} ciepło 1 min za późno.",
-        "arrived_early": "{day} ciepło {m} min za wcześnie.", "arrived_early_one": "{day} ciepło 1 min za wcześnie.",
-        "arrived_on_time": "{day} ciepło na czas.",
-        "weather_outside": "Na zewnątrz {outdoor} °C", "weather_asks": "kompensacja pogodowa żąda {flow} °C wody",
-        "weather_off": "kompensacja pogodowa jest wyłączona; żądałaby {flow} °C wody",
-        "line_standard": "linia standardowa", "line_house": "linia oszacowana na podstawie Twojego domu",
-        "line_learned": "linia wyuczona dla Twojego domu", "line_follows": "wyuczona linia po {m} stabilnych okresach",
-        "line_follows_n": "wyuczona linia po {m} stabilnych okresach, na razie {n} z {m}",
-        # rc7: the sentences review (R1, R3): Today in every case, Yesterday in figures, the Learning view.
-        "cycling_info_shadow": "Obecny termostat często włącza i wyłącza palnik; E32 wydłuży przerwę, gdy przejmie sterowanie.",
-        "day_starts": "starty: {n}",
-        "day_starts_one": "starty: 1",
-        "day_short": " (krótsze niż 10 minut: {short})",
-        "day_burner_none": "Palnik się nie uruchomił.",
-        "scoreboard_not_warm": "nie ciepło w ciągu 3 godz.",
-        "scoreboard_short_none": "Krótkie cykle palnika: brak",
-        "figures_day": "Te dane są z dnia {date}: E32 nie ma nowszego pełnego dnia.",
-        "holiday_hint": "Aby zaplanować urlop: Konfiguruj → Dom → Tryb domu i urlop.",
-        "holiday_hint_settings": "Aby zaplanować urlop: Ustawienia → Dom → Tryb domu i urlop.",
-        "dur_h_m": "{h} godz. {m} min",
-        "dur_h": "{h} godz.",
-        "warm_up_now_estimate": "{room}: nagrzewanie trwa (szacunek), aby o **{time}** było {target} °C.",
-        "warm_up_late": "{room}: nagrzewanie trwa; {target} °C może być dopiero nieco po **{time}**.",
-        "warm_up_trial": "{room}: {when} nagrzewanie byłoby od **{start}**, aby o **{time}** było {target} °C (okres próbny).",
-        "warm_up_trial_now": "{room}: nagrzewanie trwałoby teraz, aby o **{time}** było {target} °C (okres próbny).",
-        "at_tomorrow": "{time} jutro",
-        "at_date": "{time} {date}",
-        "today_away": "{room}: tryb nieobecności, bez wcześniejszego nagrzewania.",
-        "today_nobody": "{room}: nikogo nie ma w domu, bez wcześniejszego nagrzewania.",
-        "today_holiday": "{room}: urlop do {date}; po powrocie będzie ciepło.",
-        "today_return": "{room}: nagrzewanie na Twój powrót.",
-        "today_window": "{room}: wstrzymane, otwarte okno lub drzwi.",
-        "today_summer": "{room}: tryb letni, ogrzewanie pozostaje wyłączone.",
-        "today_window_window": "{room}: wstrzymane, otwarte okno.",
-        "today_window_door": "{room}: wstrzymane, otwarte drzwi.",
-        "day_yesterday": "Wczoraj",
-        "day_today": "Dziś",
-        "day_on": "Dnia {date}",
-        "arrived_late_long": "{day} ciepło {d} za późno.",
-        "arrived_early_long": "{day} ciepło {d} za wcześnie.",
-        "arrived_not_warm": "{day} nie zrobiło się ciepło w ciągu 3 godzin.",
-        "weather_idle": "gdy pomieszczenie potrzebuje ciepła, kompensacja pogodowa żąda {flow} °C wody",
-        "correction_up": "linia daje {base} °C, korekta pomieszczenia dodaje {extra} °C",
-        "line_gives": "linia daje {base} °C",
-    },
 }
 
 
 def dashboard_language(hass):
-    """English, Dutch or Polish by the Home Assistant language (English otherwise)."""
+    """English or Dutch by the Home Assistant language (English otherwise)."""
     language = (hass.config.language or "en").lower().replace("_", "-").split("-")[0]
     return language if language in TEXT else "en"
 
@@ -1382,11 +1121,15 @@ def _listed(entity_id, attribute):
              "state_not": ["unavailable", "unknown", ""]}]
 
 
-def _plan_section(t, plan):
+def _plan_section(t, plan, confirm=None):
     """Today's plan (heating_plan.py, 1.1.1 stage B): how far the E32's planner is in one plain line, why it plans
     what it plans, the next blocks and when the room is expected warm, then the morning check ("This morning: 6
     minutes early.", E32 1.3), from the sensor "Heating plan" (its texts are in Home Assistant's language). Hidden
-    while the E32 reports no plan (firmware without the planner)."""
+    while the E32 reports no plan (firmware without the planner).
+
+    confirm: the button "Let the E32 plan the heating" (heating_plan.PlanConfirmButton), which exists only while the
+    E32 is ready for that one confirmation; then it stands under the plan, asking first (1.4.2: the invitation is no
+    Repairs item any more). The registry change rebuilds the dashboard, so it comes and goes with the button."""
     if not plan:
         return None
     quoted = json.dumps(plan)
@@ -1403,9 +1146,27 @@ def _plan_section(t, plan):
                "{% endif %}"
                "{% set m = " + attr("morning_text") + " %}{% if m %}\n\n{{ m }}{% endif %}")
     shown = [{"condition": "state", "entity": plan, "state_not": "unavailable"}]
+    button = _wide(_tile(confirm, t["plan_confirm"], "mdi:calendar-check", tap_action={
+        "action": "perform-action", "perform_action": "button.press", "target": {"entity_id": confirm},
+        "confirmation": {"text": t["plan_confirm_ask"]}},
+        visibility=[{"condition": "state", "entity": confirm, "state_not": "unavailable"}])) if confirm else None
     section = _section(_heading(t["plan_today"], ICONS["plan"], visibility=shown),
-                       {"type": "markdown", "content": content, "visibility": shown})
+                       {"type": "markdown", "content": content, "visibility": shown}, button)
     section["visibility"] = shown
+    return section
+
+
+def _worth_checking_section(t, problem):
+    """Worth checking (1.4.2, HC-05): what the E32 noticed that is advice, not a fault, so no Repairs item: a room
+    that stays too cold while it asks for heat, a burner that keeps switching on and off after the self-tuning had
+    its chance. One line each from the Heating problem sensor's ``advice``; hidden while there is none."""
+    if not problem:
+        return None
+    quoted = json.dumps(problem)
+    section = _section(_heading(t["worth_checking"], "mdi:lightbulb-on-outline"), {"type": "markdown", "content": (
+        "{% for line in state_attr(" + quoted + ", 'advice') or [] %}" + _icon("insight") + " {{ line }}\n\n"
+        "{% endfor %}")})
+    section["visibility"] = _listed(problem, "advice")
     return section
 
 
@@ -1420,11 +1181,9 @@ def _knowledge_section(t, knowledge):
 
 
 def _minutes(t, n):
-    """A Jinja expression: whole minutes ``n`` in words with the plural each language needs (Polish: 1, 2-4, 5+)."""
+    """A Jinja expression: whole minutes ``n`` in words, "1 minute" or "{n} minutes"."""
     return ("((" + json.dumps(t["minute_one"], ensure_ascii=False) + " if " + n + " == 1 else "
-            + json.dumps(t["minute_few"], ensure_ascii=False) + " if " + n + " % 10 in [2, 3, 4] and " + n
-            + " % 100 not in [12, 13, 14] else " + json.dumps(t["minute_other"], ensure_ascii=False)
-            + ") | replace('{n}', " + n + " ~ ''))")
+            + json.dumps(t["minute_other"], ensure_ascii=False) + ") | replace('{n}', " + n + " ~ ''))")
 
 
 def _band(t, outdoor):
@@ -1552,6 +1311,22 @@ def _free_heat_section(t, learned):
     return section
 
 
+def _room_advice_section(t, advice):
+    """Heat along or a fixed temperature (1.4.2, plan 3.14): per room the heating advice sensor's line (``rooms``,
+    room_advice.learning_lines): up to which temperature it heats along for free and what a degree above that costs
+    (or how often a room on On asks for heat alone), and how fast it cools down and warms up. Hidden while there is
+    none."""
+    if not advice:
+        return None
+    quoted = json.dumps(advice)
+    section = _section(_heading(t["room_advice"], "mdi:radiator"), {"type": "markdown", "content": (
+        "{% for line in state_attr(" + quoted + ", 'rooms') or [] %}- **{{ line.name }}**"
+        "{% if line.advice %} · {{ line.advice }}{% endif %}{% if line.model %}<br>*{{ line.model }}*{% endif %}\n"
+        "{% endfor %}")})
+    section["visibility"] = _listed(advice, "rooms")
+    return section
+
+
 def _settings_section(t, flow, rooms=None):
     """Smart warm-up and weather compensation: the two switches and the water temperature in hard frost as rows
     (stored on the E32, e32_flow.py; always there to change), and the link to the rooms (``rooms``: the Settings tab's
@@ -1665,29 +1440,33 @@ def _per_day(title, entities, entity_id):
             "stat_types": ["change"], "entities": entities, "visibility": _known(entity_id)}
 
 
-def _energy_section(t, hub):
+def _energy_section(t, hub, tank=False):
     """Today and this week (dashboard-spec §5.3): today's gas for heating and for hot water and today's burner
-    starts and time as figures, then the one chart of the gas per day (heating, tapping and keeping warm once the
-    E32 tells them apart; heating and hot water before), the burner hours per day and one note on how the gas is
-    counted.
+    starts and time as figures, then the chart of the gas per day (always heating and hot water in total, 1.4.2), on
+    a boiler without a tank a second small chart of hot water's tapping and keeping warm once the E32 tells them
+    apart, the burner hours per day and one note on how the gas is counted.
 
-    hub: {key: entity id} of the hub sensors. Every card shows only with a value, the section hides as a whole
-    without one, and there is none without the gas and the daily-summary sensors.
+    Before 1.4.2 the one chart drew heating, tapping and keeping warm: the hot water neither of them holds (a tank's
+    charges, unsorted episodes) was missing from it (review R142 F3). Tapping and keeping warm are parts of hot
+    water, so they never stand beside it in one bar.
+
+    hub: {key: entity id} of the hub sensors; tank: the hot water is a storage tank (heating_link.dhw_tank): no split
+    chart, the note says why. Every card shows only with a value, the section hides as a whole without one, and
+    there is none without the gas and the daily-summary sensors.
     """
     heating, hot_water = hub.get("heating_gas"), hub.get("hot_water_gas")
     starts, burner = hub.get("daily_burner_starts"), hub.get("daily_burner_time")
     gas = heating or hot_water
-    posts = [(hub.get(key), t[name]) for key, name in (("heating_gas", "gas_heating"), ("tapping_gas", "gas_tapping"),
-                                                       ("keep_warm_gas", "gas_keeping_warm"))]
-    if not all(entity_id for entity_id, _ in posts):
-        posts = [(entity_id, t[name]) for entity_id, name in ((heating, "gas_heating"), (hot_water, "gas_hot_water"))
-                 if entity_id]
+    posts = [(entity_id, t[name]) for entity_id, name in ((heating, "gas_heating"), (hot_water, "gas_hot_water_total"))
+             if entity_id]
+    parts = [(hub.get(key), t[name]) for key, name in (("tapping_gas", "gas_tapping"), ("keep_warm_gas", "gas_keeping_warm"))]
+    split = parts if not tank and all(entity_id for entity_id, _ in parts) else None
     note = None
     if gas:
         quoted = json.dumps(gas)
         note = {"type": "markdown", "visibility": _known(gas), "content": (
             "{% if state_attr(" + quoted + ", 'estimate') %}" + t["gas_estimate"] + "{% else %}" + t["gas_measured"]
-            + "{% endif %}" + _details(t, t["gas_note"]))}
+            + "{% endif %}" + _details(t, t["gas_note_tank" if tank else "gas_note"]))}
     return _filled(_section_known(
         [gas, starts, burner],
         _heading(t["today_week"], ICONS["week"]),
@@ -1695,9 +1474,11 @@ def _energy_section(t, hub):
                _statistic(hot_water, t["gas_hot_water_today"], ICONS["gas"]), rows=2),
         *_pair(_statistic(starts, t["starts_today"], ICONS["burner_starts"]),
                _statistic(burner, t["burner_today"], ICONS["burner_time"]), rows=2),
-        # The one gas chart of the dashboard; the Overview has today's figure, Learning yesterday's line.
+        # The gas chart of the dashboard; the Overview has today's figure, Learning yesterday's line.
         _per_day(t["gas_per_day"], [{"entity": entity_id, "name": name} for entity_id, name in posts], gas)
         if gas else None,
+        _per_day(t["gas_split_per_day"], [{"entity": entity_id, "name": name} for entity_id, name in split],
+                 split[0][0]) if split else None,
         # The legend names the series as short as its figure above it: the entity's own name ("OpenThermostat E32
         # Burner time (total)") was cut on a phone (demo, HA 1.0.1).
         _per_day(t["burner_per_day"], [{"entity": burner, "name": t["burner_today"]}], burner) if burner else None,
@@ -1820,6 +1601,15 @@ def _scoreboard_lines(t, rooms, names, house, large=()):
                         "{% set parts = parts + [" + _jinja_text(t["scoreboard_overshoot"], c=_figure(t, 1)) + "] %}"
                         "{% endif %}")
         content += line("**{{ " + json.dumps(names.get(room_id, room_id), ensure_ascii=False) + " }}**: ")
+        # 1.4.2 (F16): a room that heats along only or is off gets no figure; it says so in grey, never "Unknown".
+        reason = keys.get("warm_on_time") or keys.get("overshoot")
+        if reason:
+            why = json.dumps({"heat_along": t["scoreboard_heat_along"], "off": t["scoreboard_room_off"]},
+                             ensure_ascii=False)
+            content += ("{% set r = state_attr(" + json.dumps(reason) + ", 'reason') %}{% set why = " + why + " %}"
+                        "{% if not parts and r in why %}{% set shown.lines = shown.lines + 1 %}- **{{ "
+                        + json.dumps(names.get(room_id, room_id), ensure_ascii=False) + " }}**: <font color=\""
+                        + ICON_COLOURS["link_unknown"] + "\">{{ why[r] }}</font>\n{% endif %}")
     # (sensor, its attribute or None for the state, text, placeholder, decimals): the heating hours and the
     # degree-days ride as attributes on the burner-starts and gas-per-degree-day sensors (scoreboard.py).
     for figures in ((("burner_starts_per_heating_hour", "heating_hours", "scoreboard_hours", "h", 1),
@@ -1891,11 +1681,12 @@ def _yesterday_figures(t, rooms, names, house, summary=None, missed=None, gas_un
         _note(t, t["scoreboard_note"]))
 
 
-def _hot_water_use_cards(t, hub, heating_active=None):
+def _hot_water_use_cards(t, hub, heating_active=None, tank=False):
     """When hot water is tapped and when it is kept warm, for the Boiler view's hot-water section: the last 24 hours
-    of what the boiler does (next to its own "heating" bit) and one note on tapping and keeping warm, both while the
-    activity has a value. The gas per day is the one chart under "Today and this week". No cards without the
-    activity (firmware before it)."""
+    of what the boiler does (next to its own "heating" bit) and one note on tapping and keeping warm (with a storage
+    tank: on tapping and charging the tank), both while the activity has a value. The note also says that today's
+    figures follow within five minutes after a hot-water period (1.4.2). The gas per day is under "Today and this
+    week". No cards without the activity (firmware before it)."""
     activity = hub.get("boiler_activity")
     if not activity:
         return []
@@ -1903,7 +1694,7 @@ def _hot_water_use_cards(t, hub, heating_active=None):
     return [{"type": "history-graph", "title": t["activity_timeline"], "hours_to_show": 24,
              "entities": [{"entity": entity_id, "name": name} for entity_id, name in rows if entity_id],
              "visibility": _known(activity)},
-            _note(t, t["dhw_use_note"], _known(activity))]
+            _note(t, t["dhw_use_note_tank" if tank else "dhw_use_note"], _known(activity))]
 
 
 def _boiler_now(t, hub, fields, essential, flow_source=None):
@@ -1940,9 +1731,10 @@ def _boiler_now(t, hub, fields, essential, flow_source=None):
                            **{key: value for key, value in reads.items() if value}})
 
 
-def _hot_water_section(t, hub, fields, essential):
-    """Hot water (dashboard-spec §5.4): its temperature next to its target, today's taps, keeping warm and burner
-    time, and what the boiler did in the last 24 hours with one note on tapping and keeping warm."""
+def _hot_water_section(t, hub, fields, essential, tank=False):
+    """Hot water (dashboard-spec §5.4): its temperature next to its target, today's taps, keeping warm (a tank: its
+    charges) and burner time, and what the boiler did in the last 24 hours with one note on tapping and keeping warm
+    (a tank: on tapping and charging the tank)."""
     measured = essential("dhw")
     target = fields.get("reported_dhw_target") or fields.get("selected_dhw_temperature")
     today = [hub[key] for key in DHW_TODAY if key in hub]
@@ -1951,7 +1743,7 @@ def _hot_water_section(t, hub, fields, essential):
         _heading(t["group_dhw"], ICONS["hot_water"]),
         *_pair(_tile(measured, t["dhw"], ICONS["dhw"]), _tile(target, t["dhw_target_short"], ICONS["dhw_target"])),
         _known_entities_card(today) if today else None,
-        *_hot_water_use_cards(t, hub, fields.get("heating_active"))))
+        *_hot_water_use_cards(t, hub, fields.get("heating_active"), tank)))
 
 
 def _value_tile(entity_id, name, icon, color=None):
@@ -2591,7 +2383,7 @@ class RoomDashboard:
         if hub is None or not hub.fresh:
             return None
         from .e32_valves import tile_kind
-        from .heating_link import learned_inputs
+        from .heating_link import dhw_tank, learned_inputs
         plan = hub.plan.plan if hub.plan is not None else None
         # The E32 counts every plan save in its revision: no need to compare the whole plan (R4-11).
         # A room's state too: switched on or off, it moves into or out of the Overview's house card (rc.5).
@@ -2603,7 +2395,10 @@ class RoomDashboard:
                 # The outdoor temperature the E32 uses (the House row shows the same one, rc7).
                 learned_inputs(getattr(hub, "learned_header", None)).get("outdoor"),
                 # What each room's valve tile shows (1.3: valves driven by temperature, _valve_tile).
-                tuple((key, tile_kind(room)) for key, room in (getattr(hub, "valves", None) or {}).items()))
+                tuple((key, tile_kind(room)) for key, room in (getattr(hub, "valves", None) or {}).items()),
+                # A storage tank or not (1.4.2): the gas split chart and the hot-water words; only "tank or not", never
+                # the method, which can change after every E32 start (R142 G3).
+                dhw_tank(hub))
 
     @callback
     def _schedule_refresh(self) -> None:
@@ -2697,7 +2492,7 @@ class RoomDashboard:
 
     @callback
     def _dashboard_config(self) -> dict:
-        t = TEXT[dashboard_language(self.hass)]
+        t = {**TEXT["en"], **TEXT[dashboard_language(self.hass)]}  # a word a language lacks: the English one
         registry = er.async_get(self.hass)
         entries = self._entries()
         self._entity_ids = {item.entity_id for item in entries}
@@ -2768,7 +2563,7 @@ class RoomDashboard:
                     "cards": [{"type": ROOM_CARD_TYPE,
                                "entry_id": self.entry_id, "room_id": sub.data["room_id"]}
                               for sub in legacy[:1]],
-                }] if product and not e32_rooms else []),
+                }] if product and not e32_rooms and legacy else []),  # 1.4.2 (P19): never an empty tab
                 *[{"title": sub.title, "path": "room-" + sub.data["room_id"],
                    "subview": True, "panel": True,
                    "cards": [{"type": ROOM_CARD_TYPE, "entry_id": self.entry_id,
@@ -2928,14 +2723,22 @@ class RoomDashboard:
                 or (used == "boiler" and boiler_outdoor)):
             outdoor = boiler_outdoor
         on_card = house_card is not None and bool(house_mode)  # the house card shows the mode and the next holiday
+        # 1.4.2 (plan 3.5): "Batteries low" as one line, only while a battery is below the limit; a tap opens the
+        # Batteries list (Settings tab), else the entity. Its own name (the entity's translation), so no dashboard text.
+        batteries = hub.get("batteries_low")
+        batteries_line = _wide(_tile(batteries, icon="mdi:battery-alert-variant-outline", color="red",
+                                     visibility=[{"condition": "numeric_state", "entity": batteries, "above": 0}],
+                                     tap_action={"action": "navigate", "navigation_path": self._settings_link(
+                                         e32_rooms, "devices/batteries")} if e32_rooms else None))
         house = _section(_heading(t["house"], ICONS["house"]),  # one icon per concept (dashboard-spec §1)
                          _house_rows(t, house_mode, outdoor, self._settings_link(e32_rooms, "house/mode"),
                                      mode=not on_card),
                          None if on_card else _holiday_card(t, house_mode),
-                         # 1.4: on the E32 room plan Configure is short; the hint names the Settings tab, as the
-                         # Plan link does (_settings_link).
-                         _note(t, t["holiday_hint_settings" if e32_rooms else "holiday_hint"], _known(house_mode))
-                         if house_mode else None)
+                         # 1.4.2 (P6): on the E32 room plan the Plan row opens Settings → House → House mode and
+                         # holiday itself, so no note repeats where it leads; the older route's Plan row opens the
+                         # integration's page, and its note still says where to go from there.
+                         _note(t, t["holiday_hint"], _known(house_mode))
+                         if house_mode and not e32_rooms else None, batteries_line)
         house = _shown_while_one_is(house, house["cards"][1:])
         rooms_section = _section(_heading(t["rooms"], "mdi:thermostat"), *room_cards) if any(room_cards) else None
         if rooms_section is not None and today and house:
@@ -2968,14 +2771,19 @@ class RoomDashboard:
                   "entities": [{"entity": metrics[key], "name": t[key]} for key in BLE_KEYS if key in metrics]}
                  for sensor_id, metrics in sorted(ble.items()) if not in_room.get(sensor_id)]
         if loose:
-            rooms.append(_section(_heading(t["bluetooth"], "mdi:bluetooth"), *loose))
+            # 1.4.2 (plan 3.9 item 6c): what to do with them, one line that opens Settings → Devices → Bluetooth sensors.
+            unassigned = t["bluetooth_unassigned"]
+            rooms.append(_section(_heading(t["bluetooth"], "mdi:bluetooth"),
+                                  _link(unassigned, "mdi:arrow-right", self._settings_link(e32_rooms, "devices/bluetooth")),
+                                  *loose))
 
         # -- Learning and settings -----------------------------------------------------------------
         # In the order of the owner's sketch (rc.5): what the E32 knows, your boiler in one sentence and water
         # temperature by outdoor temperature, then yesterday in figures, what stood out yesterday, the free heat and
         # Smart warm-up and weather compensation as rows; after them what it learned and who controls the boiler.
         learning = [section for section in (_knowledge_section(t, hub.get("knowledge")),
-                                            _plan_section(t, hub.get("heating_plan")),
+                                            _plan_section(t, hub.get("heating_plan"), registry.async_get_entity_id(
+                                                "button", DOMAIN, f"{self.prefix}_hub_plan_confirm")),
                                             _boiler_section(t, hub.get("boiler_response"), flow, learned_overview),
                                             _curve_section(t, flow.get("curve"), request, learned_overview))
                     if section]
@@ -2997,7 +2805,9 @@ class RoomDashboard:
             learning.append(yesterday)
         learning += [section for section in (
             _noticed_section(t, learned_overview), _free_heat_section(t, learned_overview),
-            _settings_section(t, flow, self._settings_link(e32_rooms, "rooms") if e32_rooms else None)) if section]
+            _settings_section(t, flow, self._settings_link(e32_rooms, "rooms") if e32_rooms else None),
+            # 1.4.2 (plan 3.14): after the sketch's seven, per room heat along or a fixed temperature, and its model.
+            _room_advice_section(t, hub.get("heating_advice"))) if section]
         # The sketch's two columns on a wide screen, within the sections view's own placement (in this order, dense,
         # a row as tall as its tallest section): yesterday spans two rows, so the curve and what stood out under it
         # fill the column beside it, your boiler above it and the settings under it. A phone stacks them in order.
@@ -3012,6 +2822,8 @@ class RoomDashboard:
                 t["learning_note"] + "{% if not state_attr(" + quoted + ", 'applied') %}"
                 + _details(t, t["advice_only"]) + "{% endif %}")}
         learning += _learned_sections(t, learned_overview, how, settings=e32_rooms)
+        # 1.4.2 (HC-05): the advice that was a Repairs item, after what it learned (hidden while there is none).
+        learning += [section for section in (_worth_checking_section(t, problem),) if section]
         # The comparison entities exist only once the E32 saw a thermostat to compare with; outside
         # the trial run a record left behind leads nowhere.
         agreement = hub.get("shadow_agreement_today") if trial else None
@@ -3165,10 +2977,11 @@ class RoomDashboard:
             badges.append({"type": "entity", "entity": room["valve_problem"], "show_state": False, "show_icon": True,
                            "color": "red", "visibility": [{"condition": "state", "entity": room["valve_problem"],
                                                            "state": "on"}]})
-        if sensor.get("battery"):  # only when it needs attention
+        if sensor.get("battery"):  # only when it needs attention: below the one battery limit (1.4.2, HC-04)
+            from .device_battery import limit_pct
             badges.append({"type": "entity", "entity": sensor["battery"], "show_state": True, "show_icon": True,
                            "color": "red", "visibility": [{"condition": "numeric_state", "entity": sensor["battery"],
-                                                           "below": 20}]})
+                                                           "below": limit_pct(entry)}]})
         own = room.get("thermostat")
         thermostat = own or self._room_thermostat(room_id)
         # The E32's own measurement only where the dial does not show it (dashboard-spec §3): never next to the
@@ -3285,7 +3098,10 @@ class RoomDashboard:
                 section["column_span"] = 2
                 for card in section["cards"][1:]:
                     card["grid_options"] = {**card.get("grid_options", {}), "columns": "full"}
-        sections = [now, advice, _energy_section(t, hub), _hot_water_section(t, hub, fields, essential)]
+        # A storage tank has no tapping/keeping-warm split and its own words (1.4.2); _signature follows it.
+        from .heating_link import dhw_tank
+        tank = dhw_tank(self._heating_hub())
+        sections = [now, advice, _energy_section(t, hub, tank), _hot_water_section(t, hub, fields, essential, tank)]
         raw = thermostat = None
         if fields:
             # Native cards only. Reported selected flow is NOT a controller request,

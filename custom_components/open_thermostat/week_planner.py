@@ -24,7 +24,7 @@ _LOGGER = logging.getLogger(__name__)
 _KEY = DOMAIN + "_week_frontend"
 # Versioned like the card and editor URLs (the manifest version): a changed module is never taken
 # from the browser cache. The older URLs stay served for pages loaded before an update.
-URL = "/open_thermostat/week-planner-1.4.1.js"
+URL = "/open_thermostat/week-planner-1.4.2.js"
 LEGACY_URLS = ("/open_thermostat/week-planner-0.4.0b4.js", "/open_thermostat/week-planner-0.4.0.dev41.js")
 ROOM_CARD_TYPE = "custom:openthermostat-room-editor-v42"
 
@@ -129,14 +129,32 @@ async def ws_save(hass, connection, msg):
 _MODULES_KEY = DOMAIN + "_card_modules"
 
 
-def card_modules():
-    """The dashboard cards' modules: each defines its custom elements (custom:openthermostat-*)."""
+def legacy_planner_needed(hass):
+    """1.4.2 (P18): whether some installation still needs the older room editor (week-planner.js, about 106 KB):
+    one with rooms of the older Home Assistant setup (zone subentries) or without an E32 room plan. Only then do
+    the browsers load it on every page; it stays served for old links either way."""
+    from collections.abc import Mapping
+    from .room_plan import has_room_plan
+
+    def needs(entry):
+        subentries = getattr(entry, "subentries", None) or {}
+        if any(getattr(sub, "subentry_type", None) == "zone" for sub in subentries.values()):
+            return True
+        return isinstance(getattr(entry, "data", None), Mapping) and not has_room_plan(entry)
+    return any(needs(entry) for entry in hass.config_entries.async_entries(DOMAIN))
+
+
+def card_modules(hass=None):
+    """The dashboard cards' modules: each defines its custom elements (custom:openthermostat-*). With ``hass``,
+    the older room editor only while an installation needs it (legacy_planner_needed)."""
     from .e32_flow import CURVE_CARD_URL
     from .e32_week import CARD_URL
     from .room_overview import BOILER_NOW_CARD_URL, CARD_URL as ROOM_STATUS_URL, HOUSE_BANNER_URL, HOUSE_CARD_URL
     # The dashboard's settings panel (1.4): only its core; it loads its kit and sections itself when the tab opens (1.4.1).
     from .settings import URL as SETTINGS_URL
-    return (CARD_URL, URL, ROOM_STATUS_URL, CURVE_CARD_URL, HOUSE_CARD_URL, BOILER_NOW_CARD_URL, HOUSE_BANNER_URL, SETTINGS_URL)
+    legacy = (URL,) if hass is None or legacy_planner_needed(hass) else ()
+    return (CARD_URL, *legacy, ROOM_STATUS_URL, CURVE_CARD_URL, HOUSE_CARD_URL, BOILER_NOW_CARD_URL, HOUSE_BANNER_URL,
+            SETTINGS_URL)
 
 
 @callback
@@ -145,10 +163,15 @@ def async_add_card_modules(hass):
     open pages through HA's frontend/subscribe_extra_js. Each URL once (no duplicates)."""
     added = hass.data.setdefault(_MODULES_KEY, set())
     present = getattr(hass.data.get(frontend.DATA_EXTRA_MODULE_URL), "urls", frozenset())
-    for url in card_modules():
+    wanted = card_modules(hass)
+    for url in wanted:
         if url not in added and url not in present:
             frontend.add_extra_js_url(hass, url)
         added.add(url)
+    if URL not in wanted and URL in added:  # 1.4.2 (P18): no installation needs the older room editor any more
+        added.discard(URL)
+        if URL in present:
+            frontend.remove_extra_js_url(hass, URL)
 
 
 @callback

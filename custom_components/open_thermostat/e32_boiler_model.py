@@ -14,7 +14,7 @@ from __future__ import annotations
 from .const import DOMAIN
 
 NONE = "none"
-NONE_LABEL = {"en": "No boiler selected yet", "nl": "Nog geen ketel gekozen", "pl": "Nie wybrano jeszcze kotła"}
+NONE_LABEL = {"en": "No boiler selected yet", "nl": "Nog geen ketel gekozen"}
 
 
 def models():

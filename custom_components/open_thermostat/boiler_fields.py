@@ -175,6 +175,17 @@ def quality(index):
     return QUALITIES[index] if index < len(FIELDS) else 0
 
 
+# 1.4.2 (P7): raw fields that are off by default although the boiler reports them reliably (quality 0): a raw value
+# is for diagnosis, not for every day. Not a quality: the E32 sends the quality with each value and the decoder checks
+# it against QUALITIES (the wire contract), so this is Home Assistant's own rule (v1_boiler_fields).
+RAW_OFF_BY_DEFAULT = frozenset({"raw_boiler_state"})
+
+
+def off_by_default(index):
+    """Whether the field's entity is created disabled: an unreliable one (quality 1) or one of RAW_OFF_BY_DEFAULT."""
+    return quality(index) == 1 or (index < len(FIELDS) and FIELDS[index][0] in RAW_OFF_BY_DEFAULT)
+
+
 # One physical value, two wire families (F28): each EMS+ catalog field and the
 # Classic field the same boiler quantity arrives in (EMS-ESP decodes both
 # telegrams into one value: 0xE4/0x18 monitor, 0xE5/0x19 counters, 0xE9/0x34
