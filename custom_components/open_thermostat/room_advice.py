@@ -612,6 +612,16 @@ def advice_text(values, name, lang):
     return text, more
 
 
+def model_rates(model):
+    """(cools, warms): the model sentence's figures, °C an hour at 5 °C outside; None while the model has none (too
+    little data, only the valve's own sensor). 1.4.3: the Learning view's room card shows the cooling as a figure."""
+    if not model or model.get("quality") not in ("learned", "rough") or not model.get("tau_h"):
+        return None
+    reference = model["mean_c"] if model.get("mean_c") is not None else 20.0
+    cool = max(0.0, (reference - SENTENCE_OUTDOOR_C) / model["tau_h"])
+    return cool, model["warm_rate_k_per_h"] - cool
+
+
 def model_text(model, name, emitter, lang):
     t = TEXT[lang]
     quality = model["quality"]
@@ -620,9 +630,7 @@ def model_text(model, name, emitter, lang):
     if quality == "too_little_data":
         return t["model.too_little_data"].format(room=name, hours=fmt(model["hours_used"], lang, 0),
                                                  need=MODEL_MIN_COOL_H + MODEL_MIN_HEAT_H)
-    reference = model["mean_c"] if model.get("mean_c") is not None else 20.0
-    cool = max(0.0, (reference - SENTENCE_OUTDOOR_C) / model["tau_h"])
-    warm = model["warm_rate_k_per_h"] - cool
+    cool, warm = model_rates(model)
     word = t["emitter." + (emitter if emitter in ("radiator", "floor") else "other")]
     if warm < 0.1:
         text = t["model.level"].format(room=name, cool=fmt(cool, lang), emitter=word)
@@ -792,7 +800,10 @@ def room_live(hass, entry, room_id):
 
 def learning_lines(hass, entry, hub, history, today, lang):
     """The Learning view's line per room in the plan's order: [{room_id, name, advice, model}] (a room that is Off
-    has no advice; a room without either is left out)."""
+    has no advice; a room without either is left out). 1.4.3 (LEARN-TAB, the room card's facts): also
+    ``advice_kind`` (the room's state the advice is for: "active" or "follow"), ``advice_reason`` (None once it has a
+    figure, else why not: too_little_data, valve_sensor) and ``cool_c_per_h`` (the model sentence's cooling at 5 °C
+    outside, or None)."""
     if lang not in TEXT:
         lang = "en"
     inputs = Inputs(hass, entry, hub, history, today)
@@ -802,7 +813,11 @@ def learning_lines(hass, entry, hub, history, today, lang):
         advice = (live.get("advice") or {}).get("text_" + lang)
         model = (live.get("model") or {}).get("sentence_" + lang)
         if advice or model:
-            lines.append({"room_id": room_id, "name": inputs.name(room_id), "advice": advice, "model": model})
+            rates = model_rates(inputs.models.get(room_id))
+            lines.append({"room_id": room_id, "name": inputs.name(room_id), "advice": advice, "model": model,
+                          "advice_kind": inputs.rooms[room_id].get("state") if advice else None,
+                          "advice_reason": (live.get("advice") or {}).get("reason") if advice else None,
+                          "cool_c_per_h": round(rates[0], 3) if rates else None})
     return lines
 
 

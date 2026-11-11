@@ -399,16 +399,6 @@ def position_note(room, lang="en"):
     return " · ".join(notes) or None
 
 
-def tile_kind(room):
-    """What the dashboard's valve tile shows for a room document: "driven" (no valve reports an opening: the
-    temperature the E32 gave them), "mixed" (the average opening and how many are driven by temperature), or None
-    (the average opening, as before 1.3)."""
-    valves, found = (room or {}).get("valves", []), driven(room)
-    if not valves or not found:
-        return None
-    return "driven" if len(found) == len(valves) else "mixed"
-
-
 def set_to(room, status_room):
     """(°C, frost protection) the E32 gave the valves driven by temperature, or None while unknown.
 
@@ -442,10 +432,45 @@ def driven_text(count, lang="en"):
     return forms[0 if count == 1 else 1].format(n=count)
 
 
+# E32 1.4.2 (B21, TrvControl.h): the watch's finding on a driven valve, ``held`` = [state, corrections since start, unix
+# s | null], present only once there is one. ok: nothing wrong now; put_back: a turned setpoint was put back to the
+# room's; own_schedule: it shows its own program (being set to manual); off_by_user: someone switched it off (left
+# alone); gave_up: three tries did not hold.
+HELD = ("ok", "put_back", "own_schedule", "off_by_user", "gave_up")
+
+
+def held(valve):
+    """(state, count, ISO time | None) of a valve's ``held``, or (None, None, None) without a valid one (firmware
+    before 1.4.2, or nothing found since the E32 started)."""
+    value = (valve or {}).get("held")
+    if (type(value) is not list or len(value) != 3 or value[0] not in HELD or type(value[1]) is not int
+            or value[1] < 0 or not (value[2] is None or type(value[2]) is int)):
+        return None, None, None
+    from datetime import datetime, timezone
+    at = datetime.fromtimestamp(value[2], timezone.utc).isoformat() if type(value[2]) is int and value[2] > 0 else None
+    return value[0], value[1], at
+
+
+def _number(value):
+    return value if type(value) in (int, float) else None
+
+
 def valve_attributes(room):
-    return {"valves": [{key: v.get(key) for key in ("name", "model", "role", "health", "link", "position_pct",
-                                                    "battery_pct", "battery_low", "setpoint_c") if v.get(key) is not None}
-                       for v in room.get("valves", [])],
+    """The Valve position sensor's attributes: per valve the E32's own keys (as reported) and, 1.4.3 (CONTRACT-1.4.3
+    §2, the Rooms view's room card), ``position`` (0..100 or None), ``set_to_c`` (the temperature it was given, only
+    for a valve driven by temperature), ``battery`` (% or None) and the watch's finding ``held``, ``held_count`` and
+    ``held_at`` (None on firmware without it)."""
+    found = {id(v) for v in driven(room)}
+    out = []
+    for v in room.get("valves", []):
+        state, count, at = held(v)
+        out.append({**{key: v.get(key) for key in ("name", "model", "role", "health", "link", "position_pct",
+                                                   "battery_pct", "battery_low", "setpoint_c") if v.get(key) is not None},
+                    "position": _number(v.get("position_pct")),
+                    "set_to_c": _number(v.get("setpoint_c")) if id(v) in found else None,
+                    "battery": _number(v.get("battery_pct")),
+                    "held": state, "held_count": count, "held_at": at})
+    return {"valves": out,
             "control": room.get("control"), "degraded": room.get("degraded"), "single_source": room.get("single_source")}
 
 

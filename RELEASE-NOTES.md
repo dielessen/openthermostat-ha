@@ -1,3 +1,62 @@
+# HA 1.4.3 — every tab as wide as your screen, a card per room, everything the E32 learns on one tab
+<!-- user-release-notes:v2:en -->
+
+Companion of E32 1.4.3; also runs with E32 1.4.2 and older, with the limits
+under Updating. Needs Home Assistant 2026.10.0 or newer.
+
+## New
+
+- **Every tab of the dashboard now uses the whole width of your screen,** like
+  the Overview: one column on a phone, up to four on a large monitor.
+- **Rooms: one card per room** with the program of today, the last 24 hours
+  and the devices of the room, and the presets and the room's state on the
+  card. The target changes by half a degree with − and +, and the Overview's
+  rooms stand two by two.
+- **Learning: everything the E32 learns on one tab,** per room in figures
+  (how long one degree takes, how fast the room cools, the coolest water that
+  warms it in time, the free heat, seven mornings, the advice). What it does
+  not know yet says what it still needs, never a number. The tab is called
+  Learning now.
+- **Radiator valves:** what the E32 found on each valve (put back, own
+  program, switched off by you, not responding) shows on the room card.
+- **Overview and Boiler say what the E32 asks of the water in the same words
+  as the Learning tab** ("Outdoor 6.7 °C: the E32 asks 42 °C water"), and the
+  room card's presets stay on one row.
+- **The boiler's Hot water flow sensor** switches itself on (hidden, under
+  Diagnostic) once the flow moves, so a hot water tank install sees it.
+
+## Fixed
+
+- **The room screen's Reload and "Use …" buttons** no longer add a browser
+  history entry, and every figure there follows your unit and number format.
+- **The notifications save bar** says "Suggested phone not saved yet" while a
+  suggested phone is not saved.
+- **A failed save** says the E32 "was" not reachable, not "is".
+
+## Updating
+
+Update under Settings → Updates (Marketplace) and restart Home Assistant. Then
+install E32 1.4.3 from its Firmware entity and confirm the takeover again.
+
+- Entities, IDs and history stay; nothing is removed or renamed.
+- The dashboard changes by itself at the restart: the Rooms and Learning tabs
+  look different. What the E32 learned per room is on the Learning tab now, not
+  on the Rooms tab; the two switches are under Settings.
+- With E32 1.4.2 everything above works. The valves' findings need what E32
+  1.4.2 reports; with E32 1.4.1 a valve tile shows one line.
+
+## Limitations
+
+- A tab with few sections stays narrower than a large monitor, because there
+  is nothing more to put beside them.
+- A room shows its Smart warm-up start and its advice only when the E32 has
+  learned enough; until then the card says what it still needs.
+- Sentences in sensors (what the E32 learned, the advice) are in Home
+  Assistant's language; the cards use yours.
+- Boiler settings stay a preview until a real boiler has confirmed them.
+- Radiator valve control has run on a few real valves only; a Sonoff TRV Gen2
+  reports no valve position.
+
 # HA 1.4.2 — recipients per room, every battery on one list, fewer Repairs
 <!-- user-release-notes:v2:en -->
 

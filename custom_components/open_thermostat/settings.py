@@ -58,24 +58,24 @@ _LOGGER = logging.getLogger(__name__)
 
 # The panel's module, served and loaded with the dashboard cards (week_planner.card_modules); the release script
 # moves the version in the name (tools/dev/prepare_release.py, "frontend URLs").
-URL = "/open_thermostat/openthermostat-settings-1.4.2.js"
+URL = "/open_thermostat/openthermostat-settings-1.4.3.js"
 # 1.4.1: the component kit (frontend/openthermostat-settings-kit.js) and the section modules are no longer loaded on every
 # Home Assistant page: only the core is (URL above, week_planner.card_modules); the core loads the kit and the sections
 # when the Settings tab opens, from the overview's ``modules`` list (modules()).
-KIT_URL = "/open_thermostat/openthermostat-settings-kit-1.4.2.js"
+KIT_URL = "/open_thermostat/openthermostat-settings-kit-1.4.3.js"
 CARD_TYPE = "custom:openthermostat-settings"
 # A section package's own module (frontend/openthermostat-settings-<section>.js, it calls the kit's defineSection), served
 # with the panel and loaded by it on the first visit of the tab: one (URL, file) line per package, the URL versioned as
 # the panel's.
 SECTION_MODULES: tuple[tuple[str, str], ...] = (
     # ("/open_thermostat/openthermostat-settings-<section>-<HA version>.js", "openthermostat-settings-<section>.js"),
-    ("/open_thermostat/openthermostat-settings-rooms-1.4.2.js", "openthermostat-settings-rooms.js"),
-    ("/open_thermostat/openthermostat-settings-house-1.4.2.js", "openthermostat-settings-house.js"),
-    ("/open_thermostat/openthermostat-settings-heating-1.4.2.js", "openthermostat-settings-heating.js"),
-    ("/open_thermostat/openthermostat-settings-devices-1.4.2.js", "openthermostat-settings-devices.js"),
-    ("/open_thermostat/openthermostat-settings-energy-1.4.2.js", "openthermostat-settings-energy.js"),
-    ("/open_thermostat/openthermostat-settings-notifications-1.4.2.js", "openthermostat-settings-notifications.js"),
-    ("/open_thermostat/openthermostat-settings-installation-1.4.2.js", "openthermostat-settings-installation.js"),
+    ("/open_thermostat/openthermostat-settings-rooms-1.4.3.js", "openthermostat-settings-rooms.js"),
+    ("/open_thermostat/openthermostat-settings-house-1.4.3.js", "openthermostat-settings-house.js"),
+    ("/open_thermostat/openthermostat-settings-heating-1.4.3.js", "openthermostat-settings-heating.js"),
+    ("/open_thermostat/openthermostat-settings-devices-1.4.3.js", "openthermostat-settings-devices.js"),
+    ("/open_thermostat/openthermostat-settings-energy-1.4.3.js", "openthermostat-settings-energy.js"),
+    ("/open_thermostat/openthermostat-settings-notifications-1.4.3.js", "openthermostat-settings-notifications.js"),
+    ("/open_thermostat/openthermostat-settings-installation-1.4.3.js", "openthermostat-settings-installation.js"),
 )
 VIEW_PATH = "settings"  # the dashboard view: /<dashboard>/settings#<route>
 CONFIGURE_PATH = "/config/integrations/integration/" + DOMAIN

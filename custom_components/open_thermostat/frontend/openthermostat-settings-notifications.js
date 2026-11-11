@@ -31,6 +31,7 @@ const TEXTS = {
   'Phone or app': 'Telefoon of app',
   'Choose No phone to stop messages to a phone; they then show in Home Assistant.': 'Kies Geen telefoon om geen berichten meer naar een telefoon te sturen; ze verschijnen dan in Home Assistant.',
   'Suggested: the app on {name}\'s own phone. Choose Save to use it.': 'Voorgesteld: de app op de eigen telefoon van {name}. Kies Opslaan om hem te gebruiken.',
+  'Suggested phone not saved yet': 'Voorgestelde telefoon nog niet opgeslagen',
   'This phone is no longer in Home Assistant: the messages show in Home Assistant until you choose another one.': 'Deze telefoon is niet meer in Home Assistant: de berichten verschijnen in Home Assistant tot je een andere kiest.',
   'Also messages about the house': 'Ook meldingen over het huis',
   '{name} gets the messages about the house too.': '{name} krijgt ook de meldingen over het huis.',
@@ -287,6 +288,9 @@ function house(ctx) {
  skeleton: 'rows',
  values,
  // Only what differs from the screen as shown; No phone is sent as null. A preselected suggestion counts as a change.
+ // The save bar over a preselected suggestion you did not touch: what stands unsaved is our proposal, not your change.
+ dirtyText: (v, m) => ('person' in m && m.phone == null && m.suggested?.service && v.phone === m.suggested.service
+  && v.house_too === (m.house_too === true) ? 'Suggested phone not saved yet' : null),
  toSave: (v, m) => {
   const shown = values(m), out = Object.fromEntries(Object.entries(v).filter(([k, x]) => !same(x, shown[k])));
   if (out.phone === none) out.phone = null;

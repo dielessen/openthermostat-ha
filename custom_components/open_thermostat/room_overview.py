@@ -36,6 +36,11 @@ follow_when_on); the sensor carries ``after`` (what the room returns to when it
 is switched on, "active" or "follow", from the plan) and ``room_state`` (the
 room's state as the E32 reports it), so the card labels a room on Heat along only
 also while a boost or a manual change runs ("Heat along only · Boost until 21:00").
+
+1.4.3 (HA-DASHBOARD-ONTWERP-1.4.3 §3.3, CONTRACT-1.4.3 §2): the sensor carries ``today``, the room's week program
+of the local day (Home Assistant's time zone) as at most 8 entries [{"at": "06:30", "c": 21.0, "level", "name"}],
+the first the level in force at 00:00, so the Rooms view's room card (frontend/room-card.js) draws today's bar
+without reading the plan; absent on a room without a week program.
 """
 from __future__ import annotations
 
@@ -49,10 +54,10 @@ from homeassistant.core import callback
 from .heating_link import RoomEntity, number
 
 # The room status card's module (served and loaded with the week planner's, week_planner.card_modules).
-CARD_URL = "/open_thermostat/room-status-card-1.4.2.js"
+CARD_URL = "/open_thermostat/room-status-card-1.4.3.js"
 # The Overview's house card (E32 rc.5, frontend/house-card.js): what the boiler does now, today in figures, the day
 # so far and, in a house with one room switched on, that room. The seventh card module, versioned like the others.
-HOUSE_CARD_URL = "/open_thermostat/house-card-1.4.2.js"
+HOUSE_CARD_URL = "/open_thermostat/house-card-1.4.3.js"
 HOUSE_CARD_TYPE = "custom:openthermostat-house"
 # Yesterday's headline figures on the Learning view, large as on the house card (the same module, house-card.js).
 YESTERDAY_CARD_TYPE = "custom:openthermostat-yesterday"
@@ -83,12 +88,22 @@ PRESENCE = ["room_home", "room_away", "house_home", "house_away"]
 # The Boiler view's "Now" card (E32 rc.5, frontend/boiler-now-card.js): what the boiler does now in a band of its
 # colour with its display code in words, the water to the heating and back, the burner power and its starts as large
 # figures. The eighth card module, versioned like the others.
-BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.4.2.js"
+BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.4.3.js"
 BOILER_NOW_CARD_TYPE = "custom:openthermostat-boiler-now"
 # 1.4.1 (CONTRACT-1.4.1 §9): the house banner at the top of every dashboard view (frontend/openthermostat-house-banner.js):
 # empty unless the house is in summer mode, then the summer sentence and "Switch summer mode off". The ninth card module.
-HOUSE_BANNER_URL = "/open_thermostat/openthermostat-house-banner-1.4.2.js"
+HOUSE_BANNER_URL = "/open_thermostat/openthermostat-house-banner-1.4.3.js"
 HOUSE_BANNER_TYPE = "custom:openthermostat-house-banner"
+# 1.4.3 (CONTRACT-1.4.3 §2): the Rooms view's room card (frontend/room-card.js): one card per room with its temperature
+# and target, its presets and state, today's program, the last 24 hours and its devices. The tenth card module.
+ROOM_CARD_URL = "/open_thermostat/room-card-1.4.3.js"
+ROOM_V2_CARD_TYPE = "custom:openthermostat-room"  # (week_planner.ROOM_CARD_TYPE is the older room editor)
+# The room card's today bar: at most this many entries (the first is the level in force at midnight).
+TODAY_MAX = 8
+# A level's name in the attribute ``today`` (the card prefers strings.json program.state; this is for automations and
+# the last resort): the planner's three levels in the languages of the integration.
+LEVEL_NAMES = {"en": {"comfort": "Comfort", "eco": "Eco", "night": "Night"},
+               "nl": {"comfort": "Comfort", "eco": "Eco", "night": "Nacht"}}
 
 
 @dataclass(frozen=True, slots=True)
@@ -383,6 +398,57 @@ def program_step(plan_room, now, zone, room=None, away=None):
             "next_target": following[2] if following else None}
 
 
+def _level_name(level, centi, lang):
+    """A level's name in ``today``: the planner's ("Night"/"Nacht"), a point with its own temperature by that
+    temperature ("21.5 °C"/"21,5 °C")."""
+    if level in LEVELS_KNOWN:
+        return LEVEL_NAMES.get(lang, LEVEL_NAMES["en"])[level]
+    text = f"{centi / 100:g}"
+    return (text.replace(".", ",") if lang == "nl" else text) + " °C"
+
+
+LEVELS_KNOWN = ("comfort", "eco", "night")
+
+
+def program_today(plan_room, now, zone, house_zone=None, lang="en"):
+    """The room's week program of the local day, for the room card's bar: [{"at", "c", "level", "name"}], or None.
+
+    plan_room: the room in the E32's plan (its 7-day ``schedule`` of [minute, centi °C] and the planner's marks);
+    now: an aware datetime; zone: the E32's time zone, in which the program's times are wall-clock times;
+    house_zone: Home Assistant's time zone, whose day the bar shows (default: the E32's). The first entry is the level
+    in force at 00:00 ("at" "00:00"); then every switch point of the day where the level or the temperature changes,
+    by its time in the house's zone ("06:30"); at most TODAY_MAX entries. ``level``: "comfort", "eco", "night", or
+    "own" for a point with its own temperature; ``name``: its name in ``lang``. None: no program (or not well-formed)
+    or no aware time.
+    """
+    week = _schedule(plan_room)
+    if week is None or not isinstance(now, datetime) or now.tzinfo is None:
+        return None
+    house = house_zone or zone
+    marks = _marks(plan_room, [[list(point) for point in day] for day in week])
+    local = now.astimezone(house)
+    start = datetime.combine(local.date(), clock_time(0, 0), tzinfo=house)
+    end = datetime.combine(local.date() + timedelta(days=1), clock_time(0, 0), tzinfo=house)
+    first = _program_now(week, marks, start.astimezone(zone))
+    points = [(start, *first)] if first else []
+    # The E32's days that overlap the house's day (the same day while both zones agree, as they normally do).
+    e32_day = start.astimezone(zone).date()
+    for offset in (-1, 0, 1):
+        day = e32_day + timedelta(days=offset)
+        for index, (at, centi) in enumerate(week[day.weekday()]):
+            wall = datetime.combine(day, clock_time(at // 60, at % 60), tzinfo=zone).astimezone(house)
+            if start < wall < end:
+                points.append((wall, marks[day.weekday()][index], centi))
+    points.sort(key=lambda point: point[0])
+    today = []
+    for wall, level, centi in points:
+        if today and (today[-1]["level"], round(today[-1]["c"] * 100)) == (level or "own", centi):
+            continue  # the same level and temperature again: no new block
+        today.append({"at": wall.strftime("%H:%M"), "c": centi / 100, "level": level or "own",
+                      "name": _level_name(level, centi, lang)})
+    return today[:TODAY_MAX] or None
+
+
 def e32_zone(hass, entry):
     """The E32's time zone (its Settings, as last seen in its daily settings backup or the time zone step) when Home
     Assistant knows its rules; else Home Assistant's own (the zone the E32 is set to when it is installed)."""
@@ -428,7 +494,7 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
     # The card's live values; the history keeps the reason itself (the room's own sensors keep the rest).
     _unrecorded_attributes = frozenset({"values", "temperature", "setpoint", "presence", "window", "opening",
                                         "valve_position", "valve_problem", "program", "comfort_mode", "comfort_until",
-                                        "after", "room_state"})
+                                        "after", "room_state", "today"})
 
     def __init__(self, hub, room):
         self._attach_room(hub, room, "reason")
@@ -450,6 +516,16 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
         return program_step(plan_room, now or datetime.now(timezone.utc), e32_zone(self.hass, self._entry()), self.room,
                             status.get("away"))
 
+    def _today(self):
+        """Today's week program for the room card's bar (program_today), in Home Assistant's day, or None."""
+        plan_room = self._plan_room()
+        if plan_room is None or self.hass is None:
+            return None
+        from homeassistant.util import dt as dt_util
+        lang = str(getattr(self.hass.config, "language", "en") or "en")[:2]
+        return program_today(plan_room, datetime.now(timezone.utc), e32_zone(self.hass, self._entry()),
+                             dt_util.get_default_time_zone(), lang)
+
     @callback
     def async_write_ha_state(self):
         super().async_write_ha_state()
@@ -463,7 +539,13 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
             self._tick()
             self._tick = None
         program = self._program() if self.hub.fresh and self.room else None
-        if not program or not program["next_at"]:
+        moments = [datetime.fromisoformat(program["next_at"])] if program and program["next_at"] else []
+        if self.hub.fresh and self.room and self._plan_room() is not None:
+            # 1.4.3: a new day gives a new ``today`` (the room card's bar), also without a step at midnight.
+            from homeassistant.util import dt as dt_util
+            local = dt_util.now()
+            moments.append(datetime.combine(local.date() + timedelta(days=1), clock_time(0, 0), tzinfo=local.tzinfo))
+        if not moments:
             return
         from homeassistant.helpers.event import async_track_point_in_utc_time
 
@@ -472,8 +554,7 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
             self._tick = None
             if self.hass is not None and self.entity_id:
                 self.async_write_ha_state()
-        self._tick = async_track_point_in_utc_time(
-            self.hass, due, datetime.fromisoformat(program["next_at"]) + timedelta(seconds=1))
+        self._tick = async_track_point_in_utc_time(self.hass, due, min(moments) + timedelta(seconds=1))
 
     async def async_will_remove_from_hass(self):
         if self._tick is not None:
@@ -543,4 +624,6 @@ class RoomReasonSensor(RoomEntity, SensorEntity):
                 # 1.4.2: what the room returns to when it is switched on ("active", "follow"; from the plan) and its
                 # state now, so the card says "Heat along only" also while a boost runs.
                 "after": after_off(self._plan_room()),
-                "room_state": room.get("state") if room.get("state") in ("active", "follow", "inactive") else None}
+                "room_state": room.get("state") if room.get("state") in ("active", "follow", "inactive") else None,
+                # 1.4.3: today's week program for the room card's bar (absent without a program, CONTRACT-1.4.3 §2).
+                **({"today": today} if (today := self._today()) else {})}

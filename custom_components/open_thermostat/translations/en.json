@@ -2827,10 +2827,11 @@
               "title": "The E32 knows your house",
               "ring": "The E32 knows your house: {pct} %",
               "hint": "It learns by itself while the heating runs.",
-              "missing": "Still to learn",
-              "more": "And {n} more.",
               "done": "It has learned everything it needs; it keeps checking as the seasons change.",
-              "waiting": "The E32 has not reported what it knows yet."
+              "waiting": "The E32 has not reported what it knows yet.",
+              "path": "What it learns",
+              "learned": "{name}: learned",
+              "busy": "{name}: still learning"
             }
           },
           "items": {
@@ -2929,7 +2930,11 @@
               "waiting": "The E32 has not reported its weather compensation yet.",
               "house": "Estimated from your house",
               "asks": "E32 asks {flow} °C",
-              "would_ask": "E32 would ask {flow} °C"
+              "would_ask": "E32 would ask {flow} °C",
+              "slope_learned": "Learned for your house: the water gets about {s} °C warmer for every degree colder outside.",
+              "slope_house": "Estimated from your house: the water gets about {s} °C warmer for every degree colder outside.",
+              "slope_standard": "The standard line for now: the water gets about {s} °C warmer for every degree colder outside.",
+              "rooms_add": "+{n} °C for the rooms"
             }
           },
           "design_flow_c": {
@@ -3119,8 +3124,8 @@
               "yes": "yes",
               "no": "no",
               "flow": "Water to heating",
-              "asked": "asked {flow} °C",
-              "asked_sent": "asked {flow} °C, sent {sent} °C",
+              "asked": "E32 asks {flow} °C",
+              "asked_sent": "E32 asks {flow} °C, sent {sent} °C",
               "would_ask": "E32 would ask {flow} °C",
               "no_request": "no request",
               "ceiling": "at most {flow} °C",
@@ -4810,7 +4815,7 @@
         "phone_gone": "{service} (not found)",
         "on": "on",
         "off": "off",
-                "with_house": " (also the house)",
+        "with_house": " (also the house)",
         "house_people": "They go to: {people}.",
         "house_nobody": "Nobody receives these yet: tick a person under People and phones. Until then they show in Home Assistant."
       }

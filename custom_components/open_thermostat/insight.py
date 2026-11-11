@@ -113,6 +113,14 @@ TEXT = {
                           "a little less.",
         "note.loop": "The E32 compares the water coming back from the floor loops over hours of floor heating. It "
                      "changes nothing itself.",
+        # 1.4.3 (LEARN-TAB): the learning path of the Learning view's knowledge card, one label per part.
+        "path.warmup": "Warm-up {room}", "path.cooling": "Cooling {room}", "path.arrival": "Warm on time {room}",
+        "path.model": "Model of {room}", "path.track": "Predictions {room}",
+        "path.curve": "Weather compensation", "path.boiler_minimum": "Boiler's start temperature",
+        "path.boiler_response": "Boiler response", "path.house": "How fast the house cools",
+        "path.plant": "Lowest flame of the boiler", "path.outlook": "Weather outlook",
+        "detail.of": "{n} of {m}", "detail.days": "{n} of {m} days good", "detail.mornings": "{n} more mornings",
+        "detail.morning": "1 more morning",
     },
     "nl": {
         "missing.warmup": "Hij moet nog zien hoe snel {room} opwarmt.",
@@ -171,6 +179,13 @@ TEXT = {
                           "van de andere iets minder.",
         "note.loop": "De E32 vergelijkt het water dat terugkomt uit de vloergroepen over uren vloerverwarming. Zelf "
                      "verandert hij niets.",
+        "path.warmup": "Opwarmen {room}", "path.cooling": "Afkoelen {room}", "path.arrival": "Op tijd warm {room}",
+        "path.model": "Model van {room}", "path.track": "Voorspellingen {room}",
+        "path.curve": "Weerafhankelijke regeling", "path.boiler_minimum": "Starttemperatuur van de ketel",
+        "path.boiler_response": "Reactie van de ketel", "path.house": "Hoe snel het huis afkoelt",
+        "path.plant": "Kleinste vlam van de ketel", "path.outlook": "Weersverwachting",
+        "detail.of": "{n} van {m}", "detail.days": "{n} van {m} dagen goed", "detail.mornings": "nog {n} ochtenden",
+        "detail.morning": "nog 1 ochtend",
     },
 }
 
@@ -219,6 +234,101 @@ def missing_sentences(part, names, lang):
     t, items = TEXT[lang], missing_items(part, names)
     more = (part["more"] if part else 0) + len((part or {}).get("missing") or []) - len(items)
     return [t["missing." + item["kind"]].format(room=item["room"] or "") for item in items], more
+
+
+# 1.4.3 (LEARN-TAB): the learning path. The parts in the E32's own order (control/Knowledge.h): percent() of rc.5 ..
+# 1.1.0, and percentModels() of the firmware with the room models (1.1.1 stage B and later). (kind, per room).
+PATH_PLAIN = (("warmup", True), ("cooling", True), ("curve", False), ("arrival", True), ("boiler_minimum", False),
+              ("boiler_response", False), ("house", False))
+PATH_MODELS = (("model", True), ("track", True), ("arrival", True), ("plant", False), ("curve", False),
+               ("outlook", False))
+MODEL_KEYS = frozenset({"model", "track", "plant", "outlook"})
+PLAIN_KEYS = frozenset({"warmup", "cooling", "boiler_minimum", "boiler_response", "house"})
+ARRIVAL_TRUSTED = 3      # ArrivalLearner::Params::trustedEvents: judged mornings before the factor is trusted
+WARMUPS_TO_LEARN = 6     # FlowLearner::Params::roomSegments (learned_overview.WARMUPS_TO_LEARN)
+CURVE_STEPS = 6          # CurveLearner::Params::minWindows (learned_overview.CURVE_STEPS)
+
+
+def _uses_models(hub, kinds):
+    """Whether the E32 weighs what it knows around the room models (percentModels): a missing key only that set has,
+    or a room whose learned telemetry carries its model; else the parts of rc.5 (percent)."""
+    if kinds & MODEL_KEYS:
+        return True
+    if kinds & PLAIN_KEYS:
+        return False
+    learned = getattr(hub, "learned", None) or {}
+    return any(type(item) is dict and type(item.get("model")) is dict for item in learned.values())
+
+
+def _detail(kind, room_id, hub, summary, lang):
+    """What is still needed for a busy part, in the unit of its learning ("4 of 6", "2 more mornings"), or None."""
+    t = TEXT[lang]
+    learned = ((getattr(hub, "learned", None) or {}).get(room_id) or {}) if room_id else {}
+    if kind == "warmup":
+        seen = learned.get("segments")
+        if type(seen) is int and 0 <= seen < WARMUPS_TO_LEARN:
+            return t["detail.of"].format(n=seen, m=WARMUPS_TO_LEARN)
+        return None
+    if kind == "arrival":
+        plan = (getattr(hub, "warmup", None) or {}).get(room_id) or {}
+        arrival = plan.get("arrival") if type(plan) is dict and type(plan.get("arrival")) is dict else {}
+        events = arrival.get("events")
+        if type(events) is int and 0 <= events < ARRIVAL_TRUSTED:
+            left = ARRIVAL_TRUSTED - events
+            return t["detail.morning"] if left == 1 else t["detail.mornings"].format(n=left)
+        return None
+    if kind == "model":
+        from .learned_overview import room_model
+        model = room_model(learned)
+        if model and model["state"] in ("checking", "demoted") and model["good_days"] is not None and model["of"]:
+            return t["detail.days"].format(n=model["good_days"], m=model["of"])
+        return None
+    if kind == "curve":
+        flow = summary.get("flow") if type(summary) is dict and type(summary.get("flow")) is dict else {}
+        curve = flow.get("curve") if type(flow.get("curve")) is dict else {}
+        windows = curve.get("windows")
+        if type(windows) is int and 0 <= windows < CURVE_STEPS:
+            return t["detail.of"].format(n=windows, m=CURVE_STEPS)
+    return None
+
+
+def knowledge_path(part, hub, summary, names, lang):
+    """The learning path (1.4.3, CONTRACT-1.4.3 §3): [{"key", "name", "state", "detail"}] for every part the E32 weighs,
+    in its own order (rooms in plan order): "busy" while its key is missing (with what it still needs where the
+    telemetry tells it), "learned" only where Home Assistant can tell (nothing left out of the list, and for the
+    morning check the E32's own count of judged mornings), else "unknown" (no chip on the card). Rooms: those that
+    are on (a room that is Off or on Heat along only is not weighed by the E32)."""
+    if part is None:
+        return []
+    t = TEXT[lang]
+    missing = set()
+    for key in part.get("missing") or []:
+        item = missing_item(key)
+        if item is not None:
+            missing.add(key)
+    kinds = {key.partition(":")[0] for key in missing}
+    complete = part.get("more", 0) == 0 and len(missing) == len(part.get("missing") or [])
+    rooms = [room_id for room_id, room in (getattr(hub, "rooms", None) or {}).items()
+             if type(room) is dict and room.get("state") not in ("inactive", "follow")]
+    path = []
+    for kind, per_room in (PATH_MODELS if _uses_models(hub, kinds) else PATH_PLAIN):
+        for room_id in (rooms if per_room else [None]):
+            key = f"{kind}:{room_id}" if room_id else kind
+            name = t["path." + kind].format(room=names.get(room_id, room_id) if room_id else "")
+            if key in missing:
+                state, detail = "busy", _detail(kind, room_id, hub, summary, lang)
+            elif not complete:
+                state, detail = "unknown", None  # the E32 left keys out of its list: this one may be among them
+            elif kind == "arrival":
+                plan = (getattr(hub, "warmup", None) or {}).get(room_id) or {}
+                arrival = plan.get("arrival") if type(plan) is dict and type(plan.get("arrival")) is dict else {}
+                events = arrival.get("events")
+                # A room without a morning to judge is not missing either: learned only once the E32 trusts its mornings.
+                state, detail = ("learned" if type(events) is int and events >= ARRIVAL_TRUSTED else "unknown"), None
+            else:
+                state, detail = "learned", None
+            path.append({"key": key, "name": name, "state": state, "detail": detail})
+    return path
 
 
 def boiler_response(summary):
@@ -380,8 +490,8 @@ class KnowledgeSensor(_InsightSensor):
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 0
-    # The sentences are shown, not kept in the history (the percentage is).
-    _unrecorded_attributes = frozenset({"missing", "items"})
+    # The sentences are shown, not kept in the history (the percentage is); 1.4.3: the learning path too.
+    _unrecorded_attributes = frozenset({"missing", "items", "path"})
 
     def __init__(self, hub):
         self._attach(hub, "hub_knowledge")
@@ -400,8 +510,9 @@ class KnowledgeSensor(_InsightSensor):
         names = room_names(self.hub, getattr(self, "hass", None), getattr(entry, "entry_id", None))
         missing, more = missing_sentences(part, names, self._lang())
         # HA 1.0.1: the same items as kinds and room names, so the card says them in the viewer's language (the
-        # sentences are in Home Assistant's own language).
-        return {"missing": missing, "more": more, "items": missing_items(part, names)}
+        # sentences are in Home Assistant's own language). 1.4.3: the learning path (knowledge_path).
+        return {"missing": missing, "more": more, "items": missing_items(part, names),
+                "path": knowledge_path(part, self.hub, self.summary, names, self._lang())}
 
 
 class BoilerResponseSensor(_InsightSensor):

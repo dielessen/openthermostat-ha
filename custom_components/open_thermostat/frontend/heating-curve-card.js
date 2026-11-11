@@ -15,7 +15,17 @@
    heading above it says it (the Learning view).
 
    openthermostat-knowledge — what the E32 knows: a ring with the percentage beside the headline "The E32 knows
-   your house: 70 %" and, below them, what it still learns in words (the Knowledge sensor, insight.py).
+   your house: 70 %" and, below them, the learning path (1.4.3, the Knowledge sensor's ``path``, insight.py): one
+   label per part, green with a check once learned, amber with a clock while it is still learning with what it still
+   needs ("Warm-up Slaapkamer · 4 of 6"); a part Home Assistant cannot tell about gets no label.
+
+   openthermostat-boiler-learned (1.4.3) — what the E32 learned from the boiler, as tiles: the highest water it goes
+   to by itself in today's outdoor band and the most the E32 asks there, its rest, the water from which it burns
+   steadily and the water from which it starts heating; only tiles with a value; while nothing is learned the
+   Boiler response sensor's sentence. Its own EN/NL words (the viewer's language).
+
+   1.4.3 (design 4.3, one story about the water temperature): "Now" on the curve says what the E32 asks and how much
+   the rooms add ("E32 asks 42 °C" over "+5 °C for the rooms"), and the line's learned steepness is a sentence under it.
 
    The words are the integration's translations (strings.json entity.sensor.flow_curve.state_attributes.chart
    and entity.sensor.knowledge.state_attributes.card), so every viewer reads them in their own Home Assistant
@@ -28,10 +38,30 @@ const CURVE_TEXT = {title: 'Water temperature by outdoor temperature', standard:
  lower: '{n} °C cooler than standard', higher: '{n} °C warmer than standard', outdoor: 'Outdoor temperature (°C)',
  water: 'Water to heating (°C)', caption: 'The colder it is outside, the warmer the water. The E32 learns the line for your house and keeps it as low as it can.',
  values: 'Show the values', outside: 'Outside', off: 'Weather compensation is off; the lines show what it would ask.',
- waiting: 'The E32 has not reported its weather compensation yet.'};
+ waiting: 'The E32 has not reported its weather compensation yet.', rooms_add: '+{n} °C for the rooms',
+ slope_learned: 'Learned for your house: the water gets about {s} °C warmer for every degree colder outside.',
+ slope_house: 'Estimated from your house: the water gets about {s} °C warmer for every degree colder outside.',
+ slope_standard: 'The standard line for now: the water gets about {s} °C warmer for every degree colder outside.'};
 const KNOWLEDGE_TEXT = {title: 'The E32 knows your house', ring: 'The E32 knows your house: {pct} %', hint: 'It learns by itself while the heating runs.',
- missing: 'Still to learn', more: 'And {n} more.', done: 'It has learned everything it needs; it keeps checking as the seasons change.',
- waiting: 'The E32 has not reported what it knows yet.'};
+ done: 'It has learned everything it needs; it keeps checking as the seasons change.',
+ waiting: 'The E32 has not reported what it knows yet.', path: 'What it learns', learned: '{name}: learned', busy: '{name}: still learning'};
+// openthermostat-boiler-learned's own words (1.4.3), English and Dutch, in the viewer's language.
+const BOILER_TEXT = {
+ en: {ceiling: 'highest water {when}; the E32 asks at most {asks}', ceiling_off: 'highest water {when}; with Smart warm-up on the E32 would ask at most {asks}',
+  band_low: 'below {high} °C outside', band: 'at {low} to {high} °C outside', band_high: 'from {low} °C outside', band_none: 'at today’s outdoor temperature',
+  rest: 'rest each time it reaches its temperature', steady: 'burns steadily from this water', start: 'starts heating from this water',
+  min: '{n} min'},
+ nl: {ceiling: 'hoogste water {when}; de E32 vraagt hooguit {asks}', ceiling_off: 'hoogste water {when}; met Slim opwarmen aan vraagt de E32 hooguit {asks}',
+  band_low: 'onder {high} °C buiten', band: 'bij {low} tot {high} °C buiten', band_high: 'vanaf {low} °C buiten', band_none: 'bij de buitentemperatuur van nu',
+  rest: 'rust telkens als hij zijn temperatuur bereikt', steady: 'brandt rustig door vanaf dit water', start: 'begint te verwarmen vanaf dit water',
+  min: '{n} min'}};
+// BoilerResponse: the boiler holds about its ceiling + 2 °C (insight.HELD_ABOVE_CEILING_C).
+const HELD_ABOVE_CEILING_C = 2;
+// Material Design Icons (v7.4.47, Apache 2.0), inline: the learning path's labels.
+const PATH_ICONS = {
+ 'check': 'M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z',
+ 'clock-outline': 'M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z'
+};
 // The axes (°C): outdoor −15..20 (wider when it is colder or warmer now), water 20..80. FROST: the design point.
 const X0 = -15, X1 = 20, Y0 = 20, Y1 = 80, FROST = -10;
 const COLORS = `--hc-learned:#00876f;--hc-now:#b5600c;--hc-learned-soft:rgba(0,135,111,.13);--hc-now-soft:rgba(181,96,12,.18)`;
@@ -46,10 +76,14 @@ const BASE = `:host{display:block;
 --ot-rest-ink:#5f6368;--ot-rest-fill:#ebedf0;--ot-attention-ink:#b3261e;--ot-attention-fill:#f9dedc;
 /* CONTRACT-1.4.1 §8 (amended): filled buttons and text buttons, readable on HA's default accent */
 --ot-fill:color-mix(in srgb,var(--ot-accent) 72%,#000);--ot-link:color-mix(in srgb,var(--ot-accent) 60%,var(--ot-fg));
+/* 1.4.3 design §6: "learned" in green, its ink 60 % mixed with the text colour; tiles raised 2.5 % text on the card */
+--ot-ok:var(--success-color,#43a047);--ot-ok-ink:color-mix(in srgb,var(--ot-ok) 60%,var(--ot-fg));
+--ot-ok-fill:color-mix(in srgb,var(--ot-ok) 16%,var(--ot-bg,#fff));--ot-raised:color-mix(in srgb,var(--ot-fg) 2.5%,var(--ot-bg,#fff));
 color:var(--ot-fg)}
 :host([data-theme="dark"]){--ot-heat-ink:#f0a060;--ot-heat-fill:rgba(240,160,96,.18);--ot-along-ink:#e6c35c;--ot-along-fill:rgba(230,195,92,.18);
 --ot-water-ink:#7fb3f0;--ot-water-fill:rgba(127,179,240,.18);--ot-rest-ink:#b0b4ba;--ot-rest-fill:rgba(176,180,186,.18);
 --ot-attention-ink:#f2857c;--ot-attention-fill:rgba(242,133,124,.18)}
+:host([data-theme="dark"]){--ot-raised:color-mix(in srgb,var(--ot-fg) 5%,var(--ot-bg,#1c1c1c))}
 ha-card{display:block;padding:16px;border-radius:var(--ot-radius);color:var(--ot-fg);${COLORS};
 --hc-surface:var(--ha-card-background,var(--card-background-color,#fff));--hc-muted:var(--secondary-text-color,#6b6b6b);--hc-grid:var(--divider-color,rgba(127,127,127,.22))}
 ha-card.dark{${DARK}}h2{margin:0 0 4px;font-size:1.05rem;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
@@ -74,6 +108,7 @@ background:var(--hc-surface);color:var(--primary-text-color);border:1px solid va
 .tip-head{color:var(--hc-muted);margin-bottom:2px;white-space:nowrap}.tip-row{display:flex;align-items:center;gap:8px;white-space:nowrap}
 .tip-row b{font-weight:600;font-variant-numeric:tabular-nums}.tip-row span{color:var(--hc-muted)}
 .caption{margin:8px 0 0;color:var(--hc-muted);font-size:.9rem}.note{margin:6px 0 0;font-size:.9rem}
+.slope{margin:8px 0 0;font-size:var(--ot-text-m);line-height:var(--ot-line-m)}
 details{margin:8px 0 0}summary{cursor:pointer;color:var(--primary-color);font-size:.9rem;padding:6px 0;min-height:24px}
 table{border-collapse:collapse;color:inherit;font-size:.875rem;font-variant-numeric:tabular-nums;margin-top:4px}th,td{padding:4px 12px 4px 0;text-align:right;vertical-align:bottom;overflow-wrap:normal}td{white-space:nowrap}
 th{font-weight:500;color:var(--hc-muted)}th:first-child,td:first-child{text-align:left}tr+tr td{border-top:1px solid var(--hc-grid)}
@@ -81,10 +116,20 @@ th{font-weight:500;color:var(--hc-muted)}th:first-child,td:first-child{text-alig
 const KNOWLEDGE_STYLE = `${BASE}
 .head{display:flex;align-items:center;gap:14px}.ring{flex:none;width:72px;height:72px}.ring .track{stroke:var(--hc-learned-soft)}
 .ring .fill{stroke:var(--hc-learned)}.ring text{font-size:16px;font-weight:600;fill:var(--primary-text-color)}
-h3{margin:14px 0 6px;font-size:.95rem;font-weight:600}ul{margin:0;padding:0;list-style:none}
-li{position:relative;margin:0 0 6px;padding-left:16px;line-height:1.45;overflow-wrap:anywhere}
-li::before{content:"";position:absolute;left:2px;top:.6em;width:6px;height:6px;border-radius:50%;background:var(--hc-learned)}
-li.more{color:var(--hc-muted)}li.more::before{background:var(--hc-muted)}.done{margin-top:12px}`;
+.done{margin-top:12px}
+.path{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0;padding:0;list-style:none}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:26px;max-width:100%;box-sizing:border-box;padding:4px 10px;border-radius:13px;
+font-size:var(--ot-text-s);line-height:var(--ot-line-s);font-weight:500}
+.chip span{min-width:0;overflow-wrap:anywhere}.chip .ic{display:inline-flex;flex:none;width:15px;height:15px}.chip svg{display:block;width:100%;height:100%}
+.chip.learned{background:var(--ot-ok-fill);color:var(--ot-ok-ink)}.chip.busy{background:var(--ot-along-fill);color:var(--ot-along-ink)}`;
+const BOILER_STYLE = `${BASE}
+ha-card{padding:12px 16px}.sentence{margin:0 0 8px;font-size:var(--ot-text-m);line-height:var(--ot-line-m);color:var(--ot-fg-2)}
+.wrap{container:boiler/inline-size}.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.tile{display:flex;flex-direction:column;justify-content:space-between;gap:4px;min-width:0;min-height:84px;box-sizing:border-box;padding:10px 12px;
+border-radius:var(--ot-radius-s);background:var(--ot-raised)}
+.value{margin:0;font-size:26px;line-height:32px;font-weight:300;font-variant-numeric:tabular-nums;white-space:nowrap}
+.label{margin:0;font-size:var(--ot-text-s);line-height:var(--ot-line-s);color:var(--ot-fg-2);overflow-wrap:anywhere}
+@container boiler (min-width:560px){.tiles{grid-template-columns:repeat(var(--n,3),minmax(0,1fr))}}`;
 
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const numeric = value => { const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value; return finite(n) ? n : null; };
@@ -148,7 +193,10 @@ function drawCurve(host, data, t, n, keep = {at: null, focus: false}) {
   : data.base !== null ? Math.min(data.high ?? Infinity, Math.max(data.low ?? -Infinity, data.base)) : used(data.outdoor);
  const showNow = base !== null;
  const nowRows = showNow ? [t('now_point', {outdoor: n(data.outdoor, 1), flow: n(Math.round(base))})] : [];
- if (showNow && data.now !== null && Math.round(data.now) !== Math.round(base)) nowRows.push(t('asks', {flow: n(data.now)}));
+ // 1.4.3 (design 4.3): what the rooms add on top of the line, in the same words as the Learning view's story.
+ const added = data.now !== null && showNow ? Math.round(data.now) - Math.round(base) : 0;
+ if (showNow && data.now !== null && added !== 0)
+  nowRows.push(t('asks', {flow: n(data.now)}), ...(added > 0 ? [t('rooms_add', {n: n(added)})] : []));
  if (showNow) {
   marks.append(make('svg:circle', {class: 'halo', cx: px(data.outdoor), cy: py(base), r: 12}),
    make('svg:circle', {class: 'point now', 'data-point': 'now', cx: px(data.outdoor), cy: py(base), r: 5}));
@@ -346,7 +394,8 @@ class OpenThermostatHeatingCurve extends OpenThermostatCard {
   const hass = this._hass, config = this._config;
   if (!hass || !config) return;
   const trial = this.trial();
-  const t = (key, values) => this.text('flow_curve.state_attributes.chart.state.', CURVE_TEXT, trial && key === 'asks' ? 'would_ask' : key, values);
+  const t = (key, values) => this.text('flow_curve.state_attributes.chart.state.', CURVE_TEXT,
+   trial && key === 'asks' ? 'would_ask' : key, values);
   const n = (v, d) => this.number(v, d);
   const card = this.frame(CURVE_STYLE), st = hass.states?.[config.entity];
   // show_name: false where a heading above the card already says it (the Learning view's own section, rc.5).
@@ -365,7 +414,13 @@ class OpenThermostatHeatingCurve extends OpenThermostatCard {
   if (data.learned) key('learned', t(data.house ? 'house' : 'learned'));
   if (data.outdoor !== null) key('now', t('now'));
   const plot = make('div', {class: 'plot'});
-  card.append(legend, plot, make('p', {class: 'caption'}, t('caption')));
+  card.append(legend, plot);
+  // 1.4.3: the steepness of the line in use in one sentence (learned, estimated from the house, or the standard one).
+  const steep = data.learned ? data.slope : data.standardSlope;
+  if (steep !== null && steep > 0)
+   card.append(make('p', {class: 'slope', 'data-slope': data.learned ? (data.house ? 'house' : 'learned') : 'standard'},
+    t(data.learned ? (data.house ? 'slope_house' : 'slope_learned') : 'slope_standard', {s: n(steep, 2)})));
+  card.append(make('p', {class: 'caption'}, t('caption')));
   if (a.state === 'advice') card.append(make('p', {class: 'note'}, t('off')));
   const draw = () => {
    this._width = plot.clientWidth;
@@ -386,15 +441,7 @@ class OpenThermostatHeatingCurve extends OpenThermostatCard {
 
 class OpenThermostatKnowledge extends OpenThermostatCard {
  static configError = 'This card needs the Knowledge sensor of OpenThermostat (entity: sensor.…); the OpenThermostat dashboard adds it for you.';
- getCardSize() { return 4; }
- // One thing still to learn in the viewer's words ({kind, room}: "It still has to see how fast Kitchen warms up."), or ''.
- item(item) {
-  if (!item || typeof item.kind !== 'string' || !/^[a-z_]+$/.test(item.kind)) return '';
-  try {
-   const text = this._hass?.localize?.(PREFIX + 'knowledge.state_attributes.items.state.' + item.kind, {room: typeof item.room === 'string' ? item.room : ''});
-   return typeof text === 'string' ? text : '';
-  } catch (e) { return ''; }
- }
+ getCardSize() { return 3; }
  render() {
   const hass = this._hass, config = this._config;
   if (!hass || !config) return;
@@ -402,11 +449,7 @@ class OpenThermostatKnowledge extends OpenThermostatCard {
   const card = this.frame(KNOWLEDGE_STYLE), st = hass.states?.[config.entity];
   if (this.missing(card, config, st)) return;
   const pct = numeric(st.state), a = st.attributes || {};
-  let missing = Array.isArray(a.missing) ? a.missing.filter(s => typeof s === 'string' && s) : [];
-  // HA 1.0.1: the same items as kinds (insight.missing_items) in the viewer's language; the sensor's sentences are in
-  // Home Assistant's own language, so they are the last resort.
-  const own = Array.isArray(a.items) && a.items.length === missing.length ? a.items.map(item => this.item(item)) : [];
-  if (own.length && own.every(Boolean)) missing = own;
+  const missing = Array.isArray(a.missing) ? a.missing.filter(s => typeof s === 'string' && s) : [];
   const more = Number.isInteger(a.more) && a.more > 0 ? a.more : 0, open = missing.length > 0 || more > 0;
   // One story on the card (rc.7): while something is still to learn the figure stays below 100 % (a rounded 99.6 % read
   // as "100 %" over a list of what it still learns), and "learned everything" only at 100 % with nothing left. Then
@@ -431,13 +474,97 @@ class OpenThermostatKnowledge extends OpenThermostatCard {
   head.append(words);
   card.append(head);
   if (pct === null) return;
-  if (complete) { card.append(make('p', {class: 'done'}, t('done'))); return; }
-  // Short of 100 % with nothing listed (the E32 rounds down): the hint under the ring says it is still learning.
-  if (!open) return;
-  const list = make('ul');
-  for (const sentence of missing) list.append(make('li', {}, sentence));
-  if (more) list.append(make('li', {class: 'more'}, t('more', {n: this.number(more)})));
-  card.append(make('h3', {}, t('missing')), list);
+  if (complete) card.append(make('p', {class: 'done'}, t('done')));
+  // 1.4.3: the learning path (insight.knowledge_path): learned parts green with a check, parts it still learns amber with
+  // a clock and what they still need; a part Home Assistant cannot tell about ("unknown") has no label, never a check.
+  const path = (Array.isArray(a.path) ? a.path : []).filter(p => p && typeof p.name === 'string' && p.name
+   && (p.state === 'learned' || p.state === 'busy'));
+  if (!path.length) return;
+  const list = make('ul', {class: 'path', 'aria-label': t('path')});
+  for (const state of ['learned', 'busy']) for (const part of path.filter(p => p.state === state)) {
+   const detail = typeof part.detail === 'string' && part.detail ? part.detail : '';
+   const label = part.name + (detail ? ' · ' + detail : ''), box = make('span', {class: 'ic', 'aria-hidden': 'true'});
+   const svg = make('svg:svg', {viewBox: '0 0 24 24', focusable: 'false'});
+   svg.append(make('svg:path', {d: PATH_ICONS[state === 'learned' ? 'check' : 'clock-outline'], fill: 'currentColor'}));
+   box.append(svg);
+   const chip = make('li', {class: 'chip ' + state, 'data-key': typeof part.key === 'string' ? part.key : null, 'data-state': state,
+    title: label, 'aria-label': t(state, {name: label})});
+   chip.append(box, make('span', {}, label));
+   list.append(chip);
+  }
+  card.append(list);
+ }
+}
+
+// 1.4.3 (design 4.2 item 3): what the E32 learned from the boiler, as tiles, under the curve on the Learning view.
+// Config: boiler (the Boiler response sensor), learned (the learned overview), curve (its outdoor temperature for the
+// band), smart (the Smart warm-up switch). Only Home Assistant's states; only tiles with a value.
+class OpenThermostatBoilerLearned extends HTMLElement {
+ constructor() { super(); this.attachShadow({mode: 'open'}); this._key = null; }
+ setConfig(config) {
+  const id = value => typeof value === 'string' && value.startsWith('sensor.') ? value : null;
+  if (!config || !id(config.boiler)) throw new Error('This card needs the "Boiler response" sensor of OpenThermostat (boiler: sensor.…); the OpenThermostat dashboard adds it for you.');
+  this._config = {boiler: config.boiler, learned: id(config.learned), curve: id(config.curve),
+   smart: typeof config.smart === 'string' ? config.smart : null};
+  this._key = null;
+  if (this._hass) this.render();
+ }
+ set hass(hass) {
+  this._hass = hass;
+  if (!this._config) return;
+  const c = this._config, key = [c.boiler, c.learned, c.curve, c.smart].map(id => id && hass?.states?.[id]).concat([locale(hass), darkOf(hass)]);
+  if (this._key && key.every((v, i) => v === this._key[i])) return;
+  this._key = key; this.render();
+ }
+ getCardSize() { return 2; }
+ getGridOptions() { return {columns: 12, min_columns: 6}; }
+ words(key, values = {}) {
+  const table = BOILER_TEXT[/^nl\b/.test(locale(this._hass)) ? 'nl' : 'en'];
+  return String(table[key] ?? BOILER_TEXT.en[key]).replace(/\{(\w+)\}/g, (all, k) => k in values ? values[k] : all);
+ }
+ number(value, digits = 0) {
+  return value.toLocaleString(locale(this._hass), {maximumFractionDigits: digits, minimumFractionDigits: 0, useGrouping: false}).replace('-', '−');
+ }
+ render() {
+  const hass = this._hass, c = this._config;
+  if (!hass || !c) return;
+  if (darkOf(hass)) this.setAttribute('data-theme', 'dark'); else this.removeAttribute('data-theme');
+  const st = id => (id ? hass.states?.[id] : null) || null, ok = s => !!s && !['unknown', 'unavailable', ''].includes(s.state);
+  const boiler = st(c.boiler), learned = st(c.learned), b = ok(boiler) ? boiler.attributes || {} : {}, l = ok(learned) ? learned.attributes || {} : {};
+  const deg = v => this.number(Math.round(v)) + ' °C', tiles = [];
+  const tile = (key, value, label) => {
+   const box = make('div', {class: 'tile', 'data-fact': key, title: label});
+   box.append(make('p', {class: 'value'}, value), make('p', {class: 'label'}, label));
+   tiles.push(box);
+  };
+  const ceiling = numeric(b.ceiling_c);
+  if (ok(boiler) && boiler.state === 'learned' && ceiling !== null) {
+   // The outdoor band the ceiling belongs to (BoilerResponse: 5 K bands from −10 °C, below −5 and from 15 °C open).
+   const o = numeric(st(c.curve)?.attributes?.outdoor_c), k = o === null ? null : Math.min(5, Math.max(0, Math.floor((o + 10) / 5)));
+   const when = k === null ? this.words('band_none') : k === 0 ? this.words('band_low', {high: this.number(-5)})
+    : k === 5 ? this.words('band_high', {low: this.number(15)}) : this.words('band', {low: this.number(-10 + 5 * k), high: this.number(-5 + 5 * k)});
+   const off = st(c.smart)?.state === 'off';
+   tile('ceiling', deg(ceiling + HELD_ABOVE_CEILING_C), this.words(off ? 'ceiling_off' : 'ceiling', {when, asks: deg(ceiling)}));
+  }
+  const rest = numeric(b.rest_min);
+  if (ok(boiler) && boiler.state === 'learned' && rest !== null && rest > 0)
+   tile('rest', this.words('min', {n: this.number(Math.max(1, Math.round(rest)))}), this.words('rest'));
+  const steady = numeric(l.steady_burn_floor_c), start = numeric(l.boiler_minimum_flow_c);
+  if (steady !== null) tile('steady', deg(steady), this.words('steady'));
+  if (start !== null) tile('start', deg(start), this.words('start'));
+  const sentence = ok(boiler) && boiler.state !== 'learned' && typeof b.sentence === 'string' ? b.sentence : '';
+  const card = make('ha-card', darkOf(hass) ? {class: 'dark'} : {}), wrap = make('div', {class: 'wrap'});
+  card.append(wrap);
+  if (sentence) wrap.append(make('p', {class: 'sentence', 'data-sentence': ''}, sentence));
+  if (tiles.length) {
+   const grid = make('div', {class: 'tiles'});
+   grid.style.setProperty('--n', Math.min(4, tiles.length));
+   grid.append(...tiles);
+   wrap.append(grid);
+  }
+  // Nothing to show: no card at all (the section's other card, the curve, stands alone).
+  this.style.display = sentence || tiles.length ? '' : 'none';
+  this.shadowRoot.replaceChildren(make('style', {}, BOILER_STYLE), card);
  }
 }
 // Other dashboard cards (HACS resources) may later replace window.customElements with a scoped-registry
@@ -467,8 +594,10 @@ const ensureDefined = (name, cls) => {
 };
 ensureDefined('openthermostat-heating-curve', OpenThermostatHeatingCurve);
 ensureDefined('openthermostat-knowledge', OpenThermostatKnowledge);
+ensureDefined('openthermostat-boiler-learned', OpenThermostatBoilerLearned);
 window.customCards = window.customCards || [];
 for (const [type, name, description] of [
  ['openthermostat-heating-curve', 'OpenThermostat heating curve', 'Water temperature by outdoor temperature: the standard line, the one learned for your house and now.'],
- ['openthermostat-knowledge', 'OpenThermostat knowledge', 'How much the E32 knows about your house, and what it still learns.']])
+ ['openthermostat-knowledge', 'OpenThermostat knowledge', 'How much the E32 knows about your house, and what it still learns.'],
+ ['openthermostat-boiler-learned', 'OpenThermostat boiler learned', 'What the E32 learned from your boiler, as figures.']])
  if (!window.customCards.some(c => c.type === type)) window.customCards.push({type, name, description});

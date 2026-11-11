@@ -210,6 +210,17 @@ TEXT = {
         "because.learned_warmup": "{room} warms about 1 °C in {figure}",
         "learned_warms": "warms about 1 °C in {d} with water of {flow} °C",
         "curve_slope": "The water gets about {s} °C warmer for every degree colder outside.",
+        # 1.4.3 (LEARN-TAB): a room's facts (room_facts): what a fact not learned yet still needs, never a number,
+        # and the progress word of a room that learns nothing now.
+        "wait.warmups": "{n} more warm-ups", "wait.warmup": "1 more warm-up",
+        "wait.other_days": "warm-ups on other days or with other water",
+        "wait.timing": "warm-up time learned; the water follows",
+        "wait.after_warmup": "after the warm-up is learned",
+        "wait.other_water": "warm-ups with another water temperature",
+        "wait.not_found": "not found yet",
+        "wait.cooling": "after a night without heating",
+        "wait.free_heat": "not seen yet",
+        "room_follow": "Heat along only", "room_off": "Off",
     },
     "nl": {
         "h_m": "{h} u {m} min", "h": "{h} u", "m": "{m} min", "at_least": "minstens {d}", "per_c": "{d} per °C",
@@ -373,6 +384,15 @@ TEXT = {
         "because.learned_warmup": "{room} ongeveer 1 °C opwarmt in {figure}",
         "learned_warms": "warmt ongeveer 1 °C op in {d} met water van {flow} °C",
         "curve_slope": "Het water wordt ongeveer {s} °C warmer voor elke graad kouder buiten.",
+        "wait.warmups": "nog {n} opwarmingen", "wait.warmup": "nog 1 opwarming",
+        "wait.other_days": "opwarmingen op andere dagen of met ander water",
+        "wait.timing": "opwarmtijd geleerd; het water volgt",
+        "wait.after_warmup": "zodra het opwarmen geleerd is",
+        "wait.other_water": "opwarmingen bij een andere watertemperatuur",
+        "wait.not_found": "nog niet gevonden",
+        "wait.cooling": "na een nacht zonder verwarming",
+        "wait.free_heat": "nog niet gezien",
+        "room_follow": "Alleen meeverwarmen", "room_off": "Uit",
     },
 }
 # The knobs (control/ControlTuning.h): automatic (AutoTuner) or fixed, the built-in value and how a value reads.
@@ -790,17 +810,22 @@ def model_line(name, learned, lang, planning=False):
 
 
 def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=None, room_id=None, comfort=None,
-                  trial=False, currency=None, now=None, planning=False, room_off=False):
-    """{name, room_id, progress, summary, lines: [{text, meaning}]} of one room; clock: utc -> "07:10" in local time.
+                  trial=False, currency=None, now=None, planning=False, room_off=False, advice=None):
+    """{name, room_id, progress, summary, lines: [{text, meaning}], facts} of one room that is on; clock: utc -> "07:10"
+    in local time.
 
     day: utc -> the local date, today: the local date now (for "Yesterday warm at 09:12", arrival_line).
     comfort: the room's ``comfort`` (its mode: away or an open window holds the program, so no Smart warm-up line);
     trial: the trial run; currency: Home Assistant's (the night advice's money); summary: once learned, how fast it
     warms in a few words (the Learning tab's progress list); planning: the E32 plans the heating (heating_plan.py);
     model: the model line's text (None on firmware without the room models).
+    advice: the room's heat-along advice (room_advice.learning_lines, the heating advice sensor's ``rooms``) or None.
+    facts (1.4.3, CONTRACT-1.4.3 §3): the same figures as the lines, structured for the Learning view's room card,
+    each from the input its line uses; a fact not learned yet is in ``waiting`` with what it needs (finish_facts).
     """
     t = TEXT[lang]
     learned = learned if type(learned) is dict else {}
+    facts, heat_along = new_facts(learned), advice  # ``advice`` is the E32's learned advice below
     ready = learned.get("readiness") == "ready"
     seen = min(WARMUPS_TO_LEARN, learned["segments"]) if _ok(learned.get("segments")) else 0
     lines = []
@@ -817,18 +842,23 @@ def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=
         values = {"d": duration(advice["rule_warmup_h"] * 60, lang), "flow": number(advice["rule_flow_c"], lang, 0)}
         lines.append(_line(t["warms"].format(**values), t["warms_mean"]))
         summary = t["learned_warms"].format(**values)
+        facts["warmup"] = {"hours": round(advice["rule_warmup_h"], 2), "flow_c": round(advice["rule_flow_c"])}
     if ready and advice and _ok(advice.get("flow_c")) and advice.get("reason") in ("learned", "lowest_learned"):
         lines.append(_line(t["lowest"].format(flow=number(advice["flow_c"], lang, 0)), t["lowest_mean"]))
+        facts["lowest_flow_c"] = round(advice["flow_c"])
     # A loss that rounds to 0 °C per hour ("loses about 0 °C") says nothing: left out.
-    if _ok(learned.get("loss_per_h")) and learned["loss_per_h"] * (REFERENCE_ROOM_C - REFERENCE_OUTDOOR_C) >= 0.01:
-        rate = learned["loss_per_h"] * (REFERENCE_ROOM_C - REFERENCE_OUTDOOR_C)
+    if (rate := cooling_rate(learned)) is not None:
         lines.append(_line(t["cools"].format(rate=number(rate, lang, 2), out=REFERENCE_OUTDOOR_C), t["cools_mean"]))
+        facts["cooling"] = {"c_per_h": round(rate, 2), "outdoor_c": REFERENCE_OUTDOOR_C}
     plan = plan if type(plan) is dict else {}
     start = plan.get("optimum_start") if type(plan.get("optimum_start")) is dict else {}
     comfort = comfort if type(comfort) is dict else {}
     held = comfort.get("mode") in HELD_MODES or comfort.get("window") == "open"
     later = free_heat_later(learned, plan)
     warm = None if held else smart_warm_up_line(start, smart, lang, clock, trial, later, now, room_off)
+    facts["smart_start"] = smart_start_fact(start, smart, clock, trial, later, now, room_off,
+                                            comfort.get("mode") if comfort.get("mode") in HELD_MODES
+                                            else "window_open" if held else None)
     if warm is not None:
         lines.append(_line(*warm))
     elif not held and start.get("reason") == "planned" and _ok(start.get("predicted_start_utc")):
@@ -837,8 +867,12 @@ def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=
     # E32 rc.5: sun, cooking and people, after the Smart warm-up line, which names the later start it gives.
     if (free := free_heat_line(learned, plan, lang, False if held else smart, warm is not None)) is not None:
         lines.append(_line(*free))
+    if (found := free_heat(learned, plan)) is not None:
+        facts["free_heat"] = {"c_per_h": round(found[1], 1), "part": DAYPARTS[found[0]],
+                              "later_min": found[2] if found[2] and smart is not False and not held else 0}
     if (arrived := arrival_line(plan.get("arrival"), lang, clock, day, today, start)) is not None:
         lines.append(_line(*arrived))
+        facts["arrival"] = arrival_fact(plan.get("arrival"), clock, day, today, start)
     night = plan.get("night") if type(plan.get("night")) is dict else {}
     if night.get("reason") == "estimated" and type(night.get("recommended")) is str:
         hold = night["recommended"] not in ("program", "thermostat_like") and _ok(night.get("recommended_night_c"))
@@ -856,6 +890,7 @@ def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=
         else:
             text = t["night_program" if nightly else "night_program_until"].format(time=rise)
         lines.append(_line(text, t["night_mean"]))
+        facts["advice"] = {"text": text, "meaning": t["night_mean"], "kind": "night"}
     # "6 of 6" read as finished while the E32 still waits for other days or a second water temperature
     # (FlowLearner readiness: 6 warm-ups in 3 heating periods and 2 water temperatures): then say what is missing.
     if ready:
@@ -866,8 +901,135 @@ def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=
         progress = t["learning_seen"].format(n=learned["segments"])
     else:
         progress = t["learning"].format(n=seen, m=WARMUPS_TO_LEARN)
+    facts["status"] = "ready" if ready else "timing" if learned.get("readiness_timing") == "ready" else "learning"
+    if facts["advice"] is None:
+        facts["advice"] = advice_fact(heat_along)
+    finish_facts(facts, heat_along, lang)
     return {"name": name, "room_id": room_id, "progress": progress, "summary": summary, "lines": lines,
-            "model": model[0] if model is not None else None}
+            "model": model[0] if model is not None else None, "facts": facts}
+
+
+# -- 1.4.3 (LEARN-TAB): a room's facts for the Learning view's room card (CONTRACT-1.4.3 §3) --------------------------
+DAYPARTS = ("night", "early_morning", "morning", "afternoon", "evening", "late_evening")  # FreeHeat's six of 4 hours
+# room_advice's kind -> what the advice is about: an On room's (what Heat along only would change), a heat-along room's
+# (up to which temperature it heats along for free, a fixed temperature).
+ADVICE_KINDS = {"active": "follow", "follow": "fixed"}
+
+
+def cooling_rate(learned):
+    """How fast the room cools at 5 °C outside (°C per hour) from the E32's heat-loss rate, or None (unknown, or so
+    small that it would read "0 °C per hour")."""
+    loss = learned.get("loss_per_h") if type(learned) is dict else None
+    if not _ok(loss):
+        return None
+    rate = loss * (REFERENCE_ROOM_C - REFERENCE_OUTDOOR_C)
+    return rate if rate >= 0.01 else None
+
+
+def new_facts(learned, status=None):
+    """A room's facts before anything is filled in: the progress of its warm-ups (FlowLearner) and its model."""
+    learned = learned if type(learned) is dict else {}
+    segments, periods = learned.get("segments"), learned.get("periods")
+    seen = min(WARMUPS_TO_LEARN, segments) if type(segments) is int and segments >= 0 else 0
+    model = room_model(learned)
+    return {"status": status, "progress": {"seen": seen, "of": WARMUPS_TO_LEARN,
+                                           "periods": periods if type(periods) is int and periods >= 0 else None},
+            "warmup": None, "cooling": None, "lowest_flow_c": None, "free_heat": None, "smart_start": None,
+            "arrival": None, "model": {key: model[key] for key in ("state", "good_days", "of")} if model else None,
+            "advice": None, "waiting": {}}
+
+
+def smart_start_fact(start, on, clock, trial=False, later_min=0, now=None, room_off=False, held=None):
+    """Smart warm-up's start for the room's next step up, read as smart_warm_up_line reads it: {"at", "target_c",
+    "target_at", "estimate", "held_reason", "now"}, or None without a planned start. held_reason: why it starts no
+    earlier than the program: the comfort mode that holds the program or "window_open", "off" (Smart warm-up off),
+    "room_off" (off for this room), "learning" (not learned yet: heating starts at the program time, the start is an
+    estimate), "not_needed" (warm enough already), "trial" (the trial run: it would start then),
+    else None; now: heating for it now; estimate: not learned yet, or from the standard warm-up time."""
+    start = start if type(start) is dict else {}
+    switch = start.get("next_switch") if type(start.get("next_switch")) is dict else {}
+    if (start.get("reason") != "planned" or not _ok(start.get("predicted_start_utc"))
+            or not _ok(switch.get("utc")) or not _ok(switch.get("target_c"))):
+        return None
+    shift = later_min * 60 if type(later_min) is int and later_min > 0 and on is not False else 0
+    begin = start["predicted_start_utc"] + shift
+    applies = start["applies"] if type(start.get("applies")) is bool else start.get("confidence") == "learned"
+    heating = start.get("start_now") is True and (not shift or begin <= (time.time() if now is None else now))
+    reason = (held or ("room_off" if on is False and room_off else "off" if on is False else None)
+              or ("learning" if not applies else None)
+              or ("not_needed" if start.get("lead_minutes") == 0 and start.get("start_now") is not True else None)
+              or ("trial" if trial else None))
+    return {"at": clock(begin), "target_c": switch["target_c"], "target_at": clock(switch["utc"]),
+            "estimate": not applies or start.get("estimate") is True, "held_reason": reason,
+            "now": bool(heating) and reason is None}
+
+
+def arrival_fact(arrival, clock, day=None, today=None, start=None):
+    """The last judged morning, read as arrival_line reads it: {"at": when the room was warm (the switch time when it
+    was not warm within 3 hours), "minutes_late" (negative: early; 180: not warm within 3 hours), "day": "today",
+    "yesterday" or the local date (YYYY-MM-DD), "next": "earlier" | "later" | None, "next_min": about how many minutes,
+    or None}. Only called once arrival_line has a line."""
+    at, error, factor = arrival.get("last_at_utc"), arrival.get("last_error_min"), arrival.get("factor")
+    day = day or (lambda utc: datetime.fromtimestamp(utc, timezone.utc).date())
+    today = today or day(time.time())
+    on, minutes = day(at), round(error)
+    factor = factor if _ok(factor) else None
+    earlier = minutes >= LATE_MIN and (factor is None or factor < FACTOR_LIMITS[1] - 1e-3)
+    later = minutes <= EARLY_MIN and (factor is None or factor > FACTOR_LIMITS[0] + 1e-3)
+    late = min(minutes, NOT_WARM_MIN)
+    return {"at": clock(at if late >= NOT_WARM_MIN else at + minutes * 60), "minutes_late": late,
+            "day": "today" if on == today else "yesterday" if on == today - timedelta(days=1) else on.isoformat(),
+            "next": "earlier" if earlier else "later" if later else None,
+            "next_min": arrival_shift(late, start, at) if earlier or later else None}
+
+
+def advice_fact(advice):
+    """The room's heat-along advice (room_advice, 1.4.2) once it has a figure: {"text", "meaning": None, "kind"}
+    (ADVICE_KINDS), else None; while it still counts days its sentence is in ``waiting`` (finish_facts)."""
+    if type(advice) is not dict or not advice.get("advice") or advice.get("advice_reason") is not None:
+        return None
+    kind = ADVICE_KINDS.get(advice.get("advice_kind"))
+    return {"text": advice["advice"], "meaning": None, "kind": kind} if kind else None
+
+
+def finish_facts(facts, advice, lang):
+    """``waiting``: what each fact not learned yet still needs, in the unit of its learning, never a number for the
+    fact itself; the cooling from the room's own model (room_advice) where the E32 has none."""
+    t, waiting, status = TEXT[lang], facts["waiting"], facts["status"]
+    cool = advice.get("cool_c_per_h") if type(advice) is dict else None
+    if facts["cooling"] is None and _ok(cool) and cool >= 0.01:
+        facts["cooling"] = {"c_per_h": round(cool, 2), "outdoor_c": REFERENCE_OUTDOOR_C}
+    if facts["cooling"] is None:
+        waiting["cooling"] = t["wait.cooling"]
+    if type(advice) is dict and advice.get("advice") and advice.get("advice_reason") is not None:
+        waiting["advice"] = advice["advice"]  # "Too little data yet ... So far 3 of the 14 days."
+    if status in ("follow", "off"):
+        return
+    seen = facts["progress"]["seen"]
+    if facts["warmup"] is None:
+        waiting["warmup"] = (t["wait.timing"] if status == "timing" else t["wait.other_days"] if seen >= WARMUPS_TO_LEARN
+                             else t["wait.warmup"] if WARMUPS_TO_LEARN - seen == 1
+                             else t["wait.warmups"].format(n=WARMUPS_TO_LEARN - seen))
+    if facts["lowest_flow_c"] is None:
+        waiting["lowest_flow_c"] = (t["wait.not_found"] if status == "ready" else t["wait.other_water"]
+                                    if status == "timing" else t["wait.after_warmup"])
+    if facts["free_heat"] is None:
+        waiting["free_heat"] = t["wait.free_heat"]
+
+
+def idle_room_overview(name, room_id, state, learned, lang, advice=None):
+    """A room that learns no warm-up now (Off, or Heat along only: E32 1.3): no lines; its facts with what still holds
+    on Heat along only (how fast it cools, the heat-along advice); an Off room only its status."""
+    t = TEXT[lang]
+    follow = state == "follow"
+    facts = new_facts(learned, "follow" if follow else "off")
+    if follow:
+        if (rate := cooling_rate(learned)) is not None:
+            facts["cooling"] = {"c_per_h": round(rate, 2), "outdoor_c": REFERENCE_OUTDOOR_C}
+        facts["advice"] = advice_fact(advice)
+        finish_facts(facts, advice, lang)
+    return {"name": name, "room_id": room_id, "progress": t["room_follow" if follow else "room_off"],
+            "summary": None, "lines": [], "model": None, "facts": facts}
 
 
 def boiler_minimum_flow(summary):
@@ -1080,6 +1242,19 @@ class LearnedOverviewSensor(RestoreEntity, SensorEntity):
         link = data.get(DOMAIN, {}).get(self.entry.entry_id, {}).get(KEY) if isinstance(data, dict) else None
         return getattr(link, "settings", None)
 
+    def _advice_lines(self):
+        """{room id: the heat-along line of the room} as the heating advice sensor last wrote it (its ``rooms``,
+        room_advice.learning_lines, in Home Assistant's language), {} without one: read, never worked out again."""
+        hass = getattr(self, "hass", None)
+        data = getattr(hass, "data", None)
+        sensor = data.get(DOMAIN, {}).get(self.entry.entry_id, {}).get("heating_advice") if isinstance(data, dict) else None
+        entity_id = getattr(sensor, "entity_id", None)
+        states = getattr(hass, "states", None)
+        st = states.get(entity_id) if entity_id and states is not None and hasattr(states, "get") else None
+        lines = st.attributes.get("rooms") if st is not None else None
+        return {line["room_id"]: line for line in lines if type(line) is dict and type(line.get("room_id")) is str} \
+            if type(lines) is list else {}
+
     def _names(self):
         """The rooms by the name the dashboard shows (renamed in Home Assistant or not; insight.room_names)."""
         from .insight import room_names
@@ -1129,18 +1304,24 @@ class LearnedOverviewSensor(RestoreEntity, SensorEntity):
         from .e32_flow import smart_warm_up
         smart = smart_warm_up(self.hass, self.entry.entry_id) if getattr(self, "hass", None) is not None else None
         day, today = local_day(self.hass) if getattr(self, "hass", None) is not None and self._clock is None else (None, None)
-        # E32 1.3: a room on Heat along only ("follow") learns no warm-up and gets none: left out like a room that is off.
+        # E32 1.3: a room on Heat along only ("follow") learns no warm-up and gets none: no lines, as a room that is off;
+        # 1.4.3: both are in ``rooms`` with their facts (idle_room_overview), for the Learning view's room cards.
         active = [(room_id, name) for room_id, name in names.items()
                   if self.hub.rooms[room_id].get("state") not in ("inactive", "follow")]
+        advice = self._advice_lines()
         trial = trial_run(self.hub.status)  # the trial run or a takeover not confirmed yet: the E32 heats nothing early
         currency = getattr(getattr(getattr(self, "hass", None), "config", None), "currency", None)
         from .heating_plan import plan_state
         planning = plan_state(self.hub) == "planning"
         # E32 1.4 (#8): each room's own Smart warm-up in effect (room_smart_warm_up), else the house switch.
+        on_rooms = dict(active)
         rooms = [room_overview(name, self.hub.learned.get(room_id), self.hub.warmup.get(room_id), lang, clock, on,
                                day, today, room_id, self.hub.rooms[room_id].get("comfort"), trial, currency,
-                               planning=planning, room_off=room_off)
-                 for room_id, name in active
+                               planning=planning, room_off=room_off, advice=advice.get(room_id))
+                 if room_id in on_rooms else
+                 idle_room_overview(name, room_id, self.hub.rooms[room_id].get("state"), self.hub.learned.get(room_id),
+                                    lang, advice.get(room_id))
+                 for room_id, name in names.items()
                  for on, room_off in (room_smart_warm_up(self.hub.rooms[room_id], smart),)]
         manual = tuning.get("manual") if type(tuning.get("manual")) is list else []
         from .insight import insight_lines  # E32 rc.5: yesterday against the house's own usual days

@@ -1197,7 +1197,7 @@
         "phone_gone": "{service} (niet gevonden)",
         "on": "aan",
         "off": "uit",
-                "with_house": " (ook het huis)",
+        "with_house": " (ook het huis)",
         "house_people": "Ze gaan naar: {people}.",
         "house_nobody": "Nog niemand krijgt deze: zet bij Personen en telefoons een vinkje bij een persoon. Tot dan verschijnen ze in Home Assistant."
       }
@@ -2734,7 +2734,7 @@
       "e32_plan_too_large": "Het ruimteplan is te groot voor de E32 (4 KB). Gebruik kortere namen, minder bronnen of minder schakelpunten. Er is niets opgeslagen.",
       "e32_storage_full": "De E32 heeft geen opslagruimte meer voor zijn ruimteplan. Verwijder een ruimte die je niet meer gebruikt, of een paar schakelpunten uit de weekprogramma's, en sla opnieuw op. Er is niets opgeslagen.",
       "e32_rejected": "De E32 weigerde het ruimteplan ({error}). Er is niets opgeslagen.",
-      "e32_unreachable": "De E32 is niet bereikbaar ({error}). Er is niets opgeslagen.",
+      "e32_unreachable": "De E32 was niet bereikbaar ({error}). Er is niets opgeslagen.",
       "e32_room_limit": "Het ruimteplan van de E32 heeft al 8 ruimtes.",
       "entity_not_found": "Deze entiteit heeft geen status in Home Assistant.",
       "gas_meter_unit": "Kies een gasmetersensor in m³, of in kWh met apparaatklasse gas of energie.",
@@ -4052,10 +4052,11 @@
               "title": "De E32 kent je huis",
               "ring": "De E32 kent je huis: {pct} %",
               "hint": "Hij leert vanzelf terwijl de verwarming draait.",
-              "missing": "Nog te leren",
-              "more": "En nog {n}.",
               "done": "Hij heeft alles geleerd wat hij nodig heeft; hij blijft het controleren als de seizoenen wisselen.",
-              "waiting": "De E32 heeft nog niet gemeld wat hij weet."
+              "waiting": "De E32 heeft nog niet gemeld wat hij weet.",
+              "path": "Wat hij leert",
+              "learned": "{name}: geleerd",
+              "busy": "{name}: leert nog"
             }
           },
           "items": {
@@ -4154,7 +4155,11 @@
               "waiting": "De E32 heeft zijn weerafhankelijke regeling nog niet gemeld.",
               "house": "Geschat uit je huis",
               "asks": "E32 vraagt {flow} °C",
-              "would_ask": "E32 zou {flow} °C vragen"
+              "would_ask": "E32 zou {flow} °C vragen",
+              "slope_learned": "Geleerd voor je huis: het water wordt ongeveer {s} °C warmer voor elke graad kouder buiten.",
+              "slope_house": "Geschat uit je huis: het water wordt ongeveer {s} °C warmer voor elke graad kouder buiten.",
+              "slope_standard": "Voorlopig de standaardlijn: het water wordt ongeveer {s} °C warmer voor elke graad kouder buiten.",
+              "rooms_add": "+{n} °C voor de ruimtes"
             }
           },
           "design_flow_c": {
@@ -4344,8 +4349,8 @@
               "yes": "ja",
               "no": "nee",
               "flow": "Water naar verwarming",
-              "asked": "gevraagd {flow} °C",
-              "asked_sent": "gevraagd {flow} °C, gestuurd {sent} °C",
+              "asked": "E32 vraagt {flow} °C",
+              "asked_sent": "E32 vraagt {flow} °C, gestuurd {sent} °C",
               "would_ask": "E32 zou {flow} °C vragen",
               "no_request": "geen vraag",
               "ceiling": "hoogstens {flow} °C",

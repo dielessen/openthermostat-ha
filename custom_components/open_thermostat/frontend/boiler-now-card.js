@@ -24,8 +24,8 @@ const PREFIX = 'component.open_thermostat.entity.sensor.';
 const CARD = 'boiler_activity.state_attributes.card.state.';
 const TEXT = {title: 'The boiler now', no_data: 'No data from the boiler', boiler: 'Boiler', code: 'Display code {code}: {meaning}',
  code_bare: 'Display code {code}', code_fault: '{severity} · display code {code}', link: 'connection with the boiler: {state}', link_good: 'good',
- link_none: 'none', dhw: 'hot water: {state}', yes: 'yes', no: 'no', flow: 'Water to heating', asked: 'asked {flow} °C',
- asked_sent: 'asked {flow} °C, sent {sent} °C',
+ link_none: 'none', dhw: 'hot water: {state}', yes: 'yes', no: 'no', flow: 'Water to heating', asked: 'E32 asks {flow} °C',
+ asked_sent: 'E32 asks {flow} °C, sent {sent} °C',
  would_ask: 'E32 would ask {flow} °C', no_request: 'no request', ceiling: 'at most {flow} °C', back: 'Water back',
  difference: 'difference {n} °C', power: 'Burner power', power_off: 'burner off', power_low: 'low fire, calm', power_mid: 'medium fire',
  power_full: 'full fire', power_above: 'hot water can go above 100 %', starts: 'Starts in the last hour', calm: 'calm', often: 'switching on and off too often', today: 'today {n}',

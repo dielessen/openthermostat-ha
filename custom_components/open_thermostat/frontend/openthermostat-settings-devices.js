@@ -190,7 +190,7 @@ const TEXTS = {
   'This valve number is already in the list.': 'Dit kraannummer staat al in de lijst.',
   'Use a valve name of up to 32 characters, without quotes or backslashes.': 'Gebruik een kraannaam van hoogstens 32 tekens, zonder aanhalingstekens of backslashes.',
   'The E32 refused this ({error}). Nothing was saved.': 'De E32 weigerde dit ({error}). Er is niets opgeslagen.',
-  'The E32 could not be reached ({error}). Nothing was saved.': 'De E32 is niet bereikbaar ({error}). Er is niets opgeslagen.',
+  'The E32 could not be reached ({error}). Nothing was saved.': 'De E32 was niet bereikbaar ({error}). Er is niets opgeslagen.',
   'The E32 could not confirm that the settings were saved. Check them on the E32 before trying again.': 'De E32 kon niet bevestigen dat de instellingen zijn opgeslagen. Controleer ze op de E32 voordat je het opnieuw probeert.',
   'The E32 has no free web session: close E32 pages you do not use, or wait two minutes, then try again.': 'De E32 heeft geen vrije websessie: sluit E32-pagina\'s die je niet gebruikt, of wacht twee minuten, en probeer het opnieuw.',
   'The E32 is updating or restarting. Try again once its web page opens normally.': 'De E32 wordt bijgewerkt of start opnieuw. Probeer het opnieuw zodra zijn webpagina normaal opent.',

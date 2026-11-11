@@ -124,7 +124,7 @@ const TEXTS = {
   'A device can be the room\'s setting device or a radiator valve the E32 drives, not both. Choose one.': 'Een apparaat kan het instelapparaat van de ruimte zijn óf een kraan die de E32 aanstuurt, niet allebei. Kies er één.',
   'Choose one of the people in the list.': 'Kies een van de personen in de lijst.',
   'The E32 could not confirm the change. Reload the page to see what is saved.': 'De E32 kon de wijziging niet bevestigen. Laad de pagina opnieuw om te zien wat er is opgeslagen.',
-  'The E32 could not be reached ({error}). Nothing was saved.': 'De E32 is niet bereikbaar ({error}). Er is niets opgeslagen.',
+  'The E32 could not be reached ({error}). Nothing was saved.': 'De E32 was niet bereikbaar ({error}). Er is niets opgeslagen.',
   'The E32 sent rooms this version cannot read. Update the E32 firmware and the integration together.': 'De E32 stuurde ruimtes die deze versie niet kan lezen. Werk de E32-firmware en de integratie samen bij.',
   'The E32 no longer accepts the saved password. Home Assistant asks for the new one: Settings → Devices & services → OpenThermostat → Re-authenticate.': 'De E32 accepteert het bewaarde wachtwoord niet meer. Home Assistant vraagt om het nieuwe: Instellingen → Apparaten en diensten → OpenThermostat → Opnieuw verifiëren.',
   'The E32 did not accept the room ({error}). Nothing was saved.': 'De E32 heeft de ruimte niet aangenomen ({error}). Er is niets opgeslagen.',
@@ -310,7 +310,8 @@ const PLAIN = ['name', 'state', 'emitter', 'sources', 'setpoint_entity', 'fallba
 const copy = v => JSON.parse(JSON.stringify(v));
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
-const deg = (kit, v, unit, lang) => kit.degrees(num(v), unit || '°C', lang);
+// A value the E32 keeps in °C (a reset value, what was written to the setting device) in the house's unit (model.unit).
+const inUnit = (celsius, unit) => (unit === '°F' ? Math.round((celsius * 9 / 5 + 32) * 10) / 10 : celsius);
 // The age of a reading in words: just now, 4 min ago, 2 h ago.
 const age = (st, t) => {
  const at = Date.parse(st?.last_reported || st?.last_updated || '');
@@ -345,22 +346,22 @@ function reasonOf(hass, room) {
 // What the room does now, in the integration's own words (Home Assistant translates the Reason sensor's sentence).
 function doing(kit, hass, st) {
  if (!st) return '';
- const a = st.attributes || {}, v = a.values && typeof a.values === 'object' ? a.values : {}, lang = kit.langOf(hass);
- const fixed = x => (num(x) == null ? '–' : num(x).toLocaleString(lang, {minimumFractionDigits: 1, maximumFractionDigits: 1}));
+ const a = st.attributes || {}, v = a.values && typeof a.values === 'object' ? a.values : {};
+ const fixed = x => (num(x) == null ? '–' : kit.number(num(x), hass, 1, 1));
  const values = {contact: typeof v.contact === 'string' ? v.contact : '', since: kit.time.moment(hass, v.since), time: kit.time.moment(hass, v.time),
-  until: kit.time.moment(hass, v.until), temperature: fixed(v.temperature), target: num(v.target) == null ? '–' : kit.number(num(v.target), lang)};
+  until: kit.time.moment(hass, v.until), temperature: fixed(v.temperature), target: num(v.target) == null ? '–' : kit.number(num(v.target), hass)};
  let line = '';
  try { line = typeof a.line === 'string' ? hass?.localize?.(REASON + 'line.state.' + a.line, values) || '' : ''; } catch (e) { line = ''; }
  if (line) return line;
  try { const text = hass?.formatEntityState?.(st); return text && text !== st.state ? text : ''; } catch (e) { return ''; }
 }
 // "Resets at 22:00 to 14 °C" / "At 23:00 to Heat along only": the room thermostat's next reset time, as the room card says it.
-function resetLine(kit, hass, climate, t) {
+function resetLine(kit, hass, climate, t, unit = '°C') {
  const a = hass?.states?.[climate]?.attributes || {}, v = a.next_reset_value, time = kit.time.moment(hass, a.next_reset);
  if (!time) return '';
  if (STATES[v]) return t(RESET[1], {time, value: t(STATES[v][0])});
  const degree = num(v);
- return degree == null ? '' : t(RESET[0], {time, value: kit.degrees(degree, '°C', kit.langOf(hass))});
+ return degree == null ? '' : t(RESET[0], {time, value: kit.degrees(inUnit(degree, unit), unit, hass)});
 }
 const measured = (hass, entities) => {
  const c = hass?.states?.[entities?.climate], s = hass?.states?.[entities?.temperature];
@@ -370,13 +371,13 @@ const measured = (hass, entities) => {
 function card(ctx, room, {compact, current} = {}) {
  const {kit, t} = ctx, route = '#room/' + encodeURIComponent(room.id), wrap = kit.h('div', {class: 'rr-card', 'data-live': '', 'data-room': room.id});
  wrap._live = hass => {
-  const now = measured(hass, room.entities), target = num(hass?.states?.[room.entities?.climate]?.attributes?.temperature), lang = kit.langOf(hass);
+  const now = measured(hass, room.entities), target = num(hass?.states?.[room.entities?.climate]?.attributes?.temperature), unit = ctx.model?.unit || '°C';
   const [word, tone, , icon] = STATES[room.state] || STATES.active;
   const until = room.state === 'inactive' && room.inactive_until ? offUntil(kit, hass, t, room.inactive_until, room.after) : '';
-  const lines = compact ? [] : [doing(kit, hass, hass?.states?.[reasonOf(hass, room)]) || (now == null ? t('No temperature yet') : ''), until, resetLine(kit, hass, room.entities?.climate, t)];
+  const lines = compact ? [] : [doing(kit, hass, hass?.states?.[reasonOf(hass, room)]) || (now == null ? t('No temperature yet') : ''), until, resetLine(kit, hass, room.entities?.climate, t, unit)];
   wrap.replaceChildren(kit.roomCard({name: room.name, compact, current, route, emitter: EMITTERS[room.emitter]?.[1] || 'radiator',
-   onClick: e => { e.preventDefault(); ctx.navigate(route); }, temperature: now == null ? null : now.toLocaleString(lang, {minimumFractionDigits: 1, maximumFractionDigits: 1}),
-   unit: ctx.model?.unit || '°C', target: target != null && room.state !== 'inactive' ? '→ ' + kit.degrees(target, ctx.model?.unit || '°C', lang) : null,
+   onClick: e => { e.preventDefault(); ctx.navigate(route); }, temperature: now == null ? null : kit.number(now, hass, 1, 1),
+   unit, target: target != null && room.state !== 'inactive' ? '→ ' + kit.degrees(target, unit, hass) : null,
    state: {text: t(word), tone, icon}, lines}));
  };
  wrap._live(ctx.hass);
@@ -400,7 +401,7 @@ function reading(kit, source, model, hass) {
  const eid = source.type === 'ble' ? bleOf(model, source.id)?.entity_id : source.id, st = eid && hass?.states?.[eid];
  if (!st) return ['', null];
  const value = eid.startsWith('climate.') ? num(st.attributes?.current_temperature) : num(st.state);
- return value == null ? ['', st] : [kit.degrees(value, eid.startsWith('climate.') ? model.unit : st.attributes?.unit_of_measurement || model.unit, kit.langOf(hass)), st];
+ return value == null ? ['', st] : [kit.degrees(value, eid.startsWith('climate.') ? model.unit : st.attributes?.unit_of_measurement || model.unit, hass), st];
 }
 // Sources keep the order the room form stores: the kind of the first one first (Bluetooth or Home Assistant).
 const grouped = list => (list.length ? [...list.filter(s => s.type === list[0].type), ...list.filter(s => s.type !== list[0].type)] : list);
@@ -463,9 +464,9 @@ function sourcesField(ctx) {
 }
 // A value with the house's as default: [As the house (2 min) | Own] and a stepper for the own one.
 function ownOrHouse(ctx, {key, label, house, value, unit, step, min, max, onChange, disabled, help}) {
- const {kit, t} = ctx, lang = ctx.lang, wrap = kit.h('div', {class: 'rr-own'});
+ const {kit, t} = ctx, wrap = kit.h('div', {class: 'rr-own'});
  let own = value != null;
- const shownHouse = house == null ? '' : `${kit.number(house, lang)} ${unit}`;
+ const shownHouse = house == null ? '' : kit.degrees(house, unit, ctx.hass);
  const seg = kit.fields.segmented({key: key + ':own', hass: ctx.hass, label, disabled, value: own ? 'own' : 'house', help,
   options: [{value: 'house', label: shownHouse ? t('As the house ({value})', {value: shownHouse}) : t('As the house'), help: t('The house value applies; you change it under House.')},
    {value: 'own', label: t('Own value'), help: t('This room uses its own value.')}],
@@ -503,7 +504,7 @@ function contactsField(ctx) {
 // registry scan here), a percentage or a "low" binary sensor, and the valve's own state (hass.states).
 function valveStatus(kit, hass, eid, t, batteryId) {
  const st = hass?.states?.[eid], battery = batteryId ? hass?.states?.[batteryId] : null, level = num(battery?.state);
- const said = level != null ? t('Battery {level}', {level: `${kit.number(level, kit.langOf(hass), 0)} %`}) : battery?.state === 'on' ? t('Battery low') : '';
+ const said = level != null ? t('Battery {level}', {level: `${kit.number(level, hass, 0)} %`}) : battery?.state === 'on' ? t('Battery low') : '';
  return [said, st ? t('Last report {age}', {age: age(st, t)}) : t('Not found in Home Assistant')].filter(Boolean).join(' · ');
 }
 // A valve as the save takes it (S-ROOM-BACKEND: {entity_id, model}, a kept valve {id}, a BLU Gateway valve {id, role, keep_open}).
@@ -653,11 +654,11 @@ function roomList(ctx) {
 // The open sections of each room, kept per viewer (and in memory when the browser keeps nothing).
 const opened = new Map();
 function summaries(ctx) {
- const {kit, t, model: m, values: v, hass, lang} = ctx, unit = m.unit || '°C', out = {};
+ const {kit, t, model: m, values: v, hass} = ctx, unit = m.unit || '°C', out = {};
  const state = v.state === 'inactive' && v.inactive_until ? offUntil(kit, hass, t, v.inactive_until, afterOf(m, v)) : t(STATES[v.state]?.[0] || 'On');
  out.general = `${state} · ${t(EMITTERS[v.emitter]?.[0] || 'Radiators')}`;
  const now = measured(hass, m.entities);
- out.temperature = [now == null ? t('No temperature yet') : t('{temperature} now', {temperature: kit.degrees(now, unit, lang)}),
+ out.temperature = [now == null ? t('No temperature yet') : t('{temperature} now', {temperature: kit.degrees(now, unit, hass)}),
   (v.sources || []).length === 1 ? t('1 source') : t('{n} sources', {n: (v.sources || []).length}),
   v.setpoint_entity ? t('setting device {name}', {name: nameOf(hass, v.setpoint_entity)}) : ''].filter(Boolean).join(' · ');
  // The week program, its reset times and Smart warm-up are read values (live, 1.4.2 P1): the planner saves them.
@@ -677,7 +678,7 @@ function summaries(ctx) {
  if (n) out.notifications = n.on ? [`${t('On')}: ${n.kinds.map(k => t(KIND_SHORT[k] || k)).join(', ')}`, !('recipients' in n) ? ''
   : n.recipients == null ? t('Everyone with a phone') : n.recipients.map(id => (live.notifications?.people || []).find(p => p.person === id)?.name || id).join(', ')]
   .filter(Boolean).join(' · ') : t('Off');
- if (v.minimum_temperature != null) out.limits = `${kit.number(v.minimum_temperature, lang)}–${kit.degrees(v.maximum_temperature, unit, lang)}`;
+ if (v.minimum_temperature != null) out.limits = `${kit.number(v.minimum_temperature, hass)}–${kit.degrees(v.maximum_temperature, unit, hass)}`;
  return out;
 }
 function roomPage(ctx) {
@@ -727,7 +728,7 @@ function roomPage(ctx) {
  // P12: the valve record could not be read now: the block stays, says why and offers a new read (HA-DEVICES' key).
  else if (!isNew && m.features?.radiator_valves !== false && m.live?.radiator_valves_error) parts.push(fold('valves',
   kit.notice(t('The radiator valves could not be read ({error}). Reload.', {error: m.live.radiator_valves_error}), 'warning',
-   kit.button(t('Reload'), () => ctx.navigate('#rooms/' + encodeURIComponent(m.id)), 'text', {'data-reload-valves': ''}))));
+   kit.button(t('Reload'), () => ctx.reload(), 'text', {'data-reload-valves': ''}))));
  if (!isNew && m.persons) parts.push(fold('persons', ctx.field(personsField(ctx), 'persons', {})));
  if (!isNew && m.notifications) parts.push(fold('notifications', ctx.field(notificationsField(ctx), 'notifications', {})));
  if (v.minimum_temperature != null) {
@@ -764,7 +765,7 @@ const valveHint = (m, v) => v.state === 'active' && !!v.setpoint_entity && ((m.l
 function sourceLine(ctx) {
  const {kit, t, model: m, hass} = ctx, s = m.live?.target_source;
  if (!s || ctx.item === NEW) return null;
- const temperature = kit.degrees(num(s.temperature), m.unit || '°C', ctx.lang), time = s.until ? kit.time.moment(hass, s.until) : '';
+ const temperature = kit.degrees(num(s.temperature), m.unit || '°C', hass), time = s.until ? kit.time.moment(hass, s.until) : '';
  const words = {
   program: time ? ['Now {temperature} from the week program, until {time}', {temperature, time}] : ['Now {temperature} from the week program', {temperature}],
   fixed: ['Now {temperature}: the temperature without a week program', {temperature}],
@@ -785,11 +786,10 @@ function adviceBlock(ctx) {
  const box = kit.h('div', {class: 'rr-advice', 'data-advice': ''}, kit.h('p', {class: 'help', text: kit.together(text)}),
   more || model ? kit.more([more, model].filter(Boolean).join(' '), lang) : null);
  if (target == null || ctx.readOnly) return box;
- const shown = unit === '°F' ? Math.round((target * 9 / 5 + 32) * 10) / 10 : target;
- const use = kit.button(t('Use {temperature}', {temperature: kit.degrees(shown, unit, ctx.lang)}), async () => {
+ const use = kit.button(t('Use {temperature}', {temperature: kit.degrees(inUnit(target, unit), unit, ctx.hass)}), async () => {
   use.disabled = true; error.replaceChildren();
   // A routine plan write of HA-ADVICE (the self-tuning does not restart); then the screen reads the room again.
-  try { await ctx.action('adopt_advice', {temperature: target}); ctx.navigate('#rooms/' + encodeURIComponent(m.id)); }
+  try { await ctx.action('adopt_advice', {temperature: target}); ctx.reload(); }
   catch (err) { use.disabled = false; error.replaceChildren(kit.inlineError(err?.text || ctx.errorText(err?.code || 'unknown'))); }
  }, 'text', {'data-adopt': ''});
  box.append(use, error);
@@ -802,7 +802,7 @@ function fixedBlock(ctx, follow) {
  const program = ctx.item !== NEW && (m.live?.program || []).length > 0;
  const parts = [];
  if (follow && program) {
-  const temperature = kit.degrees(num(v.fallback_temperature), unit, ctx.lang);
+  const temperature = kit.degrees(num(v.fallback_temperature), unit, ctx.hass);
   parts.push(h('div', {class: 'field rr-program-note', 'data-field': 'fallback_temperature'}, h('span', {class: 'label', text: t('Heat along up to')}),
    h('p', {class: 'help', text: t('This room follows its week program; the valve gets those temperatures.')}),
    ctx.readOnly ? null : kit.button(t('Use one fixed temperature'), () => ctx.act({remove_program: true, fallback_temperature: v.fallback_temperature}, {
@@ -817,13 +817,13 @@ function fixedBlock(ctx, follow) {
  return [...parts, sourceLine(ctx), adviceBlock(ctx)].filter(Boolean);
 }
 function settingLine(ctx) {
- const {kit, t, model} = ctx, el = kit.h('p', {class: 'help rr-setting', 'data-live': ''}), lang = ctx.lang;
+ const {kit, t, model} = ctx, el = kit.h('p', {class: 'help rr-setting', 'data-live': ''}), unit = model.unit || '°C';
  el._live = hass => {
   const a = hass?.states?.[model.entities?.climate]?.attributes || {};
   if (!model.setpoint_entity || ctx.values.setpoint_entity !== model.setpoint_entity || a.setting_device !== model.setpoint_entity) { el.hidden = true; return; }
   const lines = [];
-  if (typeof a.setting_device_written === 'number') lines.push(t('Last written: {temperature} at {time}', {temperature: kit.degrees(a.setting_device_written, '°C', lang), time: kit.time.moment(hass, a.setting_device_written_at)}));
-  if (typeof a.setting_device_knob === 'number') lines.push(t('Last turned on the device: {temperature} at {time}', {temperature: kit.degrees(a.setting_device_knob, '°C', lang), time: kit.time.moment(hass, a.setting_device_knob_at)}));
+  if (typeof a.setting_device_written === 'number') lines.push(t('Last written: {temperature} at {time}', {temperature: kit.degrees(inUnit(a.setting_device_written, unit), unit, hass), time: kit.time.moment(hass, a.setting_device_written_at)}));
+  if (typeof a.setting_device_knob === 'number') lines.push(t('Last turned on the device: {temperature} at {time}', {temperature: kit.degrees(inUnit(a.setting_device_knob, unit), unit, hass), time: kit.time.moment(hass, a.setting_device_knob_at)}));
   if (!lines.length) lines.push(t('Nothing written to it yet.'));
   // HA-SETDEV (V4): when Home Assistant last set the device to manual (it ran its own schedule).
   if (a.setting_device_set_to_manual) lines.push(t('Set to manual by Home Assistant at {time}', {time: kit.time.moment(hass, a.setting_device_set_to_manual)}));

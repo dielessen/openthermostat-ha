@@ -206,8 +206,8 @@ TEXT = {
                   "Check that the E32 is on and its web page opens, and that its password in Home Assistant is "
                   "still right; then press Back up E32 settings now on the E32 device.",
         "plan_ready": "The E32's predictions for {room} have been good for a week. To let it plan the heating, press "
-                      "Let the E32 plan the heating under Today's plan on the OpenThermostat dashboard (Learning and "
-                      "settings), or leave it as it is.",
+                      "Let the E32 plan the heating under Today's plan on the OpenThermostat dashboard (Learning), or "
+                      "leave it as it is.",
         "season_on": "Five days above 17 °C outside on average. Switch summer mode on?",
         "season_off": "It is getting colder. Switch summer mode off?",
     },
@@ -256,7 +256,7 @@ TEXT = {
                   "in Home Assistant nog klopt; druk daarna op Nu een back-up van de E32 maken op het E32-apparaat.",
         "plan_ready": "De voorspellingen van de E32 voor {room} zijn al een week goed. Wil je dat hij de verwarming "
                       "plant, druk dan op Laat de E32 de verwarming plannen bij Plan voor vandaag op het "
-                      "OpenThermostat-dashboard (Leren en instellingen), of laat het zoals het is.",
+                      "OpenThermostat-dashboard (Leren), of laat het zoals het is.",
         "season_on": "Al vijf dagen gemiddeld boven 17 °C buiten. Zomerstand aanzetten?",
         "season_off": "Het wordt kouder. Zomerstand uitzetten?",
     },

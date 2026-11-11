@@ -30,6 +30,42 @@ PLACEHOLDER = "not_reported_placeholder"
 PROFILE_HIDDEN = "hidden_by_boiler_profile"
 
 
+# 1.4.3 (FIXES-143, issue #12): the hot water flow ("Hot water flow" / "Warmwaterdebiet", L/min) is an unreliable
+# (quality 1) Classic field: adapters such as the Bosch EasyControl fill it with zero or a constant, so its entity was
+# made disabled and nobody saw the flow of a boiler that does measure it. A flow that moves (two different values in
+# one run, the E32's own "live flow" rule for counting taps) is the boiler's measurement: its entity is made on, under
+# Diagnostic and hidden from automatic dashboards. A value that never moves makes none. A record an earlier release
+# made disabled (by this integration, untouched by the user) is switched on and hidden once, when the flow moves
+# (LIVE_FLOW_SHOWN; Home Assistant reloads the entry to add it, as native_entity_cleanup.note_value does).
+LIVE_FLOW = frozenset({"dhw_flow"})
+LIVE_FLOW_SHOWN = "live_flow_shown_v1"
+
+
+def live_flow_field(index):
+    """Whether index is an unreliable member of the hot water flow (LIVE_FLOW): made only once its flow moves."""
+    return off_by_default(index) and concept_name(index) in LIVE_FLOW
+
+
+def show_live_flow(hass, prefix, index):
+    """The flow of index moves: an untouched record this integration disabled is switched on and hidden, once.
+    A user's own choice (disabled, hidden, named) is kept. True when the record was switched on."""
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, field_unique_id(prefix, index))
+    record = registry.async_get(entity_id) if entity_id is not None else None
+    if record is None:
+        return False
+    options = record.options.get(DOMAIN, {})
+    if options.get(LIVE_FLOW_SHOWN):
+        return False
+    shown = record.disabled_by is _INTEGRATION and ours(record)
+    if shown:
+        registry.async_update_entity(entity_id, disabled_by=None, hidden_by=_HIDDEN)
+        _LOGGER.info("OpenThermostat 1.4.3: the boiler measures its hot water flow; %s is on (hidden, under "
+                     "Diagnostic)", entity_id)
+    registry.async_update_entity_options(entity_id, DOMAIN, {**options, LIVE_FLOW_SHOWN: True})
+    return shown
+
+
 def lifetime_counter(name):
     """The boiler's own running totals (burner starts and hours, hot water starts, its uptime)."""
     return not name.startswith("thermostat_") and (name.endswith(("_starts", "_runtime")) or name == "boiler_uptime")
@@ -496,6 +532,8 @@ async def async_setup_boiler_fields(hass, entry, async_add_entities):
     limiter = reenable_limiter(hass, entry)
     unconfirmed = set()
     placeholders = set()
+    # The hot water flow's raw values seen in this run (LIVE_FLOW): two different ones mean it moves.
+    flow_values = {}
     # One evaluation per pass, shared by every entity of it (client.ready costs ~1 ms).
     shared = {"valid": False, "live": False}
 
@@ -529,6 +567,14 @@ async def async_setup_boiler_fields(hass, entry, async_add_entities):
         known = {member for entity in entities for member in entity.members}
         new = []
         registry = None
+        for index in (INDEXES if client.boiler_fields_supported else ()):
+            if live_flow_field(index) and (record := cache.records.get(index)) and record[0][2] is not None:
+                seen = flow_values.setdefault(index, set())
+                if len(seen) < 2:
+                    seen.add(record[0][1])
+        moving = {index for index, seen in flow_values.items() if len(seen) > 1}
+        for index in sorted(moving & {entity.index for entity in entities if not entity.added}):
+            show_live_flow(hass, prefix, index)
         for index in INDEXES if client.boiler_fields_supported else ():
             if index in known:
                 continue
@@ -549,8 +595,16 @@ async def async_setup_boiler_fields(hass, entry, async_add_entities):
                 continue
             registry = registry or er.async_get(hass)
             preferred = reporting or {member for member in members if cache.field_state(member) == "supported"}
-            entity = BoilerFieldEntity(prefix, client, holder(registry, prefix, members, preferred), translated,
-                                       placeholder=placeholder, shared=shared)
+            chosen = holder(registry, prefix, members, preferred)
+            live = False
+            if live_flow_field(chosen):
+                # The hot water flow: a record keeps its own state; without one, only a flow that moves.
+                if registry.async_get_entity_id("sensor", DOMAIN, field_unique_id(prefix, chosen)) is None:
+                    if chosen not in moving:
+                        continue
+                    live = True
+            entity = BoilerFieldEntity(prefix, client, chosen, translated, placeholder=placeholder, shared=shared,
+                                       live=live)
             entity.confirmed = bool(reporting) or state == "supported"
             new.append(entity)
         for entity in entities:
@@ -662,7 +716,7 @@ class BoilerFieldEntity(SensorEntity):
     _unrecorded_attributes = frozenset({"source_observed_at_ms", "age_basis", "raw_divisor", "source_ttl_ms",
                                         "protocol_profile", "source_fields", "last_read"})
 
-    def __init__(self, prefix, client, index, translated=None, placeholder=False, shared=None):
+    def __init__(self, prefix, client, index, translated=None, placeholder=False, shared=None, live=False):
         # shared: the setup's per-pass evaluation (whether the values may show at all).
         self._shared = shared
         self._source = None  # this pass's source, while shared["valid"]
@@ -695,6 +749,10 @@ class BoilerFieldEntity(SensorEntity):
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
         if placeholder:
             self._attr_entity_registry_enabled_default = False
+        if live:  # LIVE_FLOW: a hot water flow that moves is measured: on, under Diagnostic, hidden
+            self._attr_entity_registry_enabled_default = True
+            self._attr_entity_registry_visible_default = False
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN,prefix)})
         self._attr_native_unit_of_measurement = {"degC":"°C", "uA":"µA"}.get(unit,unit)
         if unit in ("bool", "bits", "text", "code", "starts"):
