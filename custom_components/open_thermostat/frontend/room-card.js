@@ -153,7 +153,9 @@ p{margin:0}svg{display:block;flex:none}button,select{font:inherit;color:inherit}
 .type{flex:none;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:var(--ot-rest-fill);color:var(--ot-rest-ink)}
 .titles{flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
 .name{margin-right:auto;font-size:var(--ot-text-l);line-height:var(--ot-line-l);font-weight:500;overflow-wrap:anywhere}
-.labels{display:flex;flex-wrap:wrap;gap:6px}
+.labels{display:flex;flex-wrap:wrap;gap:6px;flex-basis:100%}.labels:empty{display:none}
+/* 1.4.5: the state (its menu) beside the name; the deviations on a line of their own under them */
+.titles>.label,.titles>.label-menu{flex:none}
 .label{display:inline-flex;align-items:center;gap:6px;max-width:100%;box-sizing:border-box;min-height:26px;padding:2px 10px;border-radius:13px;
 font-size:var(--ot-text-s);line-height:var(--ot-line-s);font-weight:500;background:var(--fill);color:var(--ink);overflow-wrap:anywhere}
 .tone-heat{--ink:var(--ot-heat-ink);--fill:var(--ot-heat-fill)}.tone-along{--ink:var(--ot-along-ink);--fill:var(--ot-along-fill)}
@@ -174,8 +176,8 @@ border-radius:50%;background:var(--ot-raised);cursor:pointer;transition:backgrou
 .val .unit{font-size:var(--ot-text-m);color:var(--ot-fg-2)}
 .compact{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;cursor:pointer}
 .compact .now{font-size:var(--ot-text-xl);line-height:var(--ot-line-xl);font-weight:300;font-variant-numeric:tabular-nums;white-space:nowrap}
-.modes{display:flex;flex-wrap:nowrap;align-items:center;gap:0 6px;margin:0 -4px;padding:0 4px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none}
-.modes::-webkit-scrollbar{display:none}
+/* 1.4.5: one row while the presets fit; on a narrow card (below about 330 px) a second row, never sideways scroll */
+.modes{display:flex;flex-wrap:wrap;align-items:center;gap:0 6px}
 .presets{display:flex;flex-direction:column;min-width:0}
 .chip{flex:none;min-height:var(--ot-touch);padding:0;border:0;background:none;cursor:pointer}
 .chip span{display:inline-flex;align-items:center;height:30px;padding:0 8px;box-sizing:border-box;border:1px solid var(--ot-line);border-radius:15px;
@@ -568,16 +570,19 @@ class OpenThermostatRoom extends HTMLElement {
   const c = this._config, a = st?.attributes || {}, head = make('div', {class: 'head'});
   const type = make('span', {class: 'type', 'aria-hidden': 'true', 'data-type': TYPE[c.emitter] ? c.emitter : 'room'});
   type.append(svgIcon(TYPE[c.emitter] || 'thermostat', 24));
+  // 1.4.5: the state label (or its menu) beside the name, the deviations on a line of their own under them, so a long
+  // name such as "Slaapkamer" keeps its state beside it.
   const titles = make('div', {class: 'titles'}), labels = make('div', {class: 'labels'});
-  titles.append(make('p', {class: 'name'}, c.name || this.name(c.climate, c.room_id) || ''), labels);
+  titles.append(make('p', {class: 'name'}, c.name || this.name(c.climate, c.room_id) || ''));
   head.append(type, titles);
-  const label = (kind, tone, glyph, words, extra = {}) => {
+  const label = (kind, tone, glyph, words, extra = {}, into = labels) => {
    const l = make('span', {class: 'label tone-' + tone, 'data-label': kind, ...extra});
    l.append(svgIcon(glyph, 15), make('span', {}, words));
-   labels.append(l);
+   into.append(l);
   };
-  if ((state === 'on' || state === 'follow') && this.st(c.climate)) labels.append(this.stateMenu(state));
-  else if (state) label('state', ...STATE[state], this.t(state), {'data-state': state});
+  if ((state === 'on' || state === 'follow') && this.st(c.climate)) titles.append(this.stateMenu(state));
+  else if (state) label('state', ...STATE[state], this.t(state), {'data-state': state}, titles);
+  titles.append(labels);
   if (state === 'on' || state === 'follow') {
    if (a.window === 'open') {
     const door = a.opening === 'door';

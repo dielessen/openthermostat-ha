@@ -37,8 +37,14 @@ PROFILE_HIDDEN = "hidden_by_boiler_profile"
 # Diagnostic and hidden from automatic dashboards. A value that never moves makes none. A record an earlier release
 # made disabled (by this integration, untouched by the user) is switched on and hidden once, when the flow moves
 # (LIVE_FLOW_SHOWN; Home Assistant reloads the entry to add it, as native_entity_cleanup.note_value does).
+# 1.4.5 (HA-DHW-FLOW-145, #12 again): the tester still did not see it: hidden, under Diagnostic, and on the dashboard
+# among the raw values. A flow that moves is now an everyday hot-water value: on, shown, not under Diagnostic, with a
+# tile on the Boiler view ("Tapping now" / "No tapping"). A record 1.4.3 hid (by this integration, untouched by the
+# user) is shown again once (LIVE_FLOW_VISIBLE); a user's own choice is kept. Still made only for a flow that moves,
+# so an adapter's constant never makes one.
 LIVE_FLOW = frozenset({"dhw_flow"})
 LIVE_FLOW_SHOWN = "live_flow_shown_v1"
+LIVE_FLOW_VISIBLE = "live_flow_visible_v2"
 
 
 def live_flow_field(index):
@@ -59,10 +65,29 @@ def show_live_flow(hass, prefix, index):
         return False
     shown = record.disabled_by is _INTEGRATION and ours(record)
     if shown:
-        registry.async_update_entity(entity_id, disabled_by=None, hidden_by=_HIDDEN)
-        _LOGGER.info("OpenThermostat 1.4.3: the boiler measures its hot water flow; %s is on (hidden, under "
-                     "Diagnostic)", entity_id)
-    registry.async_update_entity_options(entity_id, DOMAIN, {**options, LIVE_FLOW_SHOWN: True})
+        registry.async_update_entity(entity_id, disabled_by=None)
+        _LOGGER.info("OpenThermostat: the boiler measures its hot water flow; %s is on", entity_id)
+    registry.async_update_entity_options(entity_id, DOMAIN, {**options, LIVE_FLOW_SHOWN: True, LIVE_FLOW_VISIBLE: True})
+    return shown
+
+
+def unhide_live_flow(hass, prefix, index):
+    """1.4.5: a hot water flow record 1.4.3 hid (hidden by this integration, on, not hidden for the boiler profile) is
+    shown, once per installation (LIVE_FLOW_VISIBLE). A record the user hid, disabled or the profile hid stays as it
+    is. True when the record was shown."""
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, field_unique_id(prefix, index))
+    record = registry.async_get(entity_id) if entity_id is not None else None
+    if record is None:
+        return False
+    options = record.options.get(DOMAIN, {})
+    if options.get(LIVE_FLOW_VISIBLE):
+        return False
+    shown = (record.hidden_by is _HIDDEN and record.disabled_by is None and not options.get(PROFILE_HIDDEN))
+    if shown:
+        registry.async_update_entity(entity_id, hidden_by=None)
+        _LOGGER.info("OpenThermostat 1.4.5: the hot water flow %s is shown again (with the hot water values)", entity_id)
+    registry.async_update_entity_options(entity_id, DOMAIN, {**options, LIVE_FLOW_VISIBLE: True})
     return shown
 
 
@@ -221,6 +246,19 @@ def plausible(cache, index):
     _, raw, observed, field_quality, _ = record[0]
     return (observed is not None and raw is not None and (field_quality != 1 or raw != 0)
             and not (raw == 0 and cache.field_state(index) == "not_reported"))
+
+
+def observed(cache, index):
+    """The field has a reading at all (0 included)."""
+    record = cache.records.get(index)
+    return record is not None and record[0][1] is not None and record[0][2] is not None
+
+
+def kept_flow_record(registry, prefix, index):
+    """An enabled registry record of a hot water flow field (LIVE_FLOW): made once its flow moved, or switched on."""
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, field_unique_id(prefix, index))
+    record = registry.async_get(entity_id) if entity_id is not None else None
+    return record is not None and record.disabled_by is None
 
 
 def concept_name(index):
@@ -581,6 +619,13 @@ async def async_setup_boiler_fields(hass, entry, async_add_entities):
             members = concept(index)
             known.update(members)
             reporting = {member for member in members if plausible(cache, member)}
+            if not reporting:
+                # 1.4.5: the hot water flow's 0 (no tap) is no evidence on its own, but an enabled record proves this
+                # boiler measures it (it moved once): its entity comes back with the first report after a restart,
+                # never an "Unavailable" record until the next tap.
+                registry = registry or er.async_get(hass)
+                reporting = {member for member in members if live_flow_field(member) and observed(cache, member)
+                             and kept_flow_record(registry, prefix, member)}
             state = cache.concept_state(members)
             placeholder = False
             if not reporting and state in ("not_fitted", "not_reported"):
@@ -598,11 +643,14 @@ async def async_setup_boiler_fields(hass, entry, async_add_entities):
             chosen = holder(registry, prefix, members, preferred)
             live = False
             if live_flow_field(chosen):
-                # The hot water flow: a record keeps its own state; without one, only a flow that moves.
+                # The hot water flow: a record keeps its own state (1.4.3's hidden one is shown once); without one,
+                # only a flow that moves.
                 if registry.async_get_entity_id("sensor", DOMAIN, field_unique_id(prefix, chosen)) is None:
                     if chosen not in moving:
                         continue
                     live = True
+                else:
+                    unhide_live_flow(hass, prefix, chosen)
             entity = BoilerFieldEntity(prefix, client, chosen, translated, placeholder=placeholder, shared=shared,
                                        live=live)
             entity.confirmed = bool(reporting) or state == "supported"
@@ -749,10 +797,11 @@ class BoilerFieldEntity(SensorEntity):
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
         if placeholder:
             self._attr_entity_registry_enabled_default = False
-        if live:  # LIVE_FLOW: a hot water flow that moves is measured: on, under Diagnostic, hidden
+        if live:  # LIVE_FLOW: a hot water flow that moves is measured: on
             self._attr_entity_registry_enabled_default = True
-            self._attr_entity_registry_visible_default = False
-            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        if live_flow_field(index):
+            # 1.4.5: with the hot water values, never under Diagnostic (also an existing record: the registry follows).
+            self._attr_entity_category = None
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN,prefix)})
         self._attr_native_unit_of_measurement = {"degC":"°C", "uA":"µA"}.get(unit,unit)
         if unit in ("bool", "bits", "text", "code", "starts"):

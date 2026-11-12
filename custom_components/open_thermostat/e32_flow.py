@@ -97,13 +97,13 @@ SOURCES = ["rule", "curve", "learned", "optimum_start", "plan"]  # "plan": the E
 GAS_STATUSES = ["no_meter", "collecting", "calibrated", "meter_stale"]
 # The Learning view's cards (E32 rc.5), the sixth card module (week_planner.card_modules), versioned with the
 # manifest like the other card URLs: "Water temperature by outdoor temperature" and what the E32 knows (a ring).
-CURVE_CARD_URL = "/open_thermostat/heating-curve-card-1.4.4.js"
+CURVE_CARD_URL = "/open_thermostat/heating-curve-card-1.4.5.js"
 CURVE_CARD_TYPE = "custom:openthermostat-heating-curve"
 KNOWLEDGE_CARD_TYPE = "custom:openthermostat-knowledge"
 # 1.4.3 (LEARN-TAB, CONTRACT-1.4.3 §3): what the E32 learned from the boiler, as tiles (the same module as the curve).
 BOILER_LEARNED_CARD_TYPE = "custom:openthermostat-boiler-learned"
 # 1.4.3: the Learning view's card per room (frontend/learning-room-card.js), its own module, versioned like the others.
-LEARNING_ROOM_CARD_URL = "/open_thermostat/learning-room-card-1.4.4.js"
+LEARNING_ROOM_CARD_URL = "/open_thermostat/learning-room-card-1.4.5.js"
 LEARNING_ROOM_CARD_TYPE = "custom:openthermostat-learning-room"
 # WeatherCurve (src/control/WeatherCurve.h): the standard slope follows the water temperature in hard frost
 # (−10 °C outside) for a 20 °C room; automatic is floor heating 40 °C, radiators 55 °C; the slope's limits.

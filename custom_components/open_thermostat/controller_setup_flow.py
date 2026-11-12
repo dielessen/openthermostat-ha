@@ -281,9 +281,15 @@ async def async_link_room_plan(hass, entry, address, password, *, remove_legacy_
             device_changed = not plan.settings_unchanged or plan.needs_reboot
             _private_guard(hass, entry, plan.private_entry_state)
         needs_reload = entry.state is not ConfigEntryState.LOADED
+        # 1.4.5: the E32's MQTT base before this link, when its old firmware could have left discovery entities
+        # under it (legacy_discovery.py); a later Connect E32 keeps the record.
+        from .const import CONF_TOPIC_PREFIX
+        from .legacy_discovery import LEGACY_BASE, async_retire_after_link, pre_link_base
+        old_base = pre_link_base(plan.observed_settings, entry.data[CONF_TOPIC_PREFIX])
         commit_configuration(hass, entry, plan.before,
             data={**entry.data, CONTROLLER_ADDRESS: address, CONTROLLER_PASSWORD: password,
-                  CONTROLLER_ID: plan.controller_id, BACKUP_PASSPHRASE: new_passphrase(entry)},
+                  CONTROLLER_ID: plan.controller_id, BACKUP_PASSPHRASE: new_passphrase(entry),
+                  **({LEGACY_BASE: old_base} if old_base else {})},
             options={**{k: v for k, v in entry.options.items() if k != SOURCE_OPTION}, CONF_ENABLED: True})
         expected = configuration_snapshot(entry)
         committed_private = native_entry_state(entry)
@@ -295,6 +301,9 @@ async def async_link_room_plan(hass, entry, address, password, *, remove_legacy_
             _private_guard(hass, entry, committed_private)
         result = await async_wait_room_plan_link(hass, entry, expected, private_expected=committed_private)
         _private_guard(hass, entry, committed_private)
+        if old_base and not needs_reload:  # a reload starts it with the entry; it never holds up or fails the link
+            hass.async_create_background_task(async_retire_after_link(hass, entry, plan.observed_settings),
+                                              "open_thermostat old MQTT discovery entities")
         return {**result, "controller_id": plan.controller_id, "room_ids": list(plan.room_ids),
                 "admin_logout_confirmed": client.logout_confirmed, "authorizes_physical_outputs": False}
     except BaseException as error:

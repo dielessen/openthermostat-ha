@@ -137,6 +137,9 @@ def boiler_group(name):
     """The Boiler view group of boiler field ``name``; "raw" for the unreliable raw values (Diagnostics)."""
     from .boiler_fields import INDEX_BY_NAME, quality
     index = INDEX_BY_NAME.get(name)
+    from .v1_boiler_fields import LIVE_FLOW
+    if name in LIVE_FLOW:
+        return "dhw"  # 1.4.5: the hot water flow is made only once it moves, so it is a measured value, not a raw one
     if (index is not None and quality(index) == 1) or name.startswith("raw_"):
         return "raw"
     if name.startswith("thermostat_"):
@@ -181,6 +184,7 @@ COMPARISON_PATH = "comparison"
 ICONS = {"flow": "mdi:thermometer-chevron-up", "return": "mdi:thermometer-chevron-down",
          "max_ch": "mdi:thermometer-high", "modulation": "mdi:fire", "pressure": "mdi:gauge",
          "dhw": "mdi:water-thermometer", "dhw_target": "mdi:thermometer-water", "code": "mdi:information-outline",
+         "dhw_flow": "mdi:faucet",
          "heating": "mdi:fire", "hot_water": "mdi:faucet", "gas": "mdi:meter-gas", "burner_starts": "mdi:counter",
          "burner_time": "mdi:timer-outline", "house": "mdi:home-thermometer", "learning": "mdi:school-outline",
          "boiler": "mdi:water-boiler", "now": "mdi:water-boiler", "week": "mdi:chart-bar",
@@ -310,6 +314,8 @@ TEXT = {
         "valves_diag": "Radiator valves", "valve_open": "{n} % open", "valve_set_to": "set to {t} °C",
         "valve_battery": "battery {n} %", "valve_offline": "not reporting", "valve_no_reading": "no reading",
         "valve_too_large": "message too large ({kb} KB)", "valve_too_large_plain": "message too large",
+        # 1.4.5 (FW-TRV-DOC-145): the E32 shortened the room's valve document to fit (``trimmed``), a grey note.
+        "valves_trimmed": "shortened",
         "valve_put_back": "put back to {t} °C", "valve_put_back_plain": "put back", "valve_own_schedule": "running its own program",
         "valve_off_by_user": "switched off by you", "valve_gave_up": "not responding to the E32",
         "valve_gateway": "Valve {id} on BLU Gateway {n}",
@@ -428,6 +434,8 @@ TEXT = {
         "burner_today": "Burner time", "boiler_values": "What the boiler reports",
         "who_controls": "Who controls the boiler", "yesterday_figures": "Yesterday",
         "dhw_target_short": "Hot water target",
+        # 1.4.5 (HA-DHW-FLOW-145): the hot water flow's tile on the Boiler view: the flow while a tap runs, else this.
+        "tapping_now": "Tapping now", "no_tapping": "No tapping",
         # E32 rc.5: the Learning view's what the E32 knows and (1.4.3, folded into Yesterday) what stood out (insight.py).
         "knowledge": "What the E32 knows",
         "noticed": "Noticed",
@@ -582,6 +590,7 @@ TEXT = {
         "valves_diag": "Radiatorkranen", "valve_open": "{n} % open", "valve_set_to": "staat op {t} °C",
         "valve_battery": "batterij {n} %", "valve_offline": "meldt zich niet", "valve_no_reading": "geen meting",
         "valve_too_large": "bericht te groot ({kb} KB)", "valve_too_large_plain": "bericht te groot",
+        "valves_trimmed": "ingekort",
         "valve_put_back": "teruggezet naar {t} °C", "valve_put_back_plain": "teruggezet", "valve_own_schedule": "eigen programma",
         "valve_off_by_user": "door jou uitgezet", "valve_gave_up": "geeft niet thuis",
         "valve_gateway": "Kraan {id} aan BLU Gateway {n}",
@@ -698,6 +707,7 @@ TEXT = {
         "burner_today": "Brandertijd", "boiler_values": "Wat de ketel meldt",
         "who_controls": "Wie regelt de ketel", "yesterday_figures": "Gisteren",
         "dhw_target_short": "Doel warm water",
+        "tapping_now": "Tapt nu", "no_tapping": "Geen tapwater",
         "knowledge": "Wat de E32 weet",
         "noticed": "Opgevallen",
         "curve_floor": "De laagste watertemperatuur beslist hier: de weerafhankelijke regeling zou {curve} °C vragen, maar je "
@@ -1532,17 +1542,34 @@ def _boiler_now(t, hub, fields, essential, flow_source=None):
                            **{key: value for key, value in reads.items() if value}})
 
 
+def _flow_tiles(t, flow):
+    """1.4.5 (HA-DHW-FLOW-145): the boiler's hot water flow as one tile across the section: "Tapping now" with the
+    flow (6.2 L/min, in the viewer's number format) while it is above 0, "No tapping" (no figure) at 0. Only with the
+    flow entity (a boiler whose flow moved once: v1_boiler_fields.LIVE_FLOW, or the EMS+ field) and while it has a
+    value; never "Unknown"."""
+    if not flow:
+        return []
+    tapping = _wide(_tile(flow, t["tapping_now"], ICONS["dhw_flow"],
+                          visibility=[{"condition": "numeric_state", "entity": flow, "above": 0.05}]))
+    idle = _wide(_tile(flow, t["no_tapping"], ICONS["dhw_flow"],
+                       visibility=[{"condition": "numeric_state", "entity": flow, "below": 0.05}]))
+    idle["hide_state"] = True
+    return [tapping, idle]
+
+
 def _hot_water_section(t, hub, fields, essential, tank=False):
-    """Hot water (dashboard-spec §5.4): its temperature next to its target, today's taps, keeping warm (a tank: its
-    charges) and burner time, and what the boiler did in the last 24 hours with one note on tapping and keeping warm
-    (a tank: on tapping and charging the tank)."""
+    """Hot water (dashboard-spec §5.4): its temperature next to its target, the flow (1.4.5), today's taps, keeping
+    warm (a tank: its charges) and burner time, and what the boiler did in the last 24 hours with one note on tapping
+    and keeping warm (a tank: on tapping and charging the tank)."""
     measured = essential("dhw")
     target = fields.get("reported_dhw_target") or fields.get("selected_dhw_temperature")
+    flow = fields.get("dhw_flow") or fields.get("plus_dhw_flow")
     today = [hub[key] for key in DHW_TODAY if key in hub]
     return _filled(_section_known(
-        [measured, *today, hub.get("boiler_activity")],
+        [measured, flow, *today, hub.get("boiler_activity")],
         _heading(t["group_dhw"], ICONS["hot_water"]),
         *_pair(_tile(measured, t["dhw"], ICONS["dhw"]), _tile(target, t["dhw_target_short"], ICONS["dhw_target"])),
+        *_flow_tiles(t, flow),
         _known_entities_card(today) if today else None,
         *_hot_water_use_cards(t, hub, fields.get("heating_active"), tank)))
 
@@ -1953,7 +1980,8 @@ def _valves_section(t, rooms):
     """1.4.4 (plan 2.4 and 9): Diagnostics' list of every radiator valve, per room: what it reports (its opening, or the
     temperature it was given, its battery, "not reporting") and the E32's finding (``held``, 1.4.3), in the room card's
     words; a valve whose state the E32 could not read (``message_too_large``, FW-TRV-STATE) as a red line with its
-    size. ``rooms``: [(the room's name, its Valve position sensor)]. Read live from the sensor's ``valves``; a room
+    size; 1.4.5 (FW-TRV-DOC-145): a room whose valve document the E32 shortened to fit (``trimmed``) has a grey
+    note "shortened" beside its name, here only. ``rooms``: [(the room's name, its Valve position sensor)]. Read live from the sensor's ``valves``; a room
     without valves now says nothing; the section hides while no valve sensor is there (the E32 off)."""
     if not rooms:
         return None
@@ -1971,7 +1999,9 @@ def _valves_section(t, rooms):
     for name, entity in rooms:
         quoted = json.dumps(entity)
         content += (
-            "{% set vs = state_attr(" + quoted + ", 'valves') %}{% if vs %}**" + name.replace("*", "") + "**\n\n"
+            "{% set vs = state_attr(" + quoted + ", 'valves') %}{% if vs %}**" + name.replace("*", "") + "**"
+            "{% if state_attr(" + quoted + ", 'trimmed') %} <font color=\"" + ICON_COLOURS["link_unknown"] + "\">"
+            + t["valves_trimmed"] + "</font>{% endif %}\n\n"
             "{% for v in vs %}{% set g = v.name.split(':') %}"
             "{% if v.name is match('^g[0-9]+:[0-9]+$') %}{% set label = " + json.dumps(t["valve_gateway"])
             + " | replace('{n}', g[0][1:]) | replace('{id}', g[1]) %}"

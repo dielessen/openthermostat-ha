@@ -23,6 +23,7 @@ from .metric_snapshot import finite as finite_number
 from .const import CONF_TOPIC_PREFIX, DOMAIN, MANUFACTURER
 from .program import room_program_name
 from .heating import HeatingTracker, DEFINITION
+from .energy_use import MODULATION_MAX
 from .metrics_reports import note_legacy_metrics, note_metric_definition_migration
 
 _LOGGER = logging.getLogger(__name__)
@@ -744,7 +745,7 @@ class HubMetric(SensorEntity):
                 "metrics_schema": 2 if type(payload.get("metricsSchema")) is int and payload["metricsSchema"] == 2 else None,
                 "protocol_scope": "plus" if payload.get("protocolScope") == "plus" else "unverified",
             }
-        if self._metric == "boiler_burner_power" and isinstance(value, (int, float)) and not 0 <= value <= 100:
+        if self._metric == "boiler_burner_power" and isinstance(value, (int, float)) and not 0 <= value <= MODULATION_MAX:
             value = None
         if self._topic == "device_status" and self._metric == "uptime" and getattr(self, "mqtt_attributes", None):
             self._attr_extra_state_attributes = dict(self.mqtt_attributes)  # P1 HA-3: the heartbeat's MQTT figures

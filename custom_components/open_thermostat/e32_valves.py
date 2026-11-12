@@ -388,8 +388,10 @@ def shown_name(name, lang="en"):
 def driven(room):
     """The valves of a room document that are driven by temperature and report no opening: the E32's own models without
     a position readback, and (1.4.2, HC-11) Home Assistant's valves that report none while they are there."""
+    shortened = (room or {}).get("trimmed") is True  # 1.4.5: a shortened room may have lost a valve's model
     return [v for v in (room or {}).get("valves", []) if type(v.get("position_pct")) not in (int, float) and (
-        v.get("model") in NO_POSITION_MODELS or v.get("model") == HA_MODEL and v.get("health") in ("ok", "low_battery"))]
+        v.get("model") in NO_POSITION_MODELS or v.get("model") == HA_MODEL and v.get("health") in ("ok", "low_battery")
+        or shortened and "model" not in v and type(v.get("setpoint_c")) in (int, float))]
 
 
 def self_regulating(room):
@@ -471,7 +473,11 @@ def valve_attributes(room, status_room=None):
     (``set_to``: the most common one its room's valves report, else the room's target, 8 °C frost protection while
     the room is off) so its tile never stands empty; ``set_to_source`` says which: "valve" (its own report) or "room"
     (None for a valve that reports its opening). ``bytes``: the size of the state the E32 could not read, only with
-    ``health`` "message_too_large" (FW-TRV-STATE, plan chapter 4)."""
+    ``health`` "message_too_large" (FW-TRV-STATE, plan chapter 4).
+
+    1.4.5 (FW-TRV-DOC-145): ``trimmed`` (True or False): the E32 shortened the room's valve document to fit its size
+    limit (a moment, old readings, the model, a finding or readings left out, the valve heard least recently first);
+    only the Diagnostics valve list says so. False on firmware without it."""
     found = {id(v) for v in driven(room)}
     given = set_to(room, status_room) if found else None
     out = []
@@ -489,7 +495,8 @@ def valve_attributes(room, status_room=None):
                     "held": state, "held_count": count, "held_at": at,
                     **({"bytes": size} if size is not None else {})})
     return {"valves": out,
-            "control": room.get("control"), "degraded": room.get("degraded"), "single_source": room.get("single_source")}
+            "control": room.get("control"), "degraded": room.get("degraded"), "single_source": room.get("single_source"),
+            "trimmed": room.get("trimmed") is True}
 
 
 # -- entities -----------------------------------------------------------------------------

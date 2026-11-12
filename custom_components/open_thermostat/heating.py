@@ -16,6 +16,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later
 
 from .const import CONF_TOPIC_PREFIX
+from .energy_use import MODULATION_MAX  # 0..250 %: hot water runs above 100 % on some boilers
 from .room_identity import room_key
 
 _LOGGER = logging.getLogger(__name__)
@@ -337,7 +338,7 @@ class HeatingTracker:
                 and type(value.get("pump")) is bool
                 and finite(value.get("supply_c"), 0, 110)
                 and finite(value.get("selected_flow_c"), 0, 110)
-                and finite(value.get("modulation_pct"), 0, 100))
+                and finite(value.get("modulation_pct"), 0, MODULATION_MAX))
             if valid and boot == self._ems_boot and sequence <= self._ems_sequence:
                 # DHW last-reported fields may change independently of the CH
                 # observation. Notify presentation, never renew source deadline.

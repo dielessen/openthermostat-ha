@@ -61,7 +61,7 @@
       "invalid_name": "Enter a name of 1 to 80 characters.",
       "reauth_password_invalid": "Enter the E32 password (1 to 128 characters).",
       "reauth_password_wrong": "The E32 did not accept this password. Check it and try again.",
-      "reauth_unreachable": "The E32 could not be reached. Check that it is on and connected to your network, then try again.",
+      "reauth_unreachable": "The E32 cannot be reached. Check that it is on and connected to your network, then try again.",
       "reauth_session_capacity": "The E32 has too many open sign-ins.\n1. Sign out on the E32 web page, or restart the E32.\n2. Try again here.",
       "reauth_try_again_later": "Too many sign-in attempts on the E32. Wait 30 seconds, then try again."
     },
@@ -1462,7 +1462,7 @@
       "controller_address_invalid": "Enter the local E32 web address: a local IP address or a home-network name, for example http://192.168.1.50, http://e32.local or http://e32.fritz.box. Paths and login details do not belong in the address.",
       "controller_password_required": "Enter the E32 administrator password. A saved password can only be reused for the same address.",
       "controller_auth_failed": "The E32 did not accept this password. Use the password of the E32 web page (user admin).",
-      "controller_unreachable": "The E32 could not be reached. Check its address and network connection.",
+      "controller_unreachable": "The E32 cannot be reached. Check its address and network connection.",
       "controller_update_required": "The firmware on this E32 is too old for this version of the integration. Update the E32 first: on its web page open System → Firmware update and install the latest release, then connect again.",
       "controller_busy_or_conflict": "The E32 is updating or restarting, or it waits for a restart. Wait until its web page opens normally (restart it there under System → Restart device if it asks for that), then try again.",
       "controller_legacy_rooms_present": "The E32 still has rooms from its older stand-alone setup. Update the E32 to the newest firmware (Settings → Updates → OpenThermostat E32 Firmware), which clears them, then connect again.",
@@ -5002,7 +5002,7 @@
         },
         "error": {
           "e32_password": "The E32 did not accept the saved password. Enter the current E32 password under Configure → E32 connection, then try again.",
-          "e32_unreachable": "The E32 could not be reached. Check that it is on and connected to your network, then try again.",
+          "e32_unreachable": "The E32 cannot be reached. Check that it is on and connected to your network, then try again.",
           "broker_login": "The E32 needs its own MQTT login first. On the E32, open System → Settings → Home Assistant → MQTT broker, tick “Connect to the MQTT broker”, enter the broker address and port and a broker user name and password, save and let the E32 restart. The E32 does not connect to Home Assistant through a broker without a login.",
           "mqtt_unconfirmed": "The E32 restarted with the Home Assistant settings, but Home Assistant received nothing from it over MQTT within 90 seconds. On the E32, check System → Settings → Home Assistant → MQTT broker: the same broker as the MQTT integration in Home Assistant, and a user name and password that the broker accepts.",
           "e32_busy": "The E32 is updating or restarting. Wait until it is ready and try again.",
@@ -5045,7 +5045,7 @@
         },
         "error": {
           "e32_password": "The E32 did not accept the saved password. Enter the current E32 password under Configure → E32 connection, then try again.",
-          "e32_unreachable": "The E32 could not be reached. Check that it is on and connected to your network, then try again.",
+          "e32_unreachable": "The E32 cannot be reached. Check that it is on and connected to your network, then try again.",
           "broker_login": "The E32 needs its own MQTT login first. On the E32, open System → Settings → Home Assistant → MQTT broker, tick “Connect to the MQTT broker”, enter the broker address and port and a broker user name and password, save and let the E32 restart. The E32 does not connect to Home Assistant through a broker without a login.",
           "mqtt_unconfirmed": "The E32 restarted with the Home Assistant settings, but Home Assistant received nothing from it over MQTT within 90 seconds. On the E32, check System → Settings → Home Assistant → MQTT broker: the same broker as the MQTT integration in Home Assistant, and a user name and password that the broker accepts.",
           "e32_busy": "The E32 is updating or restarting. Wait until it is ready and try again.",
@@ -5092,7 +5092,7 @@
         },
         "abort": {
           "e32_rooms_unavailable": "Connect the E32 first (Configure → E32 connection) so Home Assistant can edit its room plan.",
-          "e32_unreachable": "The E32 could not be reached. Check that it is on and connected to your network, then try again.",
+          "e32_unreachable": "The E32 cannot be reached. Check that it is on and connected to your network, then try again.",
           "room_missing": "This room is no longer in the E32 room plan."
         }
       }
@@ -5170,7 +5170,7 @@
         },
         "abort": {
           "e32_rooms_unavailable": "Connect the E32 first (Configure → E32 connection) so Home Assistant can edit its room plan.",
-          "e32_unreachable": "The E32 could not be reached. Check that it is on and connected to your network, then try again.",
+          "e32_unreachable": "The E32 cannot be reached. Check that it is on and connected to your network, then try again.",
           "room_missing": "This room is no longer in the E32 room plan."
         }
       }

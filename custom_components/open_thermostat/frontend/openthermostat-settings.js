@@ -34,7 +34,7 @@ const TEXTS = {
   'Changed by you': 'Door jou gewijzigd',
   'Changed by you; elsewhere it is now {value}.': 'Door jou gewijzigd; elders is het nu {value}.',
   'On': 'Aan', 'Off': 'Uit', 'Heat along only': 'Alleen meeverwarmen',
-  'The E32 could not be reached. Check the connection and try again.': 'De E32 is niet bereikbaar. Controleer de verbinding en probeer het opnieuw.',
+  'The E32 cannot be reached. Check the connection and try again.': 'De E32 is niet bereikbaar. Controleer de verbinding en probeer het opnieuw.',
   'The change could not be confirmed. Reload the page to see what is saved.': 'De wijziging kon niet worden bevestigd. Laad de pagina opnieuw om te zien wat er is opgeslagen.',
   'This installation is not available. Look under Settings → Devices & services → OpenThermostat.': 'Deze installatie is niet beschikbaar. Kijk bij Instellingen → Apparaten en diensten → OpenThermostat.',
   'This page does not match the installed OpenThermostat. Reload the page.': 'Deze pagina past niet bij de geïnstalleerde OpenThermostat. Laad de pagina opnieuw.',
@@ -58,7 +58,7 @@ const TEXTS = {
   'This room is no longer on the E32.': 'Deze ruimte staat niet meer op de E32.'}};
 // The sentence of each error code the backend sends (settings.py); a section adds its own (spec.errors).
 const ERRORS = {
- e32_unreachable: 'The E32 could not be reached. Check the connection and try again.',
+ e32_unreachable: 'The E32 cannot be reached. Check the connection and try again.',
  save_uncertain: 'The change could not be confirmed. Reload the page to see what is saved.',
  setup_save_uncertain: 'The change could not be confirmed. Reload the page to see what is saved.',
  unavailable: 'This installation is not available. Look under Settings → Devices & services → OpenThermostat.',

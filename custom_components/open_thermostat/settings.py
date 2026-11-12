@@ -58,24 +58,32 @@ _LOGGER = logging.getLogger(__name__)
 
 # The panel's module, served and loaded with the dashboard cards (week_planner.card_modules); the release script
 # moves the version in the name (tools/dev/prepare_release.py, "frontend URLs").
-URL = "/open_thermostat/openthermostat-settings-1.4.4.js"
+URL = "/open_thermostat/openthermostat-settings-1.4.5.js"
 # 1.4.1: the component kit (frontend/openthermostat-settings-kit.js) and the section modules are no longer loaded on every
 # Home Assistant page: only the core is (URL above, week_planner.card_modules); the core loads the kit and the sections
 # when the Settings tab opens, from the overview's ``modules`` list (modules()).
-KIT_URL = "/open_thermostat/openthermostat-settings-kit-1.4.4.js"
+KIT_URL = "/open_thermostat/openthermostat-settings-kit-1.4.5.js"
 CARD_TYPE = "custom:openthermostat-settings"
 # A section package's own module (frontend/openthermostat-settings-<section>.js, it calls the kit's defineSection), served
 # with the panel and loaded by it on the first visit of the tab: one (URL, file) line per package, the URL versioned as
 # the panel's.
 SECTION_MODULES: tuple[tuple[str, str], ...] = (
     # ("/open_thermostat/openthermostat-settings-<section>-<HA version>.js", "openthermostat-settings-<section>.js"),
-    ("/open_thermostat/openthermostat-settings-rooms-1.4.4.js", "openthermostat-settings-rooms.js"),
-    ("/open_thermostat/openthermostat-settings-house-1.4.4.js", "openthermostat-settings-house.js"),
-    ("/open_thermostat/openthermostat-settings-heating-1.4.4.js", "openthermostat-settings-heating.js"),
-    ("/open_thermostat/openthermostat-settings-devices-1.4.4.js", "openthermostat-settings-devices.js"),
-    ("/open_thermostat/openthermostat-settings-energy-1.4.4.js", "openthermostat-settings-energy.js"),
-    ("/open_thermostat/openthermostat-settings-notifications-1.4.4.js", "openthermostat-settings-notifications.js"),
-    ("/open_thermostat/openthermostat-settings-installation-1.4.4.js", "openthermostat-settings-installation.js"),
+    ("/open_thermostat/openthermostat-settings-rooms-1.4.5.js", "openthermostat-settings-rooms.js"),
+    # 1.4.5: Rooms' part the room's fields (the module budget); the section registers once it is here.
+    ("/open_thermostat/openthermostat-settings-rooms_fields-1.4.5.js", "openthermostat-settings-rooms_fields.js"),
+    ("/open_thermostat/openthermostat-settings-house-1.4.5.js", "openthermostat-settings-house.js"),
+    ("/open_thermostat/openthermostat-settings-heating-1.4.5.js", "openthermostat-settings-heating.js"),
+    # 1.4.5: Heating and boiler's part Boiler settings (the module budget); the section registers once it is here.
+    ("/open_thermostat/openthermostat-settings-heating_boiler-1.4.5.js", "openthermostat-settings-heating_boiler.js"),
+    ("/open_thermostat/openthermostat-settings-devices-1.4.5.js", "openthermostat-settings-devices.js"),
+    # 1.4.5: Devices' part Shelly devices (the module budget); the section registers once it is here.
+    ("/open_thermostat/openthermostat-settings-devices_shelly-1.4.5.js", "openthermostat-settings-devices_shelly.js"),
+    ("/open_thermostat/openthermostat-settings-energy-1.4.5.js", "openthermostat-settings-energy.js"),
+    ("/open_thermostat/openthermostat-settings-notifications-1.4.5.js", "openthermostat-settings-notifications.js"),
+    ("/open_thermostat/openthermostat-settings-installation-1.4.5.js", "openthermostat-settings-installation.js"),
+    # 1.4.5: Installation's part Maintenance (the module budget); the section registers once it is here.
+    ("/open_thermostat/openthermostat-settings-installation_maintenance-1.4.5.js", "openthermostat-settings-installation_maintenance.js"),
 )
 VIEW_PATH = "settings"  # the dashboard view: /<dashboard>/settings#<route>
 CONFIGURE_PATH = "/config/integrations/integration/" + DOMAIN

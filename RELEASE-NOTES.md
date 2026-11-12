@@ -1,3 +1,60 @@
+# HA 1.4.5 — the hot water flow on the Boiler tab, a lighter settings panel, cards that fit a narrow phone
+<!-- user-release-notes:v2:en -->
+
+Companion of E32 1.4.5; also runs with E32 1.4.4 and older, with the limits
+under Updating. Needs Home Assistant 2026.10.0 or newer.
+
+## New
+
+- **Diagnostics says "shortened" beside a room** whose valve details the E32 had
+  to cut to send them (needs E32 1.4.5).
+- **The hot water flow on the Boiler tab** (issue #12). A boiler that measures
+  its hot water flow shows under Hot water "Tapping now" with the flow, or "No
+  tapping". The Hot water flow sensor is no longer hidden under Diagnostic.
+- **The settings panel loads in smaller pieces,** so no single part of it grows
+  past its size budget. Nothing changes on screen.
+- **Connect E32 removes the old MQTT entities** that the previous firmware left
+  under the E32's former MQTT base (an "OpenThermostat 1.0.0" device with
+  unavailable entities).
+
+## Fixed
+
+- **The room card keeps all five presets on a narrow phone.** Below about 330 px
+  the row wraps onto two rows instead of scrolling sideways, and the room's
+  state ("On", "Off") stays beside a long room name.
+- **"The E32 cannot be reached" says how things are now.** A connection check
+  says "cannot be reached"; a save that failed still says "could not be
+  reached ... Nothing was saved".
+- **The Hot water flow sensor is back at once after a restart** instead of
+  standing Unavailable until the next tap.
+- **Burner modulation above 100 % counts** (hot water on some boilers) in
+  "Reported burner modulation" and the room heat estimates on the older route.
+
+## Updating
+
+Update under Settings → Updates (Marketplace) and restart Home Assistant. Then
+install E32 1.4.5 from its Firmware entity and confirm the takeover again.
+
+- Entities, IDs and history stay; nothing of this integration is removed or
+  renamed. Connect E32 only removes the old firmware's MQTT leftovers.
+- With E32 1.4.4 everything works; the "shortened" note needs the new firmware.
+  The hot water flow works with every E32, because the boiler telemetry
+  already carried it.
+- With E32 1.4.5 on HA 1.4.4 everything works too; the flow sensor stays
+  under Diagnostic and the tile is missing.
+- Going back to HA 1.4.4 keeps the flow sensor shown, but the Boiler tab loses
+  its tile.
+
+## Limitations
+
+- A room shows its Smart warm-up start and its advice only when the E32 has
+  learned enough; until then the card says what it still needs.
+- Sentences in sensors (what the E32 learned, the advice) are in Home
+  Assistant's language; the cards use yours.
+- Boiler settings stay a preview until a real boiler has confirmed them.
+- Radiator valve control has run on a few real valves only; a Sonoff TRV Gen2
+  reports no valve position.
+
 # HA 1.4.4 — Learn again, a figure for heat along, every radiator valve in Diagnostics
 <!-- user-release-notes:v2:en -->
 
