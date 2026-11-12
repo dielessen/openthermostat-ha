@@ -26,6 +26,8 @@ const OWN = {
   per_hour: 'per hour', cooling_caption: 'cooling at {out} °C outside', cooling_label: 'cooling',
   lowest_caption: 'coolest water that warms in time', lowest_label: 'coolest water',
   free_caption: 'free heat {part} (sun, cooking, people)', free_label: 'free heat',
+  reach_caption: 'reaches {t} °C ({days} days)', reach_title: 'reaches {t} °C {pct} % of the time ({days} days)', reach_label: 'reaches {t} °C',
+  reach_counting: 'still counting: day {n} of {m}', reach_counting_plain: 'still counting',
   parts: {night: 'at night', early_morning: 'early in the morning', morning: 'in the morning', afternoon: 'in the afternoon',
    evening: 'in the evening', late_evening: 'late in the evening'},
   wait_warmups: '{n} more warm-ups', wait_warmup: '1 more warm-up', wait_other_days: 'warm-ups on other days',
@@ -46,13 +48,17 @@ const OWN = {
   model_trusted: 'trusted: its predictions hold', model_demoted: 'checking again: {n} of {m} days good',
   advice: 'Advice', advice_only: 'Advice only: your week program stays as it is.',
   off_line: 'Off: the E32 learns nothing here while the room is off.',
-  none: 'The E32 has not reported what it learned for this room yet.', min: '{n} min', h: '{h} h', h_m: '{h} h {m} min'},
+  none: 'The E32 has not reported what it learned for this room yet.', min: '{n} min', h: '{h} h', h_m: '{h} h {m} min',
+  relearn: 'Learn again', relearn_question: 'Clear what the E32 learned for {name}?', relearn_more: 'It learns again by itself; the week program stays.',
+  cancel: 'Cancel', relearn_done: 'Cleared: the E32 starts learning {name} again.', failed: 'That did not work: {reason}'},
  nl: {learned: 'Geleerd', learning: 'Leert nog', learning_of: 'Leert nog · {n} van {m} opwarmingen', learning_water: 'Leert nog · het koelste water',
   heats_along: 'Verwarmt mee', off: 'Uit',
   warmup_pre: '1 °C in', warmup_caption: 'opwarmen met water van {flow} °C', warmup_label: 'opwarmen',
   per_hour: 'per uur', cooling_caption: 'afkoelen bij {out} °C buiten', cooling_label: 'afkoelen',
   lowest_caption: 'koelste water dat op tijd warmt', lowest_label: 'koelste water',
   free_caption: 'gratis warmte {part} (zon, koken, mensen)', free_label: 'gratis warmte',
+  reach_caption: 'haalt {t} °C ({days} dagen)', reach_title: 'haalt {t} °C in {pct} % van de tijd ({days} dagen)', reach_label: 'haalt {t} °C',
+  reach_counting: 'nog aan het tellen: dag {n} van {m}', reach_counting_plain: 'nog aan het tellen',
   parts: {night: '’s nachts', early_morning: 'vroeg in de ochtend', morning: '’s ochtends', afternoon: '’s middags',
    evening: '’s avonds', late_evening: 'laat op de avond'},
   wait_warmups: 'nog {n} opwarmingen', wait_warmup: 'nog 1 opwarming', wait_other_days: 'opwarmingen op andere dagen',
@@ -73,7 +79,9 @@ const OWN = {
   model_trusted: 'betrouwbaar: zijn voorspellingen kloppen', model_demoted: 'controleert opnieuw: {n} van {m} dagen goed',
   advice: 'Advies', advice_only: 'Alleen advies: je weekprogramma blijft zoals het is.',
   off_line: 'Uit: de E32 leert hier niets zolang de ruimte uit staat.',
-  none: 'De E32 heeft nog niet gemeld wat hij voor deze ruimte geleerd heeft.', min: '{n} min', h: '{h} u', h_m: '{h} u {m} min'}};
+  none: 'De E32 heeft nog niet gemeld wat hij voor deze ruimte geleerd heeft.', min: '{n} min', h: '{h} u', h_m: '{h} u {m} min',
+  relearn: 'Opnieuw leren', relearn_question: 'Wis wat de E32 voor {name} leerde?', relearn_more: 'Het leert vanzelf opnieuw; het weekprogramma blijft.',
+  cancel: 'Annuleren', relearn_done: 'Gewist: de E32 begint opnieuw te leren voor {name}.', failed: 'Dat lukte niet: {reason}'}};
 // ArrivalLearner (src/control/ArrivalLearner.h): on time between 15 min early and 10 min late; 180 min: not warm within 3 h.
 const LATE_MIN = 10, EARLY_MIN = -15, NOT_WARM_MIN = 180;
 const HISTORY_MS = 5 * 60000, PENDING_MS = 2 * 60000, DAY_MS = 86400000, DAYS = 7;
@@ -143,6 +151,16 @@ display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wr
 .bar{position:relative;height:6px;margin:8px 0 4px;border-radius:3px;background:color-mix(in srgb,var(--ot-fg) 10%,transparent);overflow:hidden}
 .bar i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--ot-along-ink)}.bar i.ok{background:var(--ot-ok)}
 .muted{font-size:var(--ot-text-m);line-height:var(--ot-line-m);color:var(--ot-fg-2)}
+/* 1.4.4: Learn again, a text button at the foot; its question inline (the panel's words), the answer under it */
+.foot{display:flex;flex-direction:column;align-items:flex-end;gap:8px;margin-top:-4px}
+.btn{min-height:var(--ot-touch);min-width:var(--ot-touch);box-sizing:border-box;padding:0 12px;border:0;border-radius:var(--ot-radius-s);background:none;
+font:inherit;font-size:var(--ot-text-m);font-weight:500;color:var(--ot-link);cursor:pointer}
+.btn:focus{outline:none}.btn:focus-visible{outline:2px solid var(--ot-accent);outline-offset:2px}.btn[disabled]{opacity:.6;cursor:default}
+.btn.filled{background:var(--ot-fill);color:var(--ot-on-accent)}
+.ask{align-self:stretch;display:flex;flex-direction:column;gap:4px;padding:12px;border-radius:var(--ot-radius-s);background:var(--ot-raised)}
+.ask .q{font-size:var(--ot-text-m);line-height:var(--ot-line-m);font-weight:500;overflow-wrap:anywhere}
+.ask .acts{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:4px}
+.said{align-self:stretch;font-size:var(--ot-text-s);line-height:var(--ot-line-s);color:var(--ot-fg-2);overflow-wrap:anywhere}.said.bad{color:var(--ot-attention-ink)}
 @container learn (min-width:620px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}`;
 
 const finite = value => typeof value === 'number' && Number.isFinite(value);
@@ -249,8 +267,9 @@ class OpenThermostatLearningRoom extends HTMLElement {
   if (!config || !id(config.learned) || typeof config.room_id !== 'string' || !config.room_id)
    throw new Error('This card needs the "What the E32 learned" sensor of OpenThermostat (learned: sensor.…) and a room (room_id); the OpenThermostat dashboard adds it for you.');
   this._config = {room_id: config.room_id, learned: id(config.learned), learning: id(config.learning), warm_on_time: id(config.warm_on_time),
-   heating_start: id(config.heating_start), reason: id(config.reason), state: id(config.state),
+   heating_start: id(config.heating_start), reason: id(config.reason), state: id(config.state), relearn: id(config.relearn),
    name: typeof config.name === 'string' ? config.name : ''};
+  this._asking = false; this._busy = false; this._said = null;
   this._key = null; this._history = null; this._fetched = 0; this._seen = undefined;
   if (this._hass) { this.refresh(); this.render(); }
  }
@@ -259,7 +278,7 @@ class OpenThermostatLearningRoom extends HTMLElement {
   if (!this._config) return;
   this.refresh();
   // Only a new state of its own entities, language, theme or clock choice redraws; Home Assistant sets hass on every change.
-  const c = this._config, key = [c.learned, c.warm_on_time, c.heating_start, c.state].map(id => id && hass?.states?.[id])
+  const c = this._config, key = [c.learned, c.warm_on_time, c.heating_start, c.state, c.relearn].map(id => id && hass?.states?.[id])
    .concat([locale(hass), darkOf(hass), hass?.locale?.time_format, hass?.config?.time_zone, this._history]);
   if (this._key && key.every((v, i) => v === this._key[i])) return;
   this._key = key; this.render();
@@ -362,8 +381,49 @@ class OpenThermostatLearningRoom extends HTMLElement {
     if (rows.childElementCount) wrap.append(rows);
    }
   }
+  const foot = this.relearnFoot(name);
+  if (foot) wrap.append(foot);
   root.replaceChildren(make('style', {}, STYLE), card);
   if (focused) root.querySelector(`[data-focus="${focused}"]`)?.focus({preventScroll: true});
+ }
+ // 1.4.4 (plan 2.3): "Learn again" when the E32 offers it (the room's button entity exists and is there): a tap asks the
+ // panel's question in the card, Learn again presses the button (the E32 clears what it learned for this room), the
+ // answer stays under it until the next question.
+ relearnFoot(name) {
+  const id = this._config.relearn, st = this.st(id);
+  if (!st || st.state === 'unavailable') return null;
+  const foot = make('div', {class: 'foot', 'data-relearn-foot': ''}), words = {name: name || this._config.room_id};
+  const button = (text, cls, key, act) => {
+   const b = make('button', {type: 'button', class: 'btn' + (cls ? ' ' + cls : ''), 'data-focus': key, ['data-' + key]: ''}, text);
+   if (this._busy) b.disabled = true;
+   b.addEventListener('click', act);
+   return b;
+  };
+  if (this._asking) {
+   const ask = make('div', {class: 'ask', role: 'group', 'aria-label': this.t('relearn')});
+   const acts = make('div', {class: 'acts'});
+   acts.append(button(this.t('cancel'), '', 'relearn-cancel', () => { this._asking = false; this._focus('relearn'); }),
+    button(this.t('relearn'), 'filled', 'relearn-confirm', () => this.relearn(id, words)));
+   ask.append(make('p', {class: 'q'}, this.t('relearn_question', words)), make('p', {class: 'sub'}, this.t('relearn_more')), acts);
+   foot.append(ask);
+  } else foot.append(button(this.t('relearn'), '', 'relearn', () => { this._asking = true; this._said = null; this._focus('relearn-cancel'); }));
+  if (this._said) foot.append(make('p', {class: 'said' + (this._said.bad ? ' bad' : ''), role: 'status', 'data-said': ''}, this._said.text));
+  return foot;
+ }
+ _focus(key) {
+  this.render();
+  this.shadowRoot.querySelector(`[data-focus="${key}"]`)?.focus({preventScroll: true});
+ }
+ async relearn(id, words) {
+  this._busy = true; this.render();
+  try {
+   await this._hass.callService('button', 'press', {entity_id: id});
+   this._said = {text: this.t('relearn_done', words)};
+  } catch (err) {
+   this._said = {bad: true, text: this.t('failed', {reason: String(err?.message || err?.code || err || '').trim() || '—'})};
+  }
+  this._busy = false; this._asking = false;
+  this._focus('relearn');
  }
  chip(facts) {
   const p = facts.progress || {}, n = finite(p.seen) ? p.seen : 0, m = finite(p.of) ? p.of : 6;
@@ -411,6 +471,17 @@ class OpenThermostatLearningRoom extends HTMLElement {
   if (cool && finite(cool.c_per_h))
    list.push(this.tile('cooling', this.figure(this.number(cool.c_per_h, 2) + ' °C', this.t('per_hour')), this.t('cooling_caption', {out: this.number(finite(cool.outdoor_c) ? cool.outdoor_c : 5)})));
   else list.push(this.waiting('cooling', this.t('wait_cooling'), this.t('cooling_label')));
+  // 1.4.4 (plan 2.4): on Heat along only, how often it reached its temperature by heating along (the hours of the last
+  // 14 cold days), and before 14 such days which day it counts; nothing for a room with a week program.
+  const r = facts.reach;
+  if (!on && r && typeof r === 'object' && finite(r.c) && finite(r.days)) {
+   const t = this.number(r.c, 1), of = finite(r.of) ? r.of : 14, days = this.number(r.days);
+   if (finite(r.pct)) {
+    const title = this.t('reach_title', {t, pct: this.number(r.pct), days});
+    list.push(this.tile('reach', this.figure(this.number(r.pct) + ' %'), this.t('reach_caption', {t, days}), title));
+   } else list.push(this.waiting('reach', r.days > 0 ? this.t('reach_counting', {n: days, m: this.number(of)}) : this.t('reach_counting_plain'),
+    this.t('reach_label', {t})));
+  }
   if (on) {
    if (finite(facts.lowest_flow_c)) list.push(this.tile('lowest_flow_c', this.figure(this.number(facts.lowest_flow_c) + ' °C'), this.t('lowest_caption')));
    else list.push(this.waiting('lowest_flow_c', facts.status === 'ready' ? this.t('wait_not_found') : facts.status === 'timing'

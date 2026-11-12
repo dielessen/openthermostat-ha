@@ -936,7 +936,7 @@ def new_facts(learned, status=None):
                                            "periods": periods if type(periods) is int and periods >= 0 else None},
             "warmup": None, "cooling": None, "lowest_flow_c": None, "free_heat": None, "smart_start": None,
             "arrival": None, "model": {key: model[key] for key in ("state", "good_days", "of")} if model else None,
-            "advice": None, "waiting": {}}
+            "advice": None, "reach": None, "waiting": {}}
 
 
 def smart_start_fact(start, on, clock, trial=False, later_min=0, now=None, room_off=False, held=None):
@@ -992,6 +992,18 @@ def advice_fact(advice):
     return {"text": advice["advice"], "meaning": None, "kind": kind} if kind else None
 
 
+def reach_fact(advice):
+    """1.4.4 (plan 2.4): how often a room on Heat along only reached its temperature by heating along, from the room's
+    heat-along line (room_advice.reach): {"c", "pct" (None while counting), "days", "of": 14}, or None without one
+    (a room with a week program, the valve's own sensor, Home Assistant before 1.4.4 wrote the line)."""
+    if type(advice) is not dict or not _ok(advice.get("reach_c")) or type(advice.get("reach_days")) is not int:
+        return None
+    pct = advice.get("reach_pct")
+    from .room_advice import ADVICE_DAYS
+    return {"c": advice["reach_c"], "pct": pct if type(pct) is int and 0 <= pct <= 100 else None,
+            "days": max(0, min(advice["reach_days"], ADVICE_DAYS)), "of": ADVICE_DAYS}
+
+
 def finish_facts(facts, advice, lang):
     """``waiting``: what each fact not learned yet still needs, in the unit of its learning, never a number for the
     fact itself; the cooling from the room's own model (room_advice) where the E32 has none."""
@@ -1027,6 +1039,7 @@ def idle_room_overview(name, room_id, state, learned, lang, advice=None):
         if (rate := cooling_rate(learned)) is not None:
             facts["cooling"] = {"c_per_h": round(rate, 2), "outdoor_c": REFERENCE_OUTDOOR_C}
         facts["advice"] = advice_fact(advice)
+        facts["reach"] = reach_fact(advice)
         finish_facts(facts, advice, lang)
     return {"name": name, "room_id": room_id, "progress": t["room_follow" if follow else "room_off"],
             "summary": None, "lines": [], "model": None, "facts": facts}

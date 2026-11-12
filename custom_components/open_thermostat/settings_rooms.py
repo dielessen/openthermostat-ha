@@ -388,8 +388,10 @@ def _after(room):
 
 def _features(plan):
     features = plan.get("features") if type(plan.get("features")) is list else []
+    # 1.4.4: Learn again (e32_learned.py), the room screen's block Learning only on firmware with the feature.
+    from .e32_learned import RELEARN_FEATURE
     return {"resets": resets_supported(plan), "smart_warm_up": SMART_WARM_UP_FEATURE in features,
-            "room_away": room_away.supported(plan)}
+            "room_away": room_away.supported(plan), "relearn": RELEARN_FEATURE in features}
 
 
 def list_model(hass, entry, hub, plan):

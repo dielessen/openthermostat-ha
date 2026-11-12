@@ -54,10 +54,10 @@ from homeassistant.core import callback
 from .heating_link import RoomEntity, number
 
 # The room status card's module (served and loaded with the week planner's, week_planner.card_modules).
-CARD_URL = "/open_thermostat/room-status-card-1.4.3.js"
+CARD_URL = "/open_thermostat/room-status-card-1.4.4.js"
 # The Overview's house card (E32 rc.5, frontend/house-card.js): what the boiler does now, today in figures, the day
 # so far and, in a house with one room switched on, that room. The seventh card module, versioned like the others.
-HOUSE_CARD_URL = "/open_thermostat/house-card-1.4.3.js"
+HOUSE_CARD_URL = "/open_thermostat/house-card-1.4.4.js"
 HOUSE_CARD_TYPE = "custom:openthermostat-house"
 # Yesterday's headline figures on the Learning view, large as on the house card (the same module, house-card.js).
 YESTERDAY_CARD_TYPE = "custom:openthermostat-yesterday"
@@ -88,15 +88,15 @@ PRESENCE = ["room_home", "room_away", "house_home", "house_away"]
 # The Boiler view's "Now" card (E32 rc.5, frontend/boiler-now-card.js): what the boiler does now in a band of its
 # colour with its display code in words, the water to the heating and back, the burner power and its starts as large
 # figures. The eighth card module, versioned like the others.
-BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.4.3.js"
+BOILER_NOW_CARD_URL = "/open_thermostat/boiler-now-card-1.4.4.js"
 BOILER_NOW_CARD_TYPE = "custom:openthermostat-boiler-now"
 # 1.4.1 (CONTRACT-1.4.1 §9): the house banner at the top of every dashboard view (frontend/openthermostat-house-banner.js):
 # empty unless the house is in summer mode, then the summer sentence and "Switch summer mode off". The ninth card module.
-HOUSE_BANNER_URL = "/open_thermostat/openthermostat-house-banner-1.4.3.js"
+HOUSE_BANNER_URL = "/open_thermostat/openthermostat-house-banner-1.4.4.js"
 HOUSE_BANNER_TYPE = "custom:openthermostat-house-banner"
 # 1.4.3 (CONTRACT-1.4.3 §2): the Rooms view's room card (frontend/room-card.js): one card per room with its temperature
 # and target, its presets and state, today's program, the last 24 hours and its devices. The tenth card module.
-ROOM_CARD_URL = "/open_thermostat/room-card-1.4.3.js"
+ROOM_CARD_URL = "/open_thermostat/room-card-1.4.4.js"
 ROOM_V2_CARD_TYPE = "custom:openthermostat-room"  # (week_planner.ROOM_CARD_TYPE is the older room editor)
 # The room card's today bar: at most this many entries (the first is the level in force at midnight).
 TODAY_MAX = 8

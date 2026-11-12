@@ -1056,6 +1056,28 @@ async def async_manual_change(link, room_id, temperature, *, running=None, statu
 # -- the climate entity --------------------------------------------------------------
 
 
+def _program_counts(room):
+    """{centi °C: how often} of the switch points of the room's week program ({} without one)."""
+    schedule = room.get("schedule")
+    count = {}
+    for day in schedule if type(schedule) is list else []:
+        for point in day if type(day) is list else []:
+            if type(point) is list and len(point) == 2 and type(point[1]) is int:
+                count[point[1]] = count.get(point[1], 0) + 1
+    return count
+
+
+def levels_from(plan_room):
+    """Where program_levels() takes the room's Comfort, Eco and Night from (1.4.4, issue #17): "room" (the levels it
+    stores), "program" (inferred from its week program) or "house" (the Room defaults of Settings → House: a room
+    without a week program and without stored levels); None while the plan is not read."""
+    if type(plan_room) is not dict:
+        return None
+    if room_levels(plan_room) is not None:
+        return "room"
+    return "program" if _program_counts(plan_room) else "house"
+
+
 def program_levels(plan_room, settings):
     """(comfort, eco, night) in °C: the room's week planner levels.
 
@@ -1074,12 +1096,7 @@ def program_levels(plan_room, settings):
     lo, hi = (lo, hi) if type(lo) is int and type(hi) is int and lo <= hi else (500, 3000)
     clamp = lambda v: max(lo, min(hi, v))  # noqa: E731
     half_up = lambda v: int(v + 0.5)  # noqa: E731  (JavaScript Math.round for these positive values)
-    schedule = room.get("schedule")
-    count = {}
-    for day in schedule if type(schedule) is list else []:
-        for point in day if type(day) is list else []:
-            if type(point) is list and len(point) == 2 and type(point[1]) is int:
-                count[point[1]] = count.get(point[1], 0) + 1
+    count = _program_counts(room)
     values = sorted(count, reverse=True)
     if not values:
         comfort, night = clamp(round(settings["comfort_c"] * 100)), clamp(round(settings["eco_c"] * 100))
@@ -1251,6 +1268,13 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
             centi = round(target * 100) if target is not None else None
             # Equal levels: the first one (Comfort, Eco, Night) names the hold.
             return next((preset for preset, i in LEVEL_PRESETS.items() if centi == round(levels[i] * 100)), PRESET_NONE)
+        plan = self.plan_room
+        if type(plan) is dict and not has_program(plan) and type(plan.get("fallback_centi_c")) is int:
+            # 1.4.4 (#17): without a week program a level becomes the room's temperature without a week program; the
+            # level that temperature equals is the room's preset (Comfort, Eco, Night first), else "none" (Program).
+            levels = program_levels(plan, comfort_options(self.entry))
+            return next((preset for preset, i in LEVEL_PRESETS.items()
+                         if plan["fallback_centi_c"] == round(levels[i] * 100)), PRESET_NONE)
         return PRESET_NONE  # away is the house mode (its own select), not a preset of one room
 
     @property
@@ -1284,6 +1308,9 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
                 # (active, follow, inactive); None without one or on older firmware.
                 **self._next_reset(room),
                 "smart_warm_up": self._smart_warm_up(),
+                # 1.4.4 (#17): where Comfort, Eco and Night come from (room, program, house); the room card says
+                # "Comfort, Eco and Night use the room defaults" for "house".
+                "levels_from": levels_from(self.plan_room),
                 # The room's setting device: which one, what was written and taken, the last failure.
                 **setting_device_attributes(self.hass, self.entry, self.room_id, self.plan_room)}
 

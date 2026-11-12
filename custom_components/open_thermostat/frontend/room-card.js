@@ -55,13 +55,14 @@ const TEXT = {
   window_open: 'Window open', door_open: 'Door open', valve_problem: 'Valve needs attention', target: 'Target', along_to: 'Heat along up to',
   again_window: 'Heats again once the window is closed', again_door: 'Heats again once the door is closed',
   again_contact: 'Heats again once it is closed', none: 'Program', comfort: 'Comfort', eco: 'Eco', sleep: 'Night', boost: 'Boost',
-  state: 'State', presets: 'Presets', switch_on: 'Switch on now', summer_refused: 'Summer mode is on: switch it off first.',
+  state: 'State', presets: 'Presets', program_back: 'Back to the week program', fixed_back: 'Back to the temperature without a week program',
+  on_back: 'Switches the room back to On', house_levels: 'Comfort, Eco and Night use the room defaults', switch_on: 'Switch on now', summer_refused: 'Summer mode is on: switch it off first.',
   today: 'Today', smart_start: 'Smart warm-up starts {time} · warm at {at}', smart_start_plain: 'Smart warm-up starts {time}',
   no_start_window: 'No early start: window open', no_start_away: 'No early start: away', no_program: 'No week program',
   now: 'now', smart: 'Smart warm-up', last_day: 'Last 24 hours', measured: 'Measured', devices: 'Devices', week: 'Week program', settings: 'Settings',
   open_pct: '{n} % open', battery: 'battery {n} %', set_to: 'set to {t} °C', put_back: 'put back to {t} °C', put_back_plain: 'put back',
   own_schedule: 'running its own program', off_by_user: 'switched off by you', gave_up: 'not responding to the E32',
-  offline: 'not reporting', low_battery: 'battery low', open_since: 'open since {time}', is_open: 'open', closed: 'closed',
+  offline: 'not reporting', low_battery: 'battery low', too_large: 'message too large ({kb} KB)', too_large_plain: 'message too large', open_since: 'open since {time}', is_open: 'open', closed: 'closed',
   home: 'home', away: 'away', setting_device: 'setting device · set to {t} °C', setting_plain: 'setting device', pump_on: 'on',
   pump_off: 'off', no_reading: 'no reading', thermometer: 'Thermometer', bluetooth: 'Bluetooth sensor', gateway: 'Valve {id} on BLU Gateway {n}',
   waiting: 'The E32 is not reporting yet.', failed: 'That did not work: {reason}', missing: 'Entity not available: {entity}',
@@ -72,13 +73,14 @@ const TEXT = {
   window_open: 'Raam open', door_open: 'Deur open', valve_problem: 'Kraan met probleem', target: 'Doel', along_to: 'Meeverwarmen tot',
   again_window: 'Verwarmt weer zodra het raam dicht is', again_door: 'Verwarmt weer zodra de deur dicht is',
   again_contact: 'Verwarmt weer zodra het dicht is', none: 'Programma', comfort: 'Comfort', eco: 'Eco', sleep: 'Nacht', boost: 'Boost',
-  state: 'Stand', presets: 'Voorkeuzen', switch_on: 'Nu aanzetten', summer_refused: 'Zomerstand staat aan: zet die eerst uit.',
+  state: 'Stand', presets: 'Voorkeuzen', program_back: 'Terug naar het weekprogramma', fixed_back: 'Terug naar de temperatuur zonder weekprogramma',
+  on_back: 'Zet de ruimte weer op Aan', house_levels: 'Comfort, Eco en Nacht gebruiken de standaardwaarden voor ruimtes', switch_on: 'Nu aanzetten', summer_refused: 'Zomerstand staat aan: zet die eerst uit.',
   today: 'Vandaag', smart_start: 'Slim opwarmen start {time} · warm om {at}', smart_start_plain: 'Slim opwarmen start {time}',
   no_start_window: 'Geen vroege start: raam open', no_start_away: 'Geen vroege start: afwezig', no_program: 'Geen weekprogramma',
   now: 'nu', smart: 'Slim opwarmen', last_day: 'Afgelopen 24 uur', measured: 'Gemeten', devices: 'Apparaten', week: 'Weekprogramma', settings: 'Instellen',
   open_pct: '{n} % open', battery: 'batterij {n} %', set_to: 'staat op {t} °C', put_back: 'teruggezet naar {t} °C', put_back_plain: 'teruggezet',
   own_schedule: 'eigen programma', off_by_user: 'door jou uitgezet', gave_up: 'geeft niet thuis',
-  offline: 'meldt zich niet', low_battery: 'batterij bijna leeg', open_since: 'open sinds {time}', is_open: 'open', closed: 'dicht',
+  offline: 'meldt zich niet', low_battery: 'batterij bijna leeg', too_large: 'bericht te groot ({kb} KB)', too_large_plain: 'bericht te groot', open_since: 'open sinds {time}', is_open: 'open', closed: 'dicht',
   home: 'thuis', away: 'weg', setting_device: 'instelapparaat · staat op {t} °C', setting_plain: 'instelapparaat', pump_on: 'aan',
   pump_off: 'uit', no_reading: 'geen meting', thermometer: 'Thermometer', bluetooth: 'Bluetooth-sensor', gateway: 'Kraan {id} aan BLU Gateway {n}',
   waiting: 'De E32 meldt zich nog niet.', failed: 'Dat lukte niet: {reason}', missing: 'Entiteit niet beschikbaar: {entity}',
@@ -93,7 +95,6 @@ const STATE = {on: ['heat', 'fire'], follow: ['along', 'fire-circle'], off: ['re
 const TYPE = {radiator: 'radiator', floor: 'heating-coil'};
 // The presets of the room thermostat, in the design's order (e32_comfort.PRESETS); Heat along only is the state menu's.
 const PRESETS = ['none', 'comfort', 'eco', 'sleep', 'boost'];
-const LEVEL_PRESETS = new Set(['comfort', 'eco', 'sleep']);
 // The E32's finding on a driven valve (e32_valves.HELD): its words and tone; "ok" says nothing.
 const HELD = {put_back: 'along', own_schedule: 'along', off_by_user: 'along', gave_up: 'attention'};
 const GATEWAY = /^g([1-9][0-9]?):(2[0-9]{2})$/;
@@ -175,6 +176,7 @@ border-radius:50%;background:var(--ot-raised);cursor:pointer;transition:backgrou
 .compact .now{font-size:var(--ot-text-xl);line-height:var(--ot-line-xl);font-weight:300;font-variant-numeric:tabular-nums;white-space:nowrap}
 .modes{display:flex;flex-wrap:nowrap;align-items:center;gap:0 6px;margin:0 -4px;padding:0 4px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none}
 .modes::-webkit-scrollbar{display:none}
+.presets{display:flex;flex-direction:column;min-width:0}
 .chip{flex:none;min-height:var(--ot-touch);padding:0;border:0;background:none;cursor:pointer}
 .chip span{display:inline-flex;align-items:center;height:30px;padding:0 8px;box-sizing:border-box;border:1px solid var(--ot-line);border-radius:15px;
 font-size:var(--ot-text-s);font-weight:500;white-space:nowrap;transition:background-color var(--ot-motion)}
@@ -679,22 +681,29 @@ class OpenThermostatRoom extends HTMLElement {
   button.append(svg);
   return button;
  }
- // The presets (those the room thermostat lists; on a room without a week program no levels) on one row: the five chips
- // fit a 374 px card; on a narrower card the row scrolls sideways inside the card (the last chip half visible), never wraps.
+ // The presets on one row, the same on every room (1.4.4, issue #17): Program · Comfort · Eco · Night · Boost (those the
+ // room thermostat lists), the room's current one pressed; on Heat along only none but Boost (its preset is the state).
+ // Program goes back to the week program; without one to the room's temperature without a week program; on Heat along
+ // only it switches the room back to On, as the thermostat dialog does (its tooltip says which). The levels are the
+ // thermostat's (e32_comfort.program_levels); where they are the room defaults (Settings → House) a muted line says so.
+ // The five chips fit a 374 px card; on a narrower card the row scrolls sideways inside the card, never wraps.
  controls(st, state) {
   const c = this._config, climate = this.st(c.climate), a = climate?.attributes || {}, row = make('div', {class: 'modes', 'data-modes': ''});
   if (!climate) return row;
   const offered = Array.isArray(a.preset_modes) ? a.preset_modes : [], program = Array.isArray(st.attributes?.today);
-  // On Heat along only "Program" would switch the room back to On: the state menu does that.
-  const presets = PRESETS.filter(p => offered.includes(p) && (program || !LEVEL_PRESETS.has(p)) && !(state === 'follow' && p === 'none'));
   const chosen = a.preset_mode === 'heat_along' ? null : a.preset_mode || 'none';
-  for (const preset of presets) {
-   const chip = make('button', {type: 'button', class: 'chip', 'data-preset': preset, 'data-focus': 'preset-' + preset, 'aria-pressed': String(chosen === preset)});
+  const back = this.t(state === 'follow' ? 'on_back' : program ? 'program_back' : 'fixed_back');
+  for (const preset of PRESETS.filter(p => offered.includes(p))) {
+   const chip = make('button', {type: 'button', class: 'chip', 'data-preset': preset, 'data-focus': 'preset-' + preset, 'aria-pressed': String(chosen === preset),
+    ...(preset === 'none' ? {title: back, 'aria-label': this.t(preset) + ', ' + back.charAt(0).toLowerCase() + back.slice(1)} : {})});
    chip.append(make('span', {}, this.t(preset)));
    chip.addEventListener('click', () => { if (chosen !== preset) this.call('climate', 'set_preset_mode', {entity_id: c.climate, preset_mode: preset}); });
    row.append(chip);
   }
-  return row;
+  if (a.levels_from !== 'house' || !['comfort', 'eco', 'sleep'].some(p => offered.includes(p))) return row;
+  const box = make('div', {class: 'presets'});
+  box.append(row, make('p', {class: 'muted', 'data-levels-note': ''}, this.t('house_levels')));
+  return box;
  }
  // The state as a status label that is a menu: On · Heat along only · Off, the same plan changes as the room screen and
  // the thermostat (Off: set_hvac_mode off; Heat along only: the preset heat_along; back to On from it: the preset none).
@@ -850,7 +859,11 @@ class OpenThermostatRoom extends HTMLElement {
    tile(source, 'thermometer', this.name(source), v === null ? this.t('no_reading') : together(this.deg(v, true) + ' ' + (typeof unit === 'string' && unit ? unit : '°C')), {kind: 'source'});
   }
   if (c.setting_device && this.st(c.setting_device)) {
-   const st = this.st(c.setting_device), a = st.attributes || {}, v = c.setting_device.startsWith('climate.') ? numeric(a.temperature) : numeric(st.state);
+   // Its target as the integration reads it (e32_setting_device.device_target): a thermostat's temperature, else (one
+   // with only a range, such as the Bosch Room thermostat II through Zigbee2MQTT, issue #16) its target_temp_low; a
+   // number's state.
+   const st = this.st(c.setting_device), a = st.attributes || {};
+   const v = !known(st) ? null : c.setting_device.startsWith('climate.') ? numeric(a.temperature) ?? numeric(a.target_temp_low) : numeric(st.state);
    tile(c.setting_device, 'thermostat', this.name(c.setting_device), v === null ? this.t('setting_plain') : this.t('setting_device', {t: this.deg(v)}), {kind: 'setting'});
   }
   // The radiator valves: per valve its opening (or the temperature it was given) and battery, the E32's finding under it.
@@ -864,13 +877,20 @@ class OpenThermostatRoom extends HTMLElement {
    else if (position !== null) parts.push(this.t('open_pct', {n: Math.round(position)}));
    else if (given !== null) parts.push(this.t('set_to', {t: this.deg(given)}));
    let second = '', tone = 'along';
-   if (HELD[v.held]) {
+   // 1.4.4 (FW-TRV-STATE): a state the E32 could not read, with its size: red, before any finding (it says nothing now).
+   const large = v.health === 'message_too_large', kb = numeric(v.bytes);
+   if (large) {
+    tone = 'attention';
+    second = kb !== null && kb > 0 ? this.t('too_large', {kb: (kb / 1000).toLocaleString(locale(hass), {minimumFractionDigits: 1, maximumFractionDigits: 1})})
+     : this.t('too_large_plain');
+   } else if (HELD[v.held]) {
     tone = HELD[v.held];
     const to = given ?? numeric(v.setpoint_c) ?? numeric(this.st(c.climate)?.attributes?.temperature);
     second = v.held === 'put_back' ? (to !== null ? this.t('put_back', {t: this.deg(to)}) : this.t('put_back_plain')) : this.t(v.held);
    }
    tile(c.valves, position !== null && position < 1 ? 'valve-closed' : 'valve', name, parts.join(' · '),
-    {battery: level, second, tone, warn: v.health === 'offline' || v.held === 'gave_up', kind: 'valve', held: v.held || null});
+    {battery: level, second, tone, warn: v.health === 'offline' || large || v.held === 'gave_up', kind: 'valve', held: v.held || null,
+     health: large ? v.health : null});
   }
   // Windows and doors: open since a time (red) or closed.
   for (const contact of c.contacts) {
@@ -897,7 +917,7 @@ class OpenThermostatRoom extends HTMLElement {
   box.append(make('p', {class: 'muted'}, this.t('devices')), grid);
   for (const item of list) {
    const el = make('button', {type: 'button', class: 'tile' + (item.warn ? ' warn' : ''), 'data-tile': item.kind, 'data-focus': 'tile-' + list.indexOf(item),
-    ...(item.held ? {'data-held': item.held} : {})});
+    ...(item.held ? {'data-held': item.held} : {}), ...(item.health ? {'data-health': item.health} : {})});
    const txt = make('span', {class: 'txt'}), value = make('span', {class: 'tv'});
    const words = [item.value].filter(Boolean);
    if (item.value) value.append(item.value);

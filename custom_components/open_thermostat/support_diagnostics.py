@@ -318,8 +318,11 @@ def learned_store(hass, entry):
     missing = not_saved(status)
     from homeassistant.helpers import issue_registry as ir
     head, tail = f"{GROUP}_", f"_{entry.entry_id}"
-    issues = sorted(issue_id.removeprefix(head).removesuffix(tail) for domain, issue_id in ir.async_get(hass).issues
-                    if domain == DOMAIN and issue_id.startswith(head) and issue_id.endswith(tail))
+    # Only the items Repairs shows: Home Assistant keeps a non-persistent item after a restart as inactive (not shown,
+    # and our bookkeeping no longer knows it), which is not an open Repair (QA-144, the tester's diagnostics of 11 Nov).
+    issues = sorted(issue_id.removeprefix(head).removesuffix(tail)
+                    for (domain, issue_id), issue in ir.async_get(hass).issues.items()
+                    if domain == DOMAIN and issue.active and issue_id.startswith(head) and issue_id.endswith(tail))
     loss = getattr(watch, "loss", None)
     return {"status": status,
             "not_saved": {"what": missing[0], "rooms_missing": missing[1], "rooms": missing[2]} if missing else None,

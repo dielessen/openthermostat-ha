@@ -1813,6 +1813,14 @@
             "state": {
               "summer": "Summer"
             }
+          },
+          "levels_from": {
+            "name": "Comfort, Eco and Night from",
+            "state": {
+              "room": "The room's own levels",
+              "program": "The week program",
+              "house": "Room defaults"
+            }
           }
         }
       }
@@ -3451,6 +3459,25 @@
           },
           "last_error_at": {
             "name": "Last error at"
+          },
+          "unread_messages": {
+            "name": "Messages the E32 could not read since it started"
+          },
+          "unread_last_topic": {
+            "name": "Last unread message: topic"
+          },
+          "unread_last_reason": {
+            "name": "Last unread message: reason",
+            "state": {
+              "too_large": "Too large",
+              "too_deep": "Nested too deeply",
+              "malformed": "Broken or cut off",
+              "unknown_device": "From no known device",
+              "wrong_type": "Not a device state"
+            }
+          },
+          "unread_last_bytes": {
+            "name": "Last unread message: size"
           }
         }
       },
@@ -3614,6 +3641,12 @@
       },
       "plan_confirm": {
         "name": "Let the E32 plan the heating"
+      },
+      "room_relearn": {
+        "name": "Learn again"
+      },
+      "hub_relearn": {
+        "name": "Learn again: house"
       }
     }
   },
@@ -5512,6 +5545,15 @@
     },
     "plan_confirm_refused": {
       "message": "The E32 refused the confirmation ({error}). Look at its House page, or try again in a moment."
+    },
+    "e32_relearn_failed": {
+      "message": "The E32 did not clear what it learned ({error}). Check the connection and try again."
+    },
+    "e32_relearn_unknown_room": {
+      "message": "The E32 no longer has this room. Nothing was cleared."
+    },
+    "e32_relearn_update_required": {
+      "message": "This E32 firmware cannot start learning again on request. Update the E32 first (Settings → Updates → OpenThermostat E32 Firmware)."
     }
   },
   "device": {

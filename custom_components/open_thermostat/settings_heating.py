@@ -138,8 +138,15 @@ def _list(hass, entry):
             "circuits": circuits,
             "boiler_model": model_name(model_id, "en") if type(model_id) is str and model_id != "none" else None,
             "boiler_settings": boiler_settings_offered(hass, entry),
+            # 1.4.4: Learn again: house (e32_learned.py), only on firmware that offers it.
+            "relearn": _relearn(hub),
             "live": {"minimum_now": _minimum_now(hub, unit) if limits and limits["automatic"] else None,
                      "boiler_settings": _boiler_now(hass, entry)}}
+
+
+def _relearn(hub):
+    from .e32_learned import supported
+    return hub is not None and supported(hub)
 
 
 def _boiler_now(hass, entry):

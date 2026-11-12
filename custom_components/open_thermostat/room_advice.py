@@ -48,6 +48,7 @@ NORMALISE_MIN_SPREAD_C = 3.0       # ... spread over this many degrees outside
 NORMALISE_SLOPE = (0.0, 1.0)       # K of room per K outside, clamped
 SOLO_LITTLE_H = 0.5                # an On room asking alone at most this long a day: Heat along only changes little
 FREE_MARGIN_C = 0.25               # a fixed temperature this close above T0 is still free
+REACH_MARGIN_C = 0.25              # 1.4.4: a heat-along hour this close below the temperature (one bin) reached it
 RETURN_DEFAULT_C = 45.0            # the return temperature for the efficiency without a reading
 GAS_KWH_PER_M3 = 9.77              # the E32's default calorific value (heating_advice.GAS_KWH_PER_M3)
 
@@ -397,6 +398,31 @@ def shares(heated, taus):
     return {room: weight / total for room, weight in weights.items()} if total else {}
 
 
+def reach(records, target):
+    """1.4.4 (plan 2.4, NEXT-RELEASE 1.4.4 item 1): how often a room on Heat along only reached its temperature by
+    heating along: {"reach_c", "reach_pct", "reach_days"}.
+
+    Counted in hours, not days: the share of the heat-along hours while the boiler heated (the histogram ``b`` the
+    advice already keeps, one sample every 5 minutes) in which the room was at ``target`` or at most REACH_MARGIN_C
+    below it, over the same qualifying days as the advice (at least 6 such hours at 15 °C or colder outside, the last
+    14). A day would only say yes or no, and one cold evening would cost the whole day; the hours say how much of the
+    time the room was warm while the house heated. ``reach_days``: the qualifying days counted so far (at most 14);
+    ``reach_pct`` (0..100) only once there are 14; ``target``: the room's temperature without a week program ("Heat
+    along up to"), None for a room that follows its week program (no figure: its target changes)."""
+    days = len(records)
+    out = {"reach_c": target, "reach_pct": None, "reach_days": days}
+    if target is None or days < ADVICE_DAYS:
+        return out
+    total = reached = 0
+    for _, rec in records:
+        for key, count in rec["b"].items():
+            total += count
+            reached += count if int(key) / BIN_PER_C >= target - REACH_MARGIN_C - 1e-9 else 0
+    if total:
+        out["reach_pct"] = round(100 * reached / total)
+    return out
+
+
 def advise(days, room_id, today, ctx):
     """The values of a room's advice (pure), or None for a room that is Off or unknown.
 
@@ -405,18 +431,21 @@ def advise(days, room_id, today, ctx):
     efficiency, kwh_per_m3, factor (the gas calibration with a meter, else None)."""
     state = ctx.get("state")
     if state == "follow":
-        if ctx.get("valve_sensor"):
-            return {"kind": "follow", "reason": "valve_sensor", "rough": True}
+        if ctx.get("valve_sensor"):  # the valve's own sensor reads too high next to a warm radiator: no figure either
+            return {"kind": "follow", "reason": "valve_sensor", "rough": True,
+                    "reach_c": None, "reach_pct": None, "reach_days": None}
         records = _qualifying(days, room_id, today, "fc")
+        reached = reach(records, None if ctx.get("program") else ctx.get("fallback_c"))
         if len(records) < ADVICE_DAYS:
-            return {"kind": "follow", "reason": "too_little_data", "part": "days", "days": len(records), "rough": False}
+            return {"kind": "follow", "reason": "too_little_data", "part": "days", "days": len(records), "rough": False,
+                    **reached}
         if not ctx.get("house_learned") or not ctx.get("ua_kw_per_k"):
             return {"kind": "follow", "reason": "too_little_data", "part": "house", "days": len(records),
-                    "rough": False}
+                    "rough": False, **reached}
         temperatures, typical, slope = normalised(records)
         t0 = percentile(temperatures, PERCENTILE)
         if t0 is None:
-            return {"kind": "follow", "reason": "too_little_data", "part": "days", "days": 0, "rough": False}
+            return {"kind": "follow", "reason": "too_little_data", "part": "days", "days": 0, "rough": False, **reached}
         heated = list(dict.fromkeys([*ctx.get("heated", []), room_id]))
         taus = ctx.get("taus") or {}
         share = shares(heated, taus)[room_id]
@@ -440,7 +469,7 @@ def advise(days, room_id, today, ctx):
                   "kwh": round(per_kwh, 2), "m3": round(m3(per_kwh), 2), "typical_c": typical, "slope": slope,
                   "ua": ctx["ua_kw_per_k"], "n": len(heated), "share": share,
                   "efficiency": ctx.get("efficiency", efficiency(RETURN_DEFAULT_C)), "target": None,
-                  "program": bool(ctx.get("program")), "now": None, "now_m3": None}
+                  "program": bool(ctx.get("program")), "now": None, "now_m3": None, **reached}
         now = ctx.get("fallback_c")
         if not values["program"] and now is not None:
             values["now"] = now
@@ -569,6 +598,7 @@ TEXT = {
     },
 }
 LANGUAGES = tuple(TEXT)
+REACH_KEYS = ("reach_c", "reach_pct", "reach_days")
 
 
 def fmt(value, lang, digits=1):
@@ -771,7 +801,9 @@ class Inputs:
             result["advice"] = {"text_en": texts["en"][0], "text_nl": texts["nl"][0],
                                 "more_en": texts["en"][1], "more_nl": texts["nl"][1],
                                 "target_c": values.get("target"), "rough": bool(values.get("rough")),
-                                "reason": values.get("reason")}
+                                "reason": values.get("reason"),
+                                # 1.4.4: Heat along only, how often it reached its temperature (reach); None otherwise.
+                                **{key: values.get(key) for key in REACH_KEYS}}
         model = self.models.get(room_id)
         if model is not None:
             result["model"] = {key: model[key] for key in ("tau_h", "warm_rate_k_per_h", "quality", "hours_used",
@@ -803,7 +835,8 @@ def learning_lines(hass, entry, hub, history, today, lang):
     has no advice; a room without either is left out). 1.4.3 (LEARN-TAB, the room card's facts): also
     ``advice_kind`` (the room's state the advice is for: "active" or "follow"), ``advice_reason`` (None once it has a
     figure, else why not: too_little_data, valve_sensor) and ``cool_c_per_h`` (the model sentence's cooling at 5 °C
-    outside, or None)."""
+    outside, or None). 1.4.4: ``reach_c``, ``reach_pct`` and ``reach_days`` (reach(); None for a room not on Heat
+    along only)."""
     if lang not in TEXT:
         lang = "en"
     inputs = Inputs(hass, entry, hub, history, today)
@@ -817,7 +850,8 @@ def learning_lines(hass, entry, hub, history, today, lang):
             lines.append({"room_id": room_id, "name": inputs.name(room_id), "advice": advice, "model": model,
                           "advice_kind": inputs.rooms[room_id].get("state") if advice else None,
                           "advice_reason": (live.get("advice") or {}).get("reason") if advice else None,
-                          "cool_c_per_h": round(rates[0], 3) if rates else None})
+                          "cool_c_per_h": round(rates[0], 3) if rates else None,
+                          **{key: (live.get("advice") or {}).get(key) for key in REACH_KEYS}})
     return lines
 
 

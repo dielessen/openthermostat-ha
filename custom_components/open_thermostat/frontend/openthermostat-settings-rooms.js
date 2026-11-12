@@ -118,6 +118,19 @@ const TEXTS = {
   'Choose a moment in the future (before 2100) for “Off until”, or leave it empty.': 'Kies voor “Uit tot” een moment in de toekomst (voor 2100), of laat het leeg.',
   'The E32 already has 8 rooms. Remove a room first.': 'De E32 heeft al 8 ruimtes. Verwijder eerst een ruimte.',
   'This room is no longer on the E32.': 'Deze ruimte staat niet meer op de E32.',
+  // 1.4.4 (HA-CARDS-144): Learn again (plan 2.3, the question of the plan word for word) and the heat-along figure (2.4).
+  'Learning': 'Leren',
+  'Learn again': 'Opnieuw leren',
+  'Learn again after a change to the radiators or the floor heating': 'Opnieuw leren na een verandering aan de radiatoren of de vloerverwarming',
+  'Clears how fast this room warms up and cools down, its morning check and its free heat. The E32 learns them again by itself; the week program and the settings stay.': 'Wist hoe snel deze ruimte opwarmt en afkoelt, de ochtendcontrole en de gratis warmte. De E32 leert ze vanzelf opnieuw; het weekprogramma en de instellingen blijven.',
+  'Clear what the E32 learned for {name}?': 'Wis wat de E32 voor {name} leerde?',
+  'It learns again by itself; the week program stays.': 'Het leert vanzelf opnieuw; het weekprogramma blijft.',
+  'Cleared: the E32 starts learning {name} again.': 'Gewist: de E32 begint opnieuw te leren voor {name}.',
+  'Reaches {temperature} {pct} % of the time ({days} days)': 'Haalt {temperature} in {pct} % van de tijd ({days} dagen)',
+  'Still counting: day {n} of {m}': 'Nog aan het tellen: dag {n} van {m}',
+  'This E32 firmware cannot start learning again on request. Update the E32 first (Settings → Updates → OpenThermostat E32 Firmware).': 'Deze E32-firmware kan niet op verzoek opnieuw beginnen met leren. Werk de E32 eerst bij (Instellingen → Updates → OpenThermostat E32 Firmware).',
+  'The E32 has no free web session: close E32 pages you do not use, or wait two minutes, then try again.': 'De E32 heeft geen vrije websessie: sluit E32-pagina\'s die je niet gebruikt, of wacht twee minuten, en probeer het opnieuw.',
+  'The E32 did not clear what it learned ({error}). Check the connection and try again.': 'De E32 heeft niet gewist wat hij geleerd heeft ({error}). Controleer de verbinding en probeer het opnieuw.',
   'The rooms were changed on the E32 twice while saving. Nothing was saved; try again.': 'De ruimtes zijn tijdens het opslaan twee keer op de E32 gewijzigd. Er is niets opgeslagen; probeer het opnieuw.',
   'The rooms no longer fit on the E32 (4 KB). Use shorter names, fewer sources or fewer switch times. Nothing was saved.': 'De ruimtes passen niet meer op de E32 (4 KB). Gebruik kortere namen, minder bronnen of minder schakeltijden. Er is niets opgeslagen.',
   'The E32 has no storage space left for its rooms. Remove a room you no longer use, or a few switch times, and save again. Nothing was saved.': 'De E32 heeft geen opslagruimte meer voor zijn ruimtes. Verwijder een ruimte die je niet meer gebruikt, of een paar schakeltijden, en sla opnieuw op. Er is niets opgeslagen.',
@@ -271,7 +284,11 @@ const ERRORS = {
  device_two_roles: 'A device can be the room\'s setting device or a radiator valve the E32 drives, not both. Choose one.',
  notification_person_invalid: 'Choose one of the people in the list.',
  advice_changed: 'The advice changed in the meantime. Reload the page.',
- advice_unavailable: 'There is no advice to use for this room right now. Reload the page.'};
+ advice_unavailable: 'There is no advice to use for this room right now. Reload the page.',
+ // 1.4.4: Learn again (e32_learned.relearn_action).
+ relearn_update_required: 'This E32 firmware cannot start learning again on request. Update the E32 first (Settings → Updates → OpenThermostat E32 Firmware).',
+ relearn_no_free_session: 'The E32 has no free web session: close E32 pages you do not use, or wait two minutes, then try again.',
+ relearn_failed: 'The E32 did not clear what it learned ({error}). Check the connection and try again.'};
 
 const NEW = 'new-room';
 // A room's state: its word, the label's tone (orange heats, amber heats along, grey off) and its one-line explanation
@@ -302,7 +319,7 @@ const REASON = 'component.open_thermostat.entity.sensor.room_reason.state_attrib
 // The sections of a room's screen, in the plan's order (HA-INSTELPANEEL-FASE2.nl.md 3.1): [key, title, icon].
 const FOLDS = [['general', 'General', 'thermostat'], ['temperature', 'Temperature', 'thermometer'], ['week', 'Week program', 'calendar'],
  ['contacts', 'Windows and doors', 'window'], ['valves', 'Radiator valves', 'radiator'], ['persons', 'Persons', 'account'],
- ['notifications', 'Notifications for this room', 'bell'], ['limits', 'Temperature limits', 'limits']];
+ ['notifications', 'Notifications for this room', 'bell'], ['limits', 'Temperature limits', 'limits'], ['learning', 'Learning', 'clock']];
 // The values of a room's screen (save keys, CONTRACT-1.4.1 §1); the planner saves the program, reset times and Smart warm-up.
 const PLAIN = ['name', 'state', 'emitter', 'sources', 'setpoint_entity', 'fallback_temperature', 'inactive_until', 'standard_program'];
 
@@ -679,6 +696,7 @@ function summaries(ctx) {
   : n.recipients == null ? t('Everyone with a phone') : n.recipients.map(id => (live.notifications?.people || []).find(p => p.person === id)?.name || id).join(', ')]
   .filter(Boolean).join(' · ') : t('Off');
  if (v.minimum_temperature != null) out.limits = `${kit.number(v.minimum_temperature, hass)}–${kit.degrees(v.maximum_temperature, unit, hass)}`;
+ out.learning = t('Learn again after a change to the radiators or the floor heating');
  return out;
 }
 function roomPage(ctx) {
@@ -737,6 +755,8 @@ function roomPage(ctx) {
    ctx.field('stepper', 'minimum_temperature', {label: t('Minimum temperature'), ...range}),
    ctx.field('stepper', 'maximum_temperature', {label: t('Maximum temperature'), ...range})));
  }
+ // 10. Learning (1.4.4): Learn again, only on firmware that offers it (the plan's feature relearn), for an administrator.
+ if (!isNew && !ctx.readOnly && m.features?.relearn) parts.push(fold('learning', relearnBlock(ctx)));
  // 9. Remove room, at the bottom, after the question.
  if (!isNew && !ctx.readOnly) parts.push(h('div', {class: 'rr-remove'}, kit.button(t('Remove room'), () => ctx.act({remove: true}, {
   title: t('Remove {name}?', {name: m.name}),
@@ -783,7 +803,7 @@ function adviceBlock(ctx) {
  const more = a['more_' + lang] || a.more_en, target = num(a.target_c), error = kit.h('div', {class: 'rr-advice-error'});
  // The room model's plain sentence (live.model: how fast it cools and warms) goes under "More" with the assumptions.
  const model = m.live?.model?.['sentence_' + lang] || m.live?.model?.sentence_en;
- const box = kit.h('div', {class: 'rr-advice', 'data-advice': ''}, kit.h('p', {class: 'help', text: kit.together(text)}),
+ const box = kit.h('div', {class: 'rr-advice', 'data-advice': ''}, kit.h('p', {class: 'help', text: kit.together(text)}), reachLine(ctx),
   more || model ? kit.more([more, model].filter(Boolean).join(' '), lang) : null);
  if (target == null || ctx.readOnly) return box;
  const use = kit.button(t('Use {temperature}', {temperature: kit.degrees(inUnit(target, unit), unit, ctx.hass)}), async () => {
@@ -794,6 +814,33 @@ function adviceBlock(ctx) {
  }, 'text', {'data-adopt': ''});
  box.append(use, error);
  return box;
+}
+// 1.4.4 (plan 2.3): Learn again for this room. The plan's question first; then the E32 clears what it learned for the room
+// (settings/action relearn) and the block says so; a refusal stays under the button.
+function relearnBlock(ctx) {
+ const {kit, t, model: m} = ctx, {h} = kit, said = h('div', {class: 'rr-relearn-said', 'data-relearn-said': ''});
+ const go = kit.button(t('Learn again'), async () => {
+  const name = m.name || m.id;
+  if (!(await kit.confirm(go.getRootNode(), {title: t('Clear what the E32 learned for {name}?', {name}), text: t('It learns again by itself; the week program stays.'),
+   confirm: t('Learn again'), lang: ctx.lang}))) return;
+  go.disabled = true; said.replaceChildren();
+  try { await ctx.action('relearn', {room: m.id}); said.replaceChildren(kit.notice(t('Cleared: the E32 starts learning {name} again.', {name}), 'success')); }
+  catch (err) { said.replaceChildren(kit.inlineError(err?.text || ctx.errorText(err?.code || 'unknown'))); }
+  go.disabled = false;
+ }, 'outlined', {'data-relearn': ''});
+ return h('div', {class: 'rr-relearn', 'data-relearn-block': ''},
+  h('p', {class: 'help', text: t('Clears how fast this room warms up and cools down, its morning check and its free heat. The E32 learns them again by itself; the week program and the settings stay.')}),
+  go, said);
+}
+// HA-ADVICE's heat-along figure (1.4.4, room_advice.reach): how often the room reached its temperature by heating along,
+// or which of the 14 days it counts; nothing for a room that follows its week program.
+function reachLine(ctx) {
+ const {kit, t, model: m, hass} = ctx, a = m.live?.advice, c = num(a?.reach_c), days = num(a?.reach_days), pct = num(a?.reach_pct);
+ if (c == null || days == null) return null;
+ const unit = m.unit || '°C', temperature = kit.degrees(inUnit(c, unit), unit, hass);
+ const text = pct != null ? t('Reaches {temperature} {pct} % of the time ({days} days)', {temperature, pct: kit.number(pct, hass), days: kit.number(days, hass)})
+  : t('Still counting: day {n} of {m}', {n: kit.number(days, hass), m: kit.number(14, hass)});
+ return kit.h('p', {class: 'help rr-reach', 'data-reach': pct != null ? 'figure' : 'counting', text: kit.together(text)});
 }
 // The fixed temperature's block: the field (or, on Heat along only with a week program, the sentence and "Use one fixed
 // temperature"), the line where the target comes from now, and the advice.
@@ -897,7 +944,8 @@ const STYLE = `.rr-toolbar{display:flex;align-items:center;justify-content:space
 .pick .btn{flex:none}.rr-valve .pick-text{gap:4px}.rr-model{max-width:320px;min-height:40px;padding:6px 10px;margin-top:4px}
 .rr-list .pick-name{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}.rr-twin{display:grid;justify-items:start;gap:0;margin:-4px 0 0 12px}
 .rr-fixed{display:grid}.rr-fixed>.field{padding:var(--ot-s3) 0;margin:0;border:0}.rr-source{margin:-8px 0 0;padding-bottom:var(--ot-s3)}
-.rr-advice{display:grid;justify-items:start;gap:4px;padding-bottom:var(--ot-s3)}.rr-program-note{display:grid;justify-items:start;gap:4px}
+.rr-advice{display:grid;justify-items:start;gap:4px;padding-bottom:var(--ot-s3)}.rr-reach{font-weight:500}
+.rr-relearn{display:grid;justify-items:start;gap:var(--ot-s2);max-width:560px}.rr-relearn-said:empty{display:none}.rr-program-note{display:grid;justify-items:start;gap:4px}
 .rr-hint .notice{margin:0 0 var(--ot-s3)}.rr-recipients{margin:0}
 .rr-setting{margin:-8px 0 0;padding-bottom:var(--ot-s3)}.rr-why{padding:var(--ot-s3) 0 0}
 .rr-week{padding:var(--ot-s3) 0}.rr-full{margin-top:var(--ot-s3)}.rr-remove{margin-top:var(--ot-s5);display:flex;justify-content:flex-start}

@@ -32,7 +32,8 @@ Firmware without the topic never creates the entity (nothing to go stale). Diagn
   (room_plan.RoomPlanLink.request_refresh, HA-REREAD), unless the heartbeat already showed that restart.
 
 1.4 (FW-LOG): the sensor "E32 errors" (below) lives here too: the error lines of the E32's system log since it
-started, from the heartbeat's ``errors``.
+started, from the heartbeat's ``errors``. 1.4.4 (DEVICE-ROBUST-144): its attributes also say how many device messages
+the E32 received and could not read since it started, and the last one (the heartbeat's ``dropped``).
 """
 from __future__ import annotations
 
@@ -272,6 +273,40 @@ def decode_errors(beat):
     return {"count": count, "at_s": at, "text": text}
 
 
+# E32 1.4.4 (DEVICE-ROBUST-144, src/diagnostics/DroppedMessages.h): the device messages the E32 received and could not
+# read since it started (a radiator valve's state that is too large, cut off or no object; a message on a valve topic
+# no valve has), ``"dropped"``: ``[count]`` without one, else ``[count, "<topic>", "<reason>", bytes]`` (the topic at
+# most 48 printable characters). Shown as attributes of "E32 errors" and as one line on the Diagnostics view
+# (dashboard._connection_section); a figure, never a Repairs item. Firmware before 1.4.4 sends none: no attributes.
+DROP_REASONS = ("too_large", "too_deep", "malformed", "unknown_device", "wrong_type")
+MAX_DROP_TOPIC = 48
+
+
+def decode_dropped(beat):
+    """The heartbeat's dropped device messages (E32 1.4.4): {"count", "topic", "reason", "bytes"}, or None."""
+    value = beat.get("dropped") if type(beat) is dict else None
+    if type(value) is not list or len(value) not in (1, 4):
+        return None
+    count = _count(value[0])
+    if count is None:
+        return None
+    if len(value) == 1:
+        return {"count": 0, "topic": None, "reason": None, "bytes": None} if count == 0 else None
+    topic, reason, size = value[1], value[2], _count(value[3])
+    if (count == 0 or type(topic) is not str or not 0 < len(topic) <= MAX_DROP_TOPIC or not topic.isprintable()
+            or not topic.isascii() or reason not in DROP_REASONS or size is None):
+        return None
+    return {"count": count, "topic": topic, "reason": reason, "bytes": size}
+
+
+def dropped_attributes(dropped):
+    """The "E32 errors" attributes of a decoded ``dropped`` (empty on firmware before 1.4.4)."""
+    if dropped is None:
+        return {}
+    return {"unread_messages": dropped["count"], "unread_last_topic": dropped["topic"],
+            "unread_last_reason": dropped["reason"], "unread_last_bytes": dropped["bytes"]}
+
+
 def error_time(beat, errors, now=None):
     """When the last error line was logged: now minus how long before this heartbeat (whole seconds), or None."""
     if errors is None or errors["at_s"] is None:
@@ -295,6 +330,7 @@ class E32ErrorsSensor(SensorEntity):
     def __init__(self, prefix, hub):
         self._hub = hub
         self.errors = None
+        self.dropped = None
         self.last_error_at = None
         self._shown = None
         self._attr_unique_id = f"{prefix}_hub_e32_errors"
@@ -313,19 +349,23 @@ class E32ErrorsSensor(SensorEntity):
         if self.errors is None:
             return None
         return {"last_error": self.errors["text"],
-                "last_error_at": self.last_error_at.isoformat() if self.last_error_at is not None else None}
+                "last_error_at": self.last_error_at.isoformat() if self.last_error_at is not None else None,
+                **dropped_attributes(self.dropped)}
 
     @callback
-    def receive(self, beat, errors, now=None, gone=False):
+    def receive(self, beat, errors, now=None, gone=False, dropped=None):
         """A heartbeat's errors (None: keep the last ones; gone: a live heartbeat without them, after a firmware
         downgrade: unavailable). The time of the last line is worked out once per new line, so it stays put;
-        the state is written only when something shown changed (also availability)."""
+        the state is written only when something shown changed (also availability). ``dropped``: the same
+        heartbeat's dropped device messages (decode_dropped; None from firmware before 1.4.4: no such attributes)."""
         if gone:
-            self.errors = self.last_error_at = None
-        elif errors is not None and errors != self.errors:
-            self.last_error_at = error_time(beat, errors, now)
-            self.errors = errors
-        shown = (self.available, self.errors, self.last_error_at)
+            self.errors = self.last_error_at = self.dropped = None
+        elif errors is not None:
+            if errors != self.errors:
+                self.last_error_at = error_time(beat, errors, now)
+                self.errors = errors
+            self.dropped = dropped
+        shown = (self.available, self.errors, self.last_error_at, self.dropped)
         if shown == self._shown:
             return
         self._shown = shown
@@ -344,10 +384,11 @@ async def async_setup_errors_sensor(hass, entry, async_add_entities):
     @callback
     def hub_changed():
         beat = getattr(hub, "heartbeat", None)
-        errors, gone = None, False
+        errors, gone, dropped = None, False, None
         if beat is not holder["beat"]:
             holder["beat"] = beat
             errors = decode_errors(beat)
+            dropped = decode_dropped(beat)
             gone = errors is None and beat is not None
         sensor = holder.get("sensor")
         if gone:
@@ -358,11 +399,12 @@ async def async_setup_errors_sensor(hass, entry, async_add_entities):
                 if getattr(hub, "closed", False):
                     return
                 sensor = holder["sensor"] = E32ErrorsSensor(prefix, hub)
-                sensor.receive(beat, errors)
+                sensor.receive(beat, errors, dropped=dropped)
                 async_add_entities([sensor], **add_options(hass, entry))
                 return
         if sensor is not None:
-            sensor.receive(beat, errors, gone=gone)  # new errors, none any more, or only whether the E32 is heard
+            # new errors, none any more, or only whether the E32 is heard
+            sensor.receive(beat, errors, gone=gone, dropped=dropped)
 
     entry.async_on_unload(hub.add_listener(hub_changed))
     hub_changed()

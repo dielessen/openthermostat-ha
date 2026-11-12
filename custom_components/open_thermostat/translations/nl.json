@@ -3038,6 +3038,14 @@
             "state": {
               "summer": "Zomer"
             }
+          },
+          "levels_from": {
+            "name": "Comfort, Eco en Nacht uit",
+            "state": {
+              "room": "De eigen niveaus van de ruimte",
+              "program": "Het weekprogramma",
+              "house": "Standaardwaarden voor ruimtes"
+            }
           }
         }
       }
@@ -4676,6 +4684,25 @@
           },
           "last_error_at": {
             "name": "Tijdstip laatste fout"
+          },
+          "unread_messages": {
+            "name": "Berichten die de E32 niet kon lezen sinds hij startte"
+          },
+          "unread_last_topic": {
+            "name": "Laatste onleesbare bericht: topic"
+          },
+          "unread_last_reason": {
+            "name": "Laatste onleesbare bericht: reden",
+            "state": {
+              "too_large": "Te groot",
+              "too_deep": "Te diep genest",
+              "malformed": "Kapot of afgebroken",
+              "unknown_device": "Van geen bekend apparaat",
+              "wrong_type": "Geen apparaatstatus"
+            }
+          },
+          "unread_last_bytes": {
+            "name": "Laatste onleesbare bericht: grootte"
           }
         }
       },
@@ -4839,6 +4866,12 @@
       },
       "plan_confirm": {
         "name": "Laat de E32 de verwarming plannen"
+      },
+      "room_relearn": {
+        "name": "Opnieuw leren"
+      },
+      "hub_relearn": {
+        "name": "Opnieuw leren: huis"
       }
     }
   },
@@ -5512,6 +5545,15 @@
     },
     "plan_confirm_refused": {
       "message": "De E32 weigerde de bevestiging ({error}). Kijk op zijn Huis-pagina, of probeer het zo nog eens."
+    },
+    "e32_relearn_failed": {
+      "message": "De E32 heeft niet gewist wat hij geleerd heeft ({error}). Controleer de verbinding en probeer het opnieuw."
+    },
+    "e32_relearn_unknown_room": {
+      "message": "De E32 heeft deze ruimte niet meer. Er is niets gewist."
+    },
+    "e32_relearn_update_required": {
+      "message": "Deze E32-firmware kan niet op verzoek opnieuw beginnen met leren. Werk de E32 eerst bij (Instellingen → Updates → OpenThermostat E32 Firmware)."
     }
   },
   "device": {

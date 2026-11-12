@@ -1,3 +1,69 @@
+# HA 1.4.4 — Learn again, a figure for heat along, every radiator valve in Diagnostics
+<!-- user-release-notes:v2:en -->
+
+Companion of E32 1.4.4; also runs with E32 1.4.3 and older, with the limits
+under Updating. Needs Home Assistant 2026.10.0 or newer.
+
+## New
+
+- **Learn again.** After a change to your heating, let the E32 learn a room or
+  the house anew: a button on each room's screen (Learning) and under Heating
+  and boiler, a text button on a room's card on the Learning tab, and button
+  entities for automations. It asks first; week programs and settings stay.
+  Needs E32 1.4.4.
+- **Heat along only shows how well it works:** the Learning card says "92 %"
+  with "reaches 19 °C (14 days)", and the room's screen says "Reaches 19 °C
+  92 % of the time (14 days)"; before 14 days it says "still counting: day 6
+  of 14".
+- **Diagnostics fills the screen** and has a new section, Radiator valves,
+  listing every valve with its opening or set temperature, battery and what
+  the E32 found.
+- **A valve whose message is too large to read** shows in red on the room card
+  and in Diagnostics, with its size ("message too large (2.3 KB)").
+- **Diagnostics says when the E32 could not read a device message:** "Messages
+  the E32 could not read: 3, last: …" under Connection with the E32 (needs E32
+  1.4.4).
+- **Any radiator valve that Home Assistant knows as a climate entity works,**
+  also one with only a temperature range.
+- **A device matrix and a page to add a device.** The documentation lists which
+  valves, thermostats, sensors and boilers are verified with a real capture, and
+  "Add a device: send a capture" shows how to send yours, so that every build is
+  tested against it.
+
+## Fixed
+
+- **A setting device that only reports a range** (a Bosch Room thermostat II
+  through Zigbee2MQTT) now shows its temperature on the room card (issue #16).
+- **A valve without a setting of its own** shows the room's temperature
+  ("set to 19 °C") instead of an empty line.
+- **Every room card has the same presets** (Program, Comfort, Eco, Night,
+  Boost), also a room without a week program and a room on Heat along only;
+  a room that uses the room defaults says so under the row (issue #17).
+- **Diagnostics no longer lists a Repairs item** that Home Assistant stopped
+  showing after a restart (the learned-store item stayed in the download).
+
+## Updating
+
+Update under Settings → Updates (Marketplace) and restart Home Assistant. Then
+install E32 1.4.4 from its Firmware entity and confirm the takeover again.
+
+- Entities, IDs and history stay; nothing is removed or renamed.
+- With E32 1.4.3 everything works, without the Learn again buttons and the
+  line for a valve whose message is too large; a Sonoff TRV-ZBT stays unknown
+  until the E32 is updated.
+- With E32 1.4.4 on HA 1.4.3 the valves are read, and the Learn again buttons
+  are missing in Home Assistant.
+
+## Limitations
+
+- A room shows its Smart warm-up start and its advice only when the E32 has
+  learned enough; until then the card says what it still needs.
+- Sentences in sensors (what the E32 learned, the advice) are in Home
+  Assistant's language; the cards use yours.
+- Boiler settings stay a preview until a real boiler has confirmed them.
+- Radiator valve control has run on a few real valves only; a Sonoff TRV Gen2
+  reports no valve position.
+
 # HA 1.4.3 — every tab as wide as your screen, a card per room, everything the E32 learns on one tab
 <!-- user-release-notes:v2:en -->
 

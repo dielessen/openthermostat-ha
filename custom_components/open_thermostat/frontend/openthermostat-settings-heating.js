@@ -9,6 +9,15 @@
 const TEXTS = {
  nl: {
   'Smart warm-up and weather compensation': 'Slim opwarmen en weerafhankelijke regeling',
+  // 1.4.4 (HA-CARDS-144): Learn again for the house (plan 2.3).
+  'Learn again: house': 'Opnieuw leren: huis',
+  'Learn again': 'Opnieuw leren',
+  'Clears what the E32 learned about the whole house: the weather compensation and the water and rhythm of the boiler. It learns them again by itself; the week programs and the settings stay.': 'Wist wat de E32 over het hele huis leerde: de weerafhankelijke regeling en het water en ritme van de ketel. Hij leert ze vanzelf opnieuw; de weekprogramma\'s en de instellingen blijven.',
+  'Clear what the E32 learned for the house?': 'Wis wat de E32 voor het huis leerde?',
+  'It learns again by itself; the week programs stay.': 'Het leert vanzelf opnieuw; de weekprogramma\'s blijven.',
+  'Cleared: the E32 starts learning the house again.': 'Gewist: de E32 begint opnieuw te leren voor het huis.',
+  'This E32 firmware cannot start learning again on request. Update the E32 first (Settings → Updates → OpenThermostat E32 Firmware).': 'Deze E32-firmware kan niet op verzoek opnieuw beginnen met leren. Werk de E32 eerst bij (Instellingen → Updates → OpenThermostat E32 Firmware).',
+  'The E32 did not clear what it learned ({error}). Check the connection and try again.': 'De E32 heeft niet gewist wat hij geleerd heeft ({error}). Controleer de verbinding en probeer het opnieuw.',
   'Smart warm-up: on': 'Slim opwarmen: aan',
   'Smart warm-up: off': 'Slim opwarmen: uit',
   'Weather compensation: on': 'Weerafhankelijke regeling: aan',
@@ -270,6 +279,10 @@ const SUBTITLES = {
  boiler: 'The boiler\'s own settings, such as the hot water temperature.'};
 const ERRORS = {
  connect_e32: 'Connect the E32 first: Configure → E32 connection.',
+ // 1.4.4: Learn again: house (e32_learned.relearn_action).
+ relearn_update_required: 'This E32 firmware cannot start learning again on request. Update the E32 first (Settings → Updates → OpenThermostat E32 Firmware).',
+ relearn_no_free_session: 'The E32 has no free web session: close E32 pages you do not use, or wait two minutes, then try again.',
+ relearn_failed: 'The E32 did not clear what it learned ({error}). Check the connection and try again.',
  e32_settings_update_required: 'This E32 firmware does not offer this setting. Update the E32 (Firmware update) first.',
  e32_flow_options_failed: 'The E32 did not save the change. Check the connection and try again.',
  e32_flow_limits_invalid: 'Enter whole degrees: minimum {minimum_range}, maximum {maximum_range}.',
@@ -395,6 +408,7 @@ const resultTone = {boiler_setting_saved: 'success', boiler_setting_kept: 'succe
  boiler_settings_allowed: 'success', boiler_settings_stopped: 'info', boiler_setting_failed: 'error'};
 const recognisedTone = {'state.verified': 'ok', 'state.probe_passed': 'ok', 'state.other_boiler': 'attention', 'state.other_boiler.classic': 'attention'};
 const CSS = `.ot-heating{display:block}.ht-status{margin:-8px 0 var(--ot-s3)}.ht-status strong{font-weight:700}
+.ht-stack{display:grid;gap:var(--ot-s3)}.ht-relearn{display:grid;justify-items:start;gap:var(--ot-s2)}.ht-relearn-said:empty{display:none}
 .ht-list .row{min-height:64px}.ht-list .row-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ht-knobs{display:flex;flex-direction:column;margin:0 calc(-1 * var(--ot-s4))}
 .ht-knob{display:flex;align-items:center;gap:var(--ot-s2);border-top:1px solid var(--ot-divider);padding-right:var(--ot-s2)}.ht-knob:first-child{border-top:0}
@@ -490,7 +504,23 @@ function list(ctx) {
   rows.push(ctx.row({label: now?.preview === false ? t('Boiler settings') : t('Boiler settings (preview)'), icon: 'wrench', route: '#heating/boiler',
    data: {item: 'boiler'}, summary: [boilerLine(t, now)]}));
  }
- return kit.h('div', {class: 'card list ht-list'}, ...rows);
+ const box = kit.h('div', {class: 'card list ht-list'}, ...rows);
+ // 1.4.4 (plan 2.3): Learn again for the house, under the list, only on firmware that offers it, for an administrator.
+ return m.relearn && !ctx.readOnly ? kit.h('div', {class: 'ht-stack'}, box, relearnHouse(ctx)) : box;
+}
+function relearnHouse(ctx) {
+ const {kit, t} = ctx, {h} = kit, said = h('div', {class: 'ht-relearn-said', 'data-relearn-said': ''});
+ const go = kit.button(t('Learn again'), async () => {
+  if (!(await kit.confirm(go.getRootNode(), {title: t('Clear what the E32 learned for the house?'), text: t('It learns again by itself; the week programs stay.'),
+   confirm: t('Learn again'), lang: ctx.lang}))) return;
+  go.disabled = true; said.replaceChildren();
+  try { await ctx.action('relearn', {house: true}); said.replaceChildren(kit.notice(t('Cleared: the E32 starts learning the house again.'), 'success')); }
+  catch (err) { said.replaceChildren(kit.inlineError(err?.text || ctx.errorText(err?.code || 'unknown'))); }
+  go.disabled = false;
+ }, 'outlined', {'data-relearn': ''});
+ return kit.card({title: t('Learn again: house'), icon: 'clock', cls: 'form ht-relearn', data: {relearn: 'house'}},
+  h('p', {class: 'help', text: t('Clears what the E32 learned about the whole house: the weather compensation and the water and rhythm of the boiler. It learns them again by itself; the week programs and the settings stay.')}),
+  go, said);
 }
 
 /* ---- Smart warm-up and weather compensation ---- */

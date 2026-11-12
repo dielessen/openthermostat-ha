@@ -559,7 +559,10 @@ def input_payload(state, temperature_unit=UnitOfTemperature.CELSIUS, target=True
         return None
     if state.domain == "climate":
         temperature = celsius(state.attributes.get("current_temperature"), temperature_unit, -40, 85)
-        value = celsius(state.attributes.get("temperature"), temperature_unit, 5, 30)
+        # 1.4.4: a thermostat with only a temperature range (the Bosch BTH-RM of issue #16) carries its target in
+        # target_temp_low, as e32_setting_device.device_target and ha_valves read it.
+        own = state.attributes.get("temperature")
+        value = celsius(state.attributes.get("target_temp_low") if own is None else own, temperature_unit, 5, 30)
     elif state.domain in ("input_number", "number"):
         unit = state.attributes.get("unit_of_measurement")
         temperature, value = None, celsius(state.state, unit, 5, 30)

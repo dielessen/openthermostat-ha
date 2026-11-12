@@ -163,6 +163,10 @@ HEATING_HANDOVER = "/config/heating/handover"
 HEATING_PLAN_MODE = "/config/heating/plan"
 # The radiator valves per room, reached through Zigbee2MQTT (E32 beta.24, TrvConfig.h).
 HEATING_TRV = "/config/heating/trv"
+# 1.4.4 (FW-RELEARN, plan 2.3): clear what the E32 learned for one room ({"room": id}) or the house ({"house": true}),
+# a body of at most 96 bytes; 200 {"cleared": [...], "room": id | "house": true, "stored": bool}; 400 unknown_room or
+# invalid_request; firmware without it (E32 1.4.3) answers 405 (or 404).
+LEARNED_RESET = "/control/learned/reset"
 # The Shelly devices the E32 drives itself (E32 1.1, ShellyConfig.h): GET the record without secrets ("password":
 # bool per device), POST the whole record back (a device without "password" keeps its stored one); the circuits'
 # pump override POST {"id","pump":"on"|"off"|"automatic","minutes"?}; and the live status with the BLU Gateway's
@@ -705,7 +709,7 @@ class ControllerClient:
                          HEATING_TRV, CONFIG_BACKUP,
                          LOGGING, BOILER_DISPLAY, BLUETOOTH, *BOILER_SETTINGS_POSTS, SHELLY_CONFIG, SHELLY_CIRCUIT, SHELLY_PROBE,
                          SHELLY_SCAN, BLUETOOTH_SCAN,
-                         BOILER_MATCH_ACKNOWLEDGE, *RECORDING_POSTS))
+                         BOILER_MATCH_ACKNOWLEDGE, *RECORDING_POSTS, LEARNED_RESET))
 
     def __init__(self, address):
         self.address = controller_address(address)
@@ -836,6 +840,11 @@ class ControllerClient:
                 if path in (LOGGING, BOILER_DISPLAY) and response.status in (400, 404, 503):
                     raise ControllerLinkError({400: "controller_settings_invalid", 404: "controller_update_required",
                                                503: "controller_settings_unconfirmed"}[response.status])
+                if path == LEARNED_RESET and response.status in (404, 405):
+                    # firmware before 1.4.4 (no relearn): E32 1.4.3 answers 405 text/plain for the unknown route
+                    raise ControllerLinkError("controller_update_required")
+                if path == LEARNED_RESET and response.status in (400, 503, 507):
+                    raise HeatingPlanRejected(response.status, await _error_name(response))
                 if path in (HEATING_FLOW, HEATING_TRV) and response.status == 404:
                     raise ControllerLinkError("controller_update_required")  # firmware before beta.19 / beta.24
                 if response.status == 429:
@@ -1239,6 +1248,17 @@ class ControllerClient:
                     raise ControllerLinkError("controller_response_invalid")
         except (aiohttp.ClientError, TimeoutError):
             raise ControllerLinkError("controller_unreachable") from None
+
+    async def async_learned_reset(self, document):
+        """POST /control/learned/reset (E32 1.4.4, FW-RELEARN): ``{"room": "<id>"}`` or ``{"house": true}``; returns
+        the E32's answer ``{"cleared": [...]}``, what it cleared (and stored at once, so a restart does not bring it
+        back). A refusal raises HeatingPlanRejected (unknown_room: 400); firmware without it controller_update_required.
+        """
+        if type(document) is not dict or not (set(document) == {"room"} and type(document["room"]) is str
+                                               or document == {"house": True}):
+            raise ControllerLinkError("controller_request_invalid")
+        raw, _, _ = await self._request("POST", LEARNED_RESET, document=document)
+        return _decode(raw)
 
     async def async_reboot(self):
         _, _, status = await self._request("POST", "/updates/reboot")

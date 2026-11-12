@@ -27,6 +27,11 @@ sends anything for it; Home Assistant drives it with the E32's own rules
 
 A failing service call is logged once per value and tried again a minute later at
 the earliest: never an exception into the telemetry listeners, never a write storm.
+
+1.4.4 (DEVICE-ROBUST-144): this is the universal route for a valve of any brand, so it takes any climate entity: one
+with only a temperature range (``target_temp_low``/``target_temp_high``, no ``temperature``, as the Bosch Room
+thermostat II of issue #16) is read and set through ``target_temp_low``, the same rule as a room's setting device
+(e32_setting_device.device_target and async_write); the high end is kept, never below the new low.
 """
 from __future__ import annotations
 
@@ -52,6 +57,24 @@ LOW_BATTERY = 20           # %, TrvControl::lowBatteryPct
 CALL_TIMEOUT = 30          # s for one service call (a cloud integration may hang)
 GONE = ("unavailable", "unknown")
 POSITION_WORDS = ("position", "pi_heating_demand")
+TARGET_TEMPERATURE = 1     # ClimateEntityFeature.TARGET_TEMPERATURE
+
+
+def target_of(state):
+    """The entity's target in its own unit: ``temperature``, else ``target_temp_low`` (a temperature range only)."""
+    value = state.attributes.get("temperature")
+    return state.attributes.get("target_temp_low") if value is None else value
+
+
+def setpoint_data(state, value):
+    """The set_temperature data for ``value`` (in the entity's unit): ``temperature``, or for an entity with only a
+    temperature range ``target_temp_low`` with its high end kept (never below the new low)."""
+    features = number(state.attributes.get("supported_features"), 0, 2 ** 31) or 0
+    plain = "temperature" in state.attributes or int(features) & TARGET_TEMPERATURE
+    if plain or "target_temp_low" not in state.attributes:
+        return {"temperature": value}
+    high = number(state.attributes.get("target_temp_high"), -100, 1000)
+    return {"target_temp_low": value, "target_temp_high": max(high, value) if high is not None else value}
 
 
 def ha_valve_names(room):
@@ -135,7 +158,7 @@ class HaValveDriver:
                 if value is not None:
                     position = round(value)
                     break
-            setpoint = celsius(state.attributes.get("temperature"), self.hass.config.units.temperature_unit, 0, 50)
+            setpoint = celsius(target_of(state), self.hass.config.units.temperature_unit, 0, 50)
             if setpoint is not None:
                 found["setpoint_c"] = setpoint
         if position is not None:
@@ -194,7 +217,7 @@ class HaValveDriver:
                     self.mode_done.add(name)  # already heating, or no heat mode to choose
                 value = planned(self.hass, state, target)
                 last, tried = self.sent.get(name), self.attempt.get(name)
-                if last is None and not mode and number(state.attributes.get("temperature"), -100, 1000) == value:
+                if last is None and not mode and number(target_of(state), -100, 1000) == value:
                     self.sent[name] = (value, now)  # it already has it (an HA restart): nothing to send
                     continue
                 changed = last is None or abs(last[0] - value) >= threshold - 1e-6
@@ -232,7 +255,9 @@ class HaValveDriver:
                 await self._call(name, "set_hvac_mode", {"hvac_mode": "heat"}, "heat")
             if value is not None:
                 self.attempt[name] = self.clock()
-                if await self._call(name, "set_temperature", {"temperature": value}, value):
+                state = self.hass.states.get(name)
+                data = setpoint_data(state, value) if state is not None else {"temperature": value}
+                if await self._call(name, "set_temperature", data, value):
                     self.sent[name] = (value, self.clock())
                     _LOGGER.debug("E32 room %s: radiator valve %s set to %s", room_id, name, value)
         finally:

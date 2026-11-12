@@ -1,5 +1,6 @@
-"""Button platform: back up the E32 settings now (e32_backup.py), restart the E32 (e32_system.py) and let the E32
-plan the heating (heating_plan.py, only while it is ready for that confirmation)."""
+"""Button platform: back up the E32 settings now (e32_backup.py), restart the E32 (e32_system.py), let the E32
+plan the heating (heating_plan.py, only while it is ready for that confirmation) and, 1.4.4, Learn again per room and
+for the house (e32_learned.py, once the E32 offers it)."""
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -26,3 +27,5 @@ async def async_setup_entry(
     await async_setup_restart_button(hass, entry, async_add_entities)
     from .heating_plan import async_setup_buttons as async_setup_plan_button  # only while the E32 is ready to plan
     await async_setup_plan_button(hass, entry, async_add_entities)
+    from .e32_learned import async_setup_buttons as async_setup_relearn_buttons  # 1.4.4: only on firmware with relearn
+    await async_setup_relearn_buttons(hass, entry, async_add_entities)

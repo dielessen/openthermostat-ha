@@ -77,7 +77,10 @@ MAX_CLASSIC_VALVES_PER_ROOM = 4
 MAX_VALVES = 24
 MAX_VALVES_WITHOUT_GATEWAY = 16  # an E32 without the BLU Gateway (before 1.1, or esp32dev)
 MAX_NAME = 64
-HEALTH = ("ok", "low_battery", "offline", "unknown")
+# 1.4.4 (FW-TRV-STATE, issue #15): "message_too_large", a valve whose Zigbee2MQTT state the E32 could not read (too
+# large to scan), with its size in ``bytes``; it clears itself after the next readable state.
+HEALTH = ("ok", "low_battery", "offline", "unknown", "message_too_large")
+TOO_LARGE = "message_too_large"
 # A BLU Gateway valve's route problem in its room document (TrvControl.h "link").
 LINKS = ("gateway", "silent", "missing", "unpaired", "unknown")
 ENTITY_KEYS = ("valve_position", "valve_battery", "valve_problem", "valve_control")
@@ -326,8 +329,11 @@ def batteries(room):
 
 
 def problems(room):
-    """[(valve name, "low_battery" | "offline")] of a room's valves."""
-    return [(v["name"], v.get("health")) for v in room.get("valves", []) if v.get("health") in ("low_battery", "offline")]
+    """[(valve name, "low_battery" | "offline" | "message_too_large")] of a room's valves. 1.4.4: a valve whose state the
+    E32 cannot read (message_too_large) is a problem too (its battery and setting are unknown); no Repairs item (only
+    "offline" raises one, sync_issues)."""
+    return [(v["name"], v.get("health")) for v in room.get("valves", [])
+            if v.get("health") in ("low_battery", "offline", TOO_LARGE)]
 
 
 def link_problems(room):
@@ -455,21 +461,33 @@ def _number(value):
     return value if type(value) in (int, float) else None
 
 
-def valve_attributes(room):
+def valve_attributes(room, status_room=None):
     """The Valve position sensor's attributes: per valve the E32's own keys (as reported) and, 1.4.3 (CONTRACT-1.4.3
     §2, the Rooms view's room card), ``position`` (0..100 or None), ``set_to_c`` (the temperature it was given, only
     for a valve driven by temperature), ``battery`` (% or None) and the watch's finding ``held``, ``held_count`` and
-    ``held_at`` (None on firmware without it)."""
+    ``held_at`` (None on firmware without it).
+
+    1.4.4 (issue #16, plan 2.4): a valve driven by temperature that reports no setpoint of its own gets the room's
+    (``set_to``: the most common one its room's valves report, else the room's target, 8 °C frost protection while
+    the room is off) so its tile never stands empty; ``set_to_source`` says which: "valve" (its own report) or "room"
+    (None for a valve that reports its opening). ``bytes``: the size of the state the E32 could not read, only with
+    ``health`` "message_too_large" (FW-TRV-STATE, plan chapter 4)."""
     found = {id(v) for v in driven(room)}
+    given = set_to(room, status_room) if found else None
     out = []
     for v in room.get("valves", []):
         state, count, at = held(v)
+        own = _number(v.get("setpoint_c")) if id(v) in found else None
+        source = "valve" if own is not None else "room" if id(v) in found and given is not None else None
+        size = v.get("bytes") if v.get("health") == TOO_LARGE and type(v.get("bytes")) is int and v["bytes"] > 0 else None
         out.append({**{key: v.get(key) for key in ("name", "model", "role", "health", "link", "position_pct",
                                                    "battery_pct", "battery_low", "setpoint_c") if v.get(key) is not None},
                     "position": _number(v.get("position_pct")),
-                    "set_to_c": _number(v.get("setpoint_c")) if id(v) in found else None,
+                    "set_to_c": own if own is not None else given[0] if source == "room" else None,
+                    "set_to_source": source,
                     "battery": _number(v.get("battery_pct")),
-                    "held": state, "held_count": count, "held_at": at})
+                    "held": state, "held_count": count, "held_at": at,
+                    **({"bytes": size} if size is not None else {})})
     return {"valves": out,
             "control": room.get("control"), "degraded": room.get("degraded"), "single_source": room.get("single_source")}
 
@@ -507,7 +525,7 @@ class ValvePositionSensor(ValveEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        attributes = valve_attributes(self.valves or {})
+        attributes = valve_attributes(self.valves or {}, self.room)
         lang = language(getattr(self, "hass", None))
         found = driven(self.valves)
         own = [shown_name(v["name"], lang) for v in found if v.get("model") != HA_MODEL]

@@ -153,7 +153,7 @@ def boiler_group(name):
 
 # E32 room entities: unique ID f"{prefix}_e32_room_{room id}_{key}" (longest key first).
 ROOM_KEYS = ("valve_position", "valve_battery", "valve_problem", "valve_control", "fallback_setpoint", "inactive_until", "heating_start", "flow_advice", "temperature", "thermostat",
-             "learning", "reason", "warm_on_time", "overshoot",
+             "learning", "reason", "warm_on_time", "overshoot", "relearn",
              "setpoint", "status", "demand", "state")
 # Yesterday's scoreboard of the house (scoreboard.py, E32 rc.4): unique ID f"{prefix}_hub_{key}".
 SCOREBOARD_HOUSE = ("burner_starts_per_heating_hour", "short_cycling_hours", "heating_gas_yesterday", "gas_per_degree_day")
@@ -194,7 +194,7 @@ ICONS = {"flow": "mdi:thermometer-chevron-up", "return": "mdi:thermometer-chevro
          "house_mode": "mdi:home-account", "holiday": "mdi:calendar-month-outline",
          # rc.7: Diagnostics' connection lines (fine, waiting, a problem, not known, an update) and Your boiler's lines
          # (the boiler's own highest water temperature, its rest, the lowest water temperature it heats at).
-         "connection": "mdi:lan-connect", "link_ok": "mdi:check-circle-outline", "link_wait": "mdi:clock-alert-outline",
+         "connection": "mdi:lan-connect", "valves": "mdi:radiator", "link_ok": "mdi:check-circle-outline", "link_wait": "mdi:clock-alert-outline",
          "link_problem": "mdi:alert-circle-outline", "link_unknown": "mdi:help-circle-outline",
          "link_update": "mdi:arrow-up-circle-outline", "ceiling": "mdi:arrow-collapse-up", "rest": "mdi:timer-sand",
          "lowest": "mdi:arrow-collapse-down"}
@@ -293,6 +293,9 @@ TEXT = {
         "link_sent": "Home Assistant last sent a value at {at}.",
         "link_error": "Last send error at {at}: {error}.",
         "link_dropped": "Values dropped while the broker did not answer: {n}.",
+        "link_unread": "Messages the E32 could not read since it started: {n}, last: {topic}, {reason}.",
+        "unread_too_large": "too large", "unread_too_deep": "nested too deeply", "unread_malformed": "broken or cut off",
+        "unread_unknown_device": "from no known device", "unread_wrong_type": "not a device state",
         "why_too_large": "the message was too long", "why_invalid_json": "it could not read the message",
         "why_no_entity": "the message named no Home Assistant entity",
         "why_unknown_kind": "it does not know that kind of value; update the E32",
@@ -302,6 +305,14 @@ TEXT = {
                            "them in here. The Boiler tab and the E32's Home page estimate the gas per day from "
                            "the burner power and the boiler's power.",
         "older_rooms": "Rooms (older setup)",
+        # 1.4.4 (HA-CARDS-144): every radiator valve on Diagnostics with what it reports and the E32's finding; the words
+        # of the room card (frontend/room-card.js) word for word.
+        "valves_diag": "Radiator valves", "valve_open": "{n} % open", "valve_set_to": "set to {t} °C",
+        "valve_battery": "battery {n} %", "valve_offline": "not reporting", "valve_no_reading": "no reading",
+        "valve_too_large": "message too large ({kb} KB)", "valve_too_large_plain": "message too large",
+        "valve_put_back": "put back to {t} °C", "valve_put_back_plain": "put back", "valve_own_schedule": "running its own program",
+        "valve_off_by_user": "switched off by you", "valve_gave_up": "not responding to the E32",
+        "valve_gateway": "Valve {id} on BLU Gateway {n}",
         "legacy_boiler_note": "What the boiler reports over its bus (EMS), not proof of an E32 command. Unknown or old values are not zero. "
                               "Burner power is a percentage of the boiler's maximum, not kW.",
         "flow_graph": "Water temperatures: target, to heating and back", "flow_selection": "Target (boiler)",
@@ -556,6 +567,9 @@ TEXT = {
         "link_sent": "Home Assistant stuurde de laatste waarde om {at}.",
         "link_error": "Laatste verzendfout om {at}: {error}.",
         "link_dropped": "Waarden die wegvielen omdat de broker niet antwoordde: {n}.",
+        "link_unread": "Berichten die de E32 niet kon lezen sinds hij startte: {n}, laatste: {topic}, {reason}.",
+        "unread_too_large": "te groot", "unread_too_deep": "te diep genest", "unread_malformed": "kapot of afgebroken",
+        "unread_unknown_device": "van geen bekend apparaat", "unread_wrong_type": "geen apparaatstatus",
         "why_too_large": "het bericht was te lang", "why_invalid_json": "hij kon het bericht niet lezen",
         "why_no_entity": "het bericht noemde geen Home Assistant-entiteit",
         "why_unknown_kind": "hij kent dat soort waarde niet; werk de E32 bij",
@@ -565,6 +579,12 @@ TEXT = {
                            "(EMS+) vullen ze hier in. Het tabblad Ketel en de pagina Huis van de E32 schatten het "
                            "gas per dag uit het brandervermogen en het vermogen van de ketel.",
         "older_rooms": "Ruimtes (oudere opzet)",
+        "valves_diag": "Radiatorkranen", "valve_open": "{n} % open", "valve_set_to": "staat op {t} °C",
+        "valve_battery": "batterij {n} %", "valve_offline": "meldt zich niet", "valve_no_reading": "geen meting",
+        "valve_too_large": "bericht te groot ({kb} KB)", "valve_too_large_plain": "bericht te groot",
+        "valve_put_back": "teruggezet naar {t} °C", "valve_put_back_plain": "teruggezet", "valve_own_schedule": "eigen programma",
+        "valve_off_by_user": "door jou uitgezet", "valve_gave_up": "geeft niet thuis",
+        "valve_gateway": "Kraan {id} aan BLU Gateway {n}",
         "legacy_boiler_note": "Wat de ketel via zijn bus (EMS) meldt, geen bewijs van een E32-opdracht. Onbekende of "
                               "oude waarden zijn geen nul. Brandervermogen is een percentage van het maximum van de ketel, geen kW.",
         "flow_graph": "Watertemperaturen: doel, naar verwarming en terug", "flow_selection": "Doel (ketel)",
@@ -936,13 +956,15 @@ def _learning_rooms_section(t, entry_id, learned, names, rooms):
     """Per room (1.4.3, design 4.2 item 2, CONTRACT-1.4.3 §3): one learning card per room (custom:openthermostat-
     learning-room, frontend/learning-room-card.js), side by side, one view column each (``columns: 12``), the rooms
     that are on first. ``rooms``: [(room id, its entities)]. Hidden as a whole while the learned overview has no value
-    (the cards then say nothing), so no heading stands over empty cards after an update or while the E32 is off."""
+    (the cards then say nothing), so no heading stands over empty cards after an update or while the E32 is off.
+    1.4.4: ``relearn``, the room's Learn again button (e32_learned.py, only on firmware with it): the card's text button
+    "Learn again" asks first and presses it."""
     if not learned or not rooms:
         return None
     from .e32_flow import LEARNING_ROOM_CARD_TYPE
     cards = [{"type": LEARNING_ROOM_CARD_TYPE, "entry_id": entry_id, "room_id": room_id, "name": names.get(room_id, room_id),
-              "learned": learned, **{key: room[key] for key in ("learning", "warm_on_time", "heating_start", "reason", "state")
-                                     if room.get(key)},
+              "learned": learned, **{key: room[key] for key in ("learning", "warm_on_time", "heating_start", "reason", "state",
+                                                                "relearn") if room.get(key)},
               "grid_options": {"columns": 12}} for room_id, room in rooms]
     section = _section(_heading(t["per_room"], ICONS["learning"]), *cards)
     section["visibility"] = _known(learned)
@@ -1105,9 +1127,32 @@ def _at_macro(t):
 
 
 REFUSALS = ("too_large", "invalid_json", "no_entity", "unknown_kind", "invalid_value", "unknown_room")
+# 1.4.4 (DEVICE-ROBUST-144): why the E32 could not read a device message (last_restart.DROP_REASONS).
+UNREAD_REASONS = ("too_large", "too_deep", "malformed", "unknown_device", "wrong_type")
 
 
-def _connection_section(t, request, update=None):
+def _unread_line(t, errors):
+    """1.4.4 (DEVICE-ROBUST-144): "Messages the E32 could not read since it started: 3, last: zigbee2mqtt/…, too large (7.1 KB)." from
+    the "E32 errors" sensor's attributes (last_restart.dropped_attributes): a figure since the E32 started, shown only
+    while it is above 0 and the sensor is available (never a Repairs item). The size is bytes / 1000 with one decimal,
+    as the room card and the E32 pages say a valve message's size; under 1000 bytes in B."""
+    if not errors:
+        return ""
+    e = json.dumps(errors)
+    reasons = json.dumps({key: t["unread_" + key] for key in UNREAD_REASONS}, ensure_ascii=False)
+    size = ("(' (' ~ (u.b ~ ' B' if u.b < 1000 else ('%.1f' % (u.b / 1000)) | replace('.', "
+            + json.dumps(t["decimal"]) + ") ~ ' KB') ~ ')'"
+            " if u.b is number and u.b > 0 else '')")
+    return ("{% set u = namespace(n=state_attr(" + e + ", 'unread_messages'), topic=state_attr(" + e
+            + ", 'unread_last_topic'), why=state_attr(" + e + ", 'unread_last_reason'), b=state_attr(" + e
+            + ", 'unread_last_bytes')) %}{% set reasons = " + reasons + " %}"
+            "{% if states(" + e + ") not in ['unavailable', 'unknown'] and u.n is number and u.n > 0 and u.topic"
+            " and u.why in reasons %}" + _icon("link_wait") + " {{ "
+            + _jinja_text(t["link_unread"], n="u.n", topic="u.topic", reason="reasons[u.why] ~ " + size)
+            + " }}\n\n{% endif %}")
+
+
+def _connection_section(t, request, update=None, errors=None):
     """Connection with the E32 (rc.7), first on Diagnostics: one plain line per question, the details behind "More".
 
     - Is the E32 heard? The heat request sensor (heating_link.HeatRequestSensor) is unavailable while the E32 is silent
@@ -1119,6 +1164,8 @@ def _connection_section(t, request, update=None):
     - The MQTT broker: the E32 is heard through it; Home Assistant's newest send failed or not (``last_error_at`` after
       ``last_sent``), the kind of failure in words (``last_error_kind``).
     - The firmware: the update entity (firmware_update.py): its version, and an update available, skipped or installing.
+    - 1.4.4 (DEVICE-ROBUST-144): device messages the E32 could not read since it started, with the last one
+      (``errors``: the "E32 errors" sensor, _unread_line), only while there are any.
 
     More: when Home Assistant last sent a value, its last send error, the values dropped and a refusal while values
     arrive. None without the heat request sensor (no E32); always shown otherwise (its first line has an answer).
@@ -1182,7 +1229,7 @@ def _connection_section(t, request, update=None):
         "{% if d.lines %}<details><summary>" + t["more"] + "</summary>\n\n{% for x in d.lines %}- {{ x }}\n"
         "{% endfor %}\n</details>{% endif %}{% endif %}")
     content = (_at_macro(t) + "{% set why = " + why + " %}{% set sends = " + sends + " %}" + heard + values + firmware
-               + more)
+               + _unread_line(t, errors) + more)
     return _section(_heading(t["connection"], ICONS["connection"]), {"type": "markdown", "content": content})
 
 
@@ -1881,6 +1928,78 @@ def _span(section, columns, cards="full"):
     return section
 
 
+def _wide_when_few(sections):
+    """1.4.4 (plan 2.4, NEXT-RELEASE 1.4.4 item 4): Home Assistant shows no more columns than a view's sections span
+    together, so a view of fewer than four sections stood narrow on a monitor (Diagnostics with two: 2 × 500 px at 1920
+    px). Then every section spans two columns (on a phone still one), its wide cards across it (_span), a tile that was
+    across its one-column section across the two. A section with half-width tiles side by side keeps one column: across
+    two they would need 12 grid columns each, and a phone (12 in all) would then stack them instead of showing them in
+    pairs (the Comparison's E32 and thermostat figures, P21). Applied to Diagnostics and Comparison."""
+    if not 0 < len(sections) < 4:
+        return sections
+    for section in sections:
+        paired = any(card["type"] in HALF_CARDS and (card.get("grid_options") or {}).get("columns", 6) == 6
+                     for card in section["cards"])
+        if section.get("column_span", 1) >= 2 or paired:
+            continue
+        _span(section, 2)
+        for card in section["cards"]:  # a tile across its one-column section (_wide) goes across the two
+            if card["type"] in HALF_CARDS and (card.get("grid_options") or {}).get("columns") == 12:
+                card["grid_options"] = {**card["grid_options"], "columns": "full"}
+    return sections
+
+
+def _valves_section(t, rooms):
+    """1.4.4 (plan 2.4 and 9): Diagnostics' list of every radiator valve, per room: what it reports (its opening, or the
+    temperature it was given, its battery, "not reporting") and the E32's finding (``held``, 1.4.3), in the room card's
+    words; a valve whose state the E32 could not read (``message_too_large``, FW-TRV-STATE) as a red line with its
+    size. ``rooms``: [(the room's name, its Valve position sensor)]. Read live from the sensor's ``valves``; a room
+    without valves now says nothing; the section hides while no valve sensor is there (the E32 off)."""
+    if not rooms:
+        return None
+    comma = t["decimal"] == ","
+
+    def word(key, **values):
+        text = t[key]
+        for name, expression in values.items():
+            text = text.replace("{" + name + "}", "{{ " + expression + " }}")
+        return text
+    number = "(('%g' % {0}) | replace('.', ','))" if comma else "('%g' % {0})"
+    kb = "(('%.1f' % ({0} / 1000)) | replace('.', ','))" if comma else "('%.1f' % ({0} / 1000))"
+    held = {key: word("valve_" + key) for key in ("own_schedule", "off_by_user", "gave_up")}
+    content = ""
+    for name, entity in rooms:
+        quoted = json.dumps(entity)
+        content += (
+            "{% set vs = state_attr(" + quoted + ", 'valves') %}{% if vs %}**" + name.replace("*", "") + "**\n\n"
+            "{% for v in vs %}{% set g = v.name.split(':') %}"
+            "{% if v.name is match('^g[0-9]+:[0-9]+$') %}{% set label = " + json.dumps(t["valve_gateway"])
+            + " | replace('{n}', g[0][1:]) | replace('{id}', g[1]) %}"
+            "{% elif v.name.startswith('climate.') %}{% set label = state_attr(v.name, 'friendly_name') or v.name %}"
+            "{% else %}{% set label = v.name %}{% endif %}"
+            "{% if v.health == 'message_too_large' %}\n<ha-alert alert-type=\"error\">{{ label }}: "
+            "{% if v.bytes is number %}" + word("valve_too_large", kb=kb.format("v.bytes")) + "{% else %}"
+            + t["valve_too_large_plain"] + "{% endif %}"
+            "{% if v.set_to_c is number %} · " + word("valve_set_to", t=number.format("v.set_to_c")) + "{% endif %}"
+            "</ha-alert>\n\n"
+            "{% else %}- {{ label }}: "
+            "{% if v.health == 'offline' %}" + t["valve_offline"]
+            + "{% elif v.position is number %}" + word("valve_open", n="(v.position | round | int)")
+            + "{% elif v.set_to_c is number %}" + word("valve_set_to", t=number.format("v.set_to_c"))
+            + "{% else %}" + t["valve_no_reading"] + "{% endif %}"
+            "{% if v.battery is number %} · " + word("valve_battery", n="(v.battery | round | int)") + "{% endif %}"
+            "{% set to = v.set_to_c if v.set_to_c is number else v.setpoint_c %}"
+            "{% if v.held == 'put_back' %} · {% if to is number %}"
+            + word("valve_put_back", t=number.format("to")) + "{% else %}" + t["valve_put_back_plain"] + "{% endif %}"
+            + "".join("{% elif v.held == '" + key + "' %} · " + text for key, text in held.items())
+            + "{% endif %}\n{% endif %}{% endfor %}\n{% endif %}")
+    section = _section(_heading(t["valves_diag"], ICONS["valves"]), {"type": "markdown", "content": content})
+    # Shown while a valve sensor is there: its state may be unknown (every valve driven by temperature has no opening).
+    section["visibility"] = [{"condition": "or", "conditions": [
+        {"condition": "state", "entity": entity, "state_not": "unavailable"} for _, entity in rooms]}]
+    return section
+
+
 def _compared(t, what, icon, e32, thermostat):
     """The Comparison subview's pair: a line with what is counted, then the E32's and the thermostat's figure."""
     tiles = [tile for tile in (_tile(e32, t["e32"], icon), _tile(thermostat, t["thermostat"], icon)) if tile]
@@ -2286,7 +2405,11 @@ class RoomDashboard:
         parts = self._heating_sections(t, entries, hub_entities, native_fields, essential, registry, e32_rooms, legacy)
         boiler, raw, thermostat = self._boiler_sections(t, hub_entities, native_fields, graph, essential,
                                                         self._flow_entities(entries).get("source"))
-        diagnostics = self._diagnostics_sections(t, registry, hub_entities, raw, thermostat)
+        heating_hub = self._heating_hub()
+        from .heating_link import label
+        valves = [(self._room_name(room_id, heating_hub, label), room["valve_position"])
+                  for room_id, room in self._e32_rooms(entries).items() if room.get("valve_position")]
+        diagnostics = self._diagnostics_sections(t, registry, hub_entities, raw, thermostat, valves)
 
         def view(title, path, sections, columns=4, **more):
             # 1.4.3 (HA-DASHBOARD-ONTWERP-1.4.3 2.1): every tab as wide as the screen, as the Overview: at most four
@@ -2329,14 +2452,15 @@ class RoomDashboard:
                 # 1.4.3 (CONTRACT-1.4.3 §1): four columns, the strip and the room cards across the view.
                 *([view(t["learning_view"], LEARNED_PATH, parts["learning"])] if parts["learning"] else []),
                 # 6. Diagnostics.
-                view(t["diagnostics"], "diagnostics", diagnostics),
+                # 1.4.4: fewer than four sections each span two columns (_wide_when_few), so it fills a monitor.
+                view(t["diagnostics"], "diagnostics", _wide_when_few(diagnostics)),
                 # 7. Settings (1.4, HA-INSTELPANEEL-ONTWERP.nl.md): one panel card, the settings app (settings.py).
                 *([{"title": t["settings_view"], "path": SETTINGS_PATH, "panel": True,
                     "cards": [{"type": SETTINGS_CARD_TYPE, "entry_id": self.entry_id,
                                "settings_path": self.settings_path}]}] if product else []),
                 # Trial run only: reached from the "E32 compared with your thermostat" link and the
                 # "Ready to take over?" tile in the learning view.
-                *([view(t["comparison_view"], COMPARISON_PATH, comparison, subview=True,
+                *([view(t["comparison_view"], COMPARISON_PATH, _wide_when_few(comparison), subview=True,
                         back_path=back)] if comparison else []),
             ])
         }
@@ -2878,12 +3002,14 @@ class RoomDashboard:
                 sections.append(legacy)
         return [section for section in sections if section], raw, thermostat
 
-    def _diagnostics_sections(self, t, registry, hub, raw, thermostat):
-        """The Diagnostics view (dashboard-spec §8): the E32, the thermostat on the boiler bus, the energy and hot
-        water counters, the raw boiler data, the hot water capability and the older rooms."""
+    def _diagnostics_sections(self, t, registry, hub, raw, thermostat, valves=()):
+        """The Diagnostics view (dashboard-spec §8): the E32, the thermostat on the boiler bus, the radiator valves
+        (1.4.4, ``valves``: [(room name, Valve position sensor)]), the energy and hot water counters, the raw boiler data,
+        the hot water capability and the older rooms."""
         # rc.7: first, in plain words, whether the E32 and Home Assistant reach each other (the rc.5 outage).
         sections = [section for section in (_connection_section(
-            t, hub.get("heat_request"), registry.async_get_entity_id("update", DOMAIN, f"{self.prefix}_e32_firmware")),)
+            t, hub.get("heat_request"), registry.async_get_entity_id("update", DOMAIN, f"{self.prefix}_e32_firmware"),
+            registry.async_get_entity_id("sensor", DOMAIN, f"{self.prefix}_hub_e32_errors")),)
             if section]
         device = [hub[metric] for metric in DEVICE_DIAGNOSTIC_METRICS if metric in hub]
         # Rows (not tiles) under each heading: whole names, also on a phone.
@@ -2893,6 +3019,8 @@ class RoomDashboard:
         if thermostat:
             sections.append(_section_known(thermostat, _heading(t["group_thermostat"], ICONS["thermostat"]),
                                            _known_entities_card(thermostat)))
+        if valves:
+            sections.append(_valves_section(t, list(valves)))
         # The energy and hot water counters: only isolated definition-v2 IDs, no legacy counter aggregates or
         # backfill. Each shows once it has a value; until then one line says why there is none.
         counters = [hub[key + "_v2"] for key in COUNTER_KEYS if key + "_v2" in hub]

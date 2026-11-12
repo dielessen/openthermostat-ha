@@ -365,6 +365,12 @@
     "button": {
       "e32_backup_now": {
         "default": "mdi:content-save-cog"
+      },
+      "room_relearn": {
+        "default": "mdi:restore"
+      },
+      "hub_relearn": {
+        "default": "mdi:restore"
       }
     }
   },
