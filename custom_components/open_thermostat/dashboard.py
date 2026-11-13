@@ -317,6 +317,7 @@ TEXT = {
         # 1.4.5 (FW-TRV-DOC-145): the E32 shortened the room's valve document to fit (``trimmed``), a grey note.
         "valves_trimmed": "shortened",
         "valve_put_back": "put back to {t} °C", "valve_put_back_plain": "put back", "valve_own_schedule": "running its own program",
+        "valve_own_sensor": "on its own sensor (the E32 is putting it back on the room's sensor)",
         "valve_off_by_user": "switched off by you", "valve_gave_up": "not responding to the E32",
         "valve_gateway": "Valve {id} on BLU Gateway {n}",
         "legacy_boiler_note": "What the boiler reports over its bus (EMS), not proof of an E32 command. Unknown or old values are not zero. "
@@ -592,6 +593,7 @@ TEXT = {
         "valve_too_large": "bericht te groot ({kb} KB)", "valve_too_large_plain": "bericht te groot",
         "valves_trimmed": "ingekort",
         "valve_put_back": "teruggezet naar {t} °C", "valve_put_back_plain": "teruggezet", "valve_own_schedule": "eigen programma",
+        "valve_own_sensor": "op eigen sensor (de E32 zet hem terug op de sensor van de ruimte)",
         "valve_off_by_user": "door jou uitgezet", "valve_gave_up": "geeft niet thuis",
         "valve_gateway": "Kraan {id} aan BLU Gateway {n}",
         "legacy_boiler_note": "Wat de ketel via zijn bus (EMS) meldt, geen bewijs van een E32-opdracht. Onbekende of "
@@ -1994,7 +1996,7 @@ def _valves_section(t, rooms):
         return text
     number = "(('%g' % {0}) | replace('.', ','))" if comma else "('%g' % {0})"
     kb = "(('%.1f' % ({0} / 1000)) | replace('.', ','))" if comma else "('%.1f' % ({0} / 1000))"
-    held = {key: word("valve_" + key) for key in ("own_schedule", "off_by_user", "gave_up")}
+    held = {key: word("valve_" + key) for key in ("own_schedule", "own_sensor", "off_by_user", "gave_up")}
     content = ""
     for name, entity in rooms:
         quoted = json.dumps(entity)

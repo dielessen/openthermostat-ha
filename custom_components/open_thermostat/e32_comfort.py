@@ -1361,7 +1361,7 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
             return None
         from .e32_flow import smart_warm_up
         from .learned_overview import (HELD_MODES, arrival_line, free_heat_later, language, local_clock, local_day,
-                                       room_smart_warm_up, smart_warm_up_line, trial_run)
+                                       room_smart_warm_up, slow_correction, smart_warm_up_line, trial_run)
         plan = self.hub.warmup.get(self.room_id) if type(getattr(self.hub, "warmup", None)) is dict else None
         plan = plan if type(plan) is dict else {}
         lang, clock = language(self.hass), local_clock(self.hass)
@@ -1375,7 +1375,8 @@ class E32RoomClimate(RoomEntity, ClimateEntity):
         on, room_off = room_smart_warm_up(self.room, smart_warm_up(self.hass, self.entry.entry_id))
         line = None if held else smart_warm_up_line(plan.get("optimum_start"), on, lang, clock, trial, later,
                                                     room_off=room_off)
-        arrived = arrival_line(plan.get("arrival"), lang, clock, *local_day(self.hass), plan.get("optimum_start"))
+        arrived = arrival_line(plan.get("arrival"), lang, clock, *local_day(self.hass), plan.get("optimum_start"),
+                               slow_correction(getattr(self.hub, "firmware_version", None)))  # 1.4.6: the E32's rule
         return " ".join(item[0] for item in (line, arrived) if item) or None
 
     # -- commands ----------------------------------------------------------------

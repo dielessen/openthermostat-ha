@@ -48,6 +48,19 @@ open en dicht met het instellen van de temperatuur": one role per valve.
   of the frost limit (8 °C) or of the value we wrote last (also any value in
   the 10 s after a write) is never a manual change. Strictly within: a turn of
   one step on a 1 °C device from 20.5 °C is a change (review HC-13).
+- **A stale report** (1.4.6, review B5): cloud-polled devices such as a tado
+  report their old target once more after a write (12 Nov 2026: 19 °C again two
+  minutes after our 20.5 °C, which ended the morning's warm-up as a "manual
+  change"). Per room Home Assistant remembers the device's target as it was
+  just before our write (read from its state at the write). That value, within
+  half the device's step, within STALE_SECONDS (10 minutes) after the write, is
+  no manual change and no pending knob: the room's target is written again
+  (after MIN_INTERVAL) and the link records it (``setting_device_stale``, with
+  its time). The person at the knob still wins: the same old value a second
+  time in that window is a manual change, and any other value is one at once.
+  A device that keeps changing by itself is the own-schedule safety net's
+  business below; a stale report is not counted for it (no one turned or
+  scheduled it) and does not hide it.
 - **One role per valve** (valve_routes.two_roles): a device is a room's setting
   device or a radiator valve the E32 drives, not both. The room form and the
   settings panel refuse the combination (``device_two_roles``); an installation
@@ -97,6 +110,7 @@ _LOGGER = logging.getLogger(__name__)
 DEVICE_DOMAINS = ("climate", "number", "input_number")
 MIN_INTERVAL = 60       # s between two writes to one device
 ECHO_SECONDS = 10       # our own write settles
+STALE_SECONDS = 600     # a cloud device may report its value from before our write once more within this long
 PENDING_SECONDS = 60    # a knob change waits this long for the E32 to report it as its target
 KNOB_SETTLE_S = 5       # a knob turned through several values: one manual change this long after the last step
 NO_CLOCK_MINUTES = 120  # a manual change with a program but without the clock (the firmware's own fixed value)
@@ -389,9 +403,15 @@ def error_text(error, lang):
     return text.format(device=device, value=_degrees(value, lang) if value is not None else "", detail=detail)
 
 
+def _reports_own_schedule(hass, device):
+    """True while the setting device reports its own schedule now (schedule_mode); False otherwise, also without hass."""
+    state = hass.states.get(device) if hass is not None else None
+    return schedule_mode(state) is not None
+
+
 def _new_link(device):
     return {"device": device, "written": None, "written_at": None, "knob": None, "knob_at": None,
-            "error": None, "failures": 0, "checked": None,
+            "error": None, "failures": 0, "checked": None, "stale": None, "stale_at": None,
             "manual_at": None, "manual_tries": 0, "manual_clock": None, "manual_checked": False}
 
 
@@ -400,8 +420,10 @@ def setting_device_attributes(hass, entry, room_id, plan_room):
 
     ``setting_device`` (entity ID), ``setting_device_written`` (the last target written, °C) and
     ``setting_device_written_at``, ``setting_device_knob`` (the last knob value taken as a manual change, °C) and
-    ``setting_device_knob_at``, ``setting_device_set_to_manual`` (when Home Assistant last set it from its own
-    schedule to manual; ISO times: the dashboard shows them in the user's locale), and ``setting_device_error``: the
+    ``setting_device_knob_at``, ``setting_device_stale`` (the last stale report the device made after a write, °C, which
+    was not taken as a manual change) and ``setting_device_stale_at``, ``setting_device_set_to_manual`` (when Home Assistant last set it from its own
+    schedule to manual; ISO times: the dashboard shows them in the user's locale), ``setting_device_own_schedule``
+    (1.4.6: True while the device reports its own schedule right now) and ``setting_device_error``: the
     last failure in plain words, None once a write works again. Kept in memory: after a restart the values come back
     with the next write or knob change.
     """
@@ -416,7 +438,11 @@ def setting_device_attributes(hass, entry, room_id, plan_room):
     return {"setting_device": device,
             "setting_device_written": link["written"], "setting_device_written_at": link["written_at"],
             "setting_device_knob": link["knob"], "setting_device_knob_at": link["knob_at"],
+            "setting_device_stale": link.get("stale"), "setting_device_stale_at": link.get("stale_at"),
             "setting_device_set_to_manual": link.get("manual_at"),
+            # 1.4.6 (HA-OWN-PROGRAM, issue #15): the device reports its own program right now (hvac_mode auto or a
+            # schedule preset); live from its state, so it is said at once and goes when the device is manual again.
+            "setting_device_own_schedule": _reports_own_schedule(hass, device),
             "setting_device_error": error_text(link["error"], _language(hass))}
 
 
@@ -459,6 +485,8 @@ class SettingDevicePusher:
         self.call_later = call_later  # (hass, seconds, callback) -> cancel: the knob's settle time
         self.pushed = {}       # room id -> (entity, °C wanted, clock) of the last write
         self.wrote = {}        # room id -> what that write set on the device, in °C (the echo of it)
+        # room id -> [entity, °C the device showed just before our write, clock of that write, stale reports seen]
+        self.before = {}
         self.pending = {}      # room id -> (°C, clock until): a manual change on its way to the E32
         self.knobs = {}        # room id -> (entity, °C, cancel): a knob still being turned (KNOB_SETTLE_S)
         self.unasked = {}      # entity -> [(date, quarter)] of changes we did not write
@@ -585,6 +613,7 @@ class SettingDevicePusher:
         error = None
         # Known before the write: the device may report the new value before the service call returns.
         self.pushed[room_id] = (state.entity_id, want, self.clock())
+        self._remember_before(room_id, state)
         self.wrote[room_id] = celsius(device_value(self.hass, state, want), _unit(self.hass, state), -100, 1000)
         try:
             value = await async_write(self.hass, state, want)
@@ -597,6 +626,7 @@ class SettingDevicePusher:
         self.pushed[room_id] = (state.entity_id, want, self.clock())
         if error is not None:
             self.wrote[room_id] = None
+            self.before.pop(room_id, None)
         link = self.links.get(room_id)
         if link is None or link["device"] != state.entity_id:
             return  # the room changed its setting device meanwhile: this write tells nothing about the new one
@@ -606,6 +636,30 @@ class SettingDevicePusher:
         _LOGGER.debug("E32 room %s: set %s to %s", room_id, state.entity_id, value)
         link["written"], link["written_at"] = _written_celsius(self.hass, state, value), self.now().isoformat()
         self._succeeded(room_id, link)
+
+    def _remember_before(self, room_id, state):
+        """The device's target just before this write (its state now), for the stale report. A rewrite after a stale
+        report keeps the first record: the old value shown again after the second write is the person at the knob."""
+        previous = device_target(self.hass, state)
+        record = self.before.get(room_id)
+        if (record is not None and record[0] == state.entity_id and record[3] and previous is not None
+                and self.clock() - record[2] < STALE_SECONDS and near(state, previous, record[1])):
+            return
+        if previous is None:
+            self.before.pop(room_id, None)
+        else:
+            self.before[room_id] = [state.entity_id, previous, self.clock(), 0]
+
+    def _stale(self, room_id, state, value, link):
+        """True (once per write) when ``value`` is the device's target from before our last write, reported late."""
+        record = self.before.get(room_id)
+        if (record is None or record[0] != state.entity_id or record[3] or self.clock() - record[2] >= STALE_SECONDS
+                or not near(state, value, record[1])):
+            return False
+        record[3] += 1
+        link["stale"], link["stale_at"] = round(value, 1), self.now().isoformat()
+        self.evaluate()  # the room's target goes back on the device after MIN_INTERVAL
+        return True
 
     # -- what the link did: attributes and the Repairs item ------------------------------------
     @staticmethod
@@ -699,6 +753,10 @@ class SettingDevicePusher:
             link = self._link(room_id, device)
             if schedule_mode(state) is not None and schedule_mode(before) is None:
                 self._own_program(room_id, room, link, state)  # back on its own schedule: manual again (safety net)
+            if (schedule_mode(state) is None) != (schedule_mode(before) is None):
+                # HA-OWN-PROGRAM (1.4.6): the room thermostat's "setting_device_own_schedule" follows the device's
+                # report at once, not with the next write. After this callback, so a knob turn is registered first.
+                self.hass.loop.call_soon(self.hub.notify)
             value = device_target(self.hass, state)
             old = device_target(self.hass, before)
             if value is None or (old is not None and abs(old - value) < 0.01):
@@ -715,7 +773,9 @@ class SettingDevicePusher:
             return True
         if link["manual_clock"] is not None and self.clock() - link["manual_clock"] < ECHO_SECONDS:
             return True
-        return near(state, value, self._current(status, room)) or near(state, value, FROST_C)
+        if near(state, value, self._current(status, room)) or near(state, value, FROST_C):
+            return True
+        return self._stale(room_id, state, value, link)
 
     @callback
     def _turned(self, room_id, room, status, state, value, link):

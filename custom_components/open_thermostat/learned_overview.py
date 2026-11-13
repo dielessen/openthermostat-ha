@@ -115,10 +115,30 @@ TEXT = {
         "arrival_later": "{when} warm at {time} ({how}); next time it starts a little later.",
         "arrival_earlier_min": "{when} warm at {time} ({how}); next time it starts about {n} earlier.",
         "arrival_later_min": "{when} warm at {time} ({how}); next time it starts about {n} later.",
+        # E32 1.4.6 (ArrivalLearner::correct): within 10 min nothing changes, beyond it a part of the rest, at most 15 min
+        "arrival_earlier_slow": "{when} warm at {time} ({how}); next time it starts a little earlier (at most a quarter of an hour a morning).",
+        "arrival_later_slow": "{when} warm at {time} ({how}); next time it starts a little later (at most a quarter of an hour a morning).",
         "arrival_mean": "It checks every morning whether the room was warm on time and adjusts its warm-up time.",
+        "arrival_mean_slow": "It checks every morning whether the room was warm on time. When it was more than 10 minutes off, it moves its warm-up time a little, never more than a quarter of an hour a morning.",
         "how_late": "{d} late",
         "how_early": "{d} early",
         "how_on_time": "on time",
+        # 1.4.6 (HA-LEARN-TEXTS part B): what the E32's lead guard says about the room's warm-up time (lead_line)
+        "lead_collecting": "Still learning its warm-up time. {n} of its last {m} mornings count; it needs 5 that count.",
+        "lead_collecting_one": "Still learning its warm-up time. Its last morning counts; it needs 5 that count.",
+        "lead_collecting_one_not": "Still learning its warm-up time. Its last morning did not count; it needs 5 that count.",
+        "lead_collecting_none": "Still learning its warm-up time. No morning counts yet; it needs 5 that count.",
+        "lead_collecting_plain": "Still learning its warm-up time; it needs 5 mornings that count.",
+        "lead_checking": "Adjusting its warm-up time. It has 5 mornings that count, but fewer than 4 of them are within a quarter of an hour of the switch time.",
+        "lead_learned": "Learned. At least 4 of its last 5 mornings that count were within a quarter of an hour of the switch time.",
+        "lead_held": "Not learned for now. The E32 is watching its warm-up time.",
+        "lead_held_evidence": "Not learned for now. Too few of its recent mornings counted, so the E32 is watching its warm-up time.",
+        "lead_held_step": "Not learned for now. The correction moved a lot in one day, so the E32 is watching it.",
+        "lead_held_range": "Not learned for now. The correction is at its limit, so the E32 is watching it.",
+        "lead_mornings": "Last mornings, oldest first: {list}.",
+        "lead_never": "not warm within 3 hours",
+        "lead_not_counted": "{what} (not counted)",
+        "lead_mean": "The E32 judges every morning and calls the warm-up time learned only when the recent mornings were close to the switch time. A morning may not count, for example after a restart or with much hot water in use. Home Assistant only shows what the E32 reports.",
         "when_today": "Today",
         "when_yesterday": "Yesterday",
         "when_date": "On {date}",
@@ -186,6 +206,7 @@ TEXT = {
         "arrival_not_warm": "{when} not warm within 3 hours after {time}.",
         "arrival_not_warm_earlier": "{when} not warm within 3 hours after {time}; next time it starts a little earlier.",
         "arrival_not_warm_earlier_min": "{when} not warm within 3 hours after {time}; next time it starts about {n} earlier.",
+        "arrival_not_warm_earlier_slow": "{when} not warm within 3 hours after {time}; next time it starts a little earlier (at most a quarter of an hour a morning).",
         "saving_eur_once": "about {m3} m³ gas ({eur})",
         "saving_once": "about {m3} m³ gas",
         "night_hold_until": "Keeping it at {night} °C until {time} is cheaper than letting it cool down: {saving}.",
@@ -290,10 +311,28 @@ TEXT = {
         "arrival_later": "{when} warm om {time} ({how}); de volgende keer begint het iets later.",
         "arrival_earlier_min": "{when} warm om {time} ({how}); de volgende keer begint het ongeveer {n} eerder.",
         "arrival_later_min": "{when} warm om {time} ({how}); de volgende keer begint het ongeveer {n} later.",
+        "arrival_earlier_slow": "{when} warm om {time} ({how}); de volgende keer begint het iets eerder (hooguit een kwartier per ochtend).",
+        "arrival_later_slow": "{when} warm om {time} ({how}); de volgende keer begint het iets later (hooguit een kwartier per ochtend).",
         "arrival_mean": "Hij kijkt elke ochtend of de ruimte op tijd warm was en past zijn opwarmtijd daarop aan.",
+        "arrival_mean_slow": "Hij kijkt elke ochtend of de ruimte op tijd warm was. Scheelde het meer dan 10 minuten, dan verschuift hij zijn opwarmtijd een beetje, nooit meer dan een kwartier per ochtend.",
         "how_late": "{d} te laat",
         "how_early": "{d} te vroeg",
         "how_on_time": "op tijd",
+        "lead_collecting": "Leert zijn opwarmtijd nog. {n} van zijn laatste {m} ochtenden tellen mee; hij heeft er 5 nodig die meetellen.",
+        "lead_collecting_one": "Leert zijn opwarmtijd nog. Zijn laatste ochtend telt mee; hij heeft er 5 nodig die meetellen.",
+        "lead_collecting_one_not": "Leert zijn opwarmtijd nog. Zijn laatste ochtend telde niet mee; hij heeft er 5 nodig die meetellen.",
+        "lead_collecting_none": "Leert zijn opwarmtijd nog. Nog geen ochtend telt mee; hij heeft er 5 nodig die meetellen.",
+        "lead_collecting_plain": "Leert zijn opwarmtijd nog; hij heeft 5 ochtenden nodig die meetellen.",
+        "lead_checking": "Past zijn opwarmtijd aan. Hij heeft 5 ochtenden die meetellen, maar minder dan 4 daarvan liggen binnen een kwartier van de schakeltijd.",
+        "lead_learned": "Geleerd. Minstens 4 van zijn laatste 5 ochtenden die meetellen lagen binnen een kwartier van de schakeltijd.",
+        "lead_held": "Voorlopig niet geleerd. De E32 let op zijn opwarmtijd.",
+        "lead_held_evidence": "Voorlopig niet geleerd. Te weinig van zijn recente ochtenden telden mee, dus de E32 let op zijn opwarmtijd.",
+        "lead_held_step": "Voorlopig niet geleerd. De bijstelling veranderde in één dag flink, dus de E32 let erop.",
+        "lead_held_range": "Voorlopig niet geleerd. De bijstelling zit aan haar grens, dus de E32 let erop.",
+        "lead_mornings": "Laatste ochtenden, oudste eerst: {list}.",
+        "lead_never": "niet warm binnen 3 uur",
+        "lead_not_counted": "{what} (telt niet mee)",
+        "lead_mean": "De E32 beoordeelt elke ochtend en noemt de opwarmtijd pas geleerd als de laatste ochtenden dicht bij de schakeltijd lagen. Een ochtend telt soms niet mee, bijvoorbeeld na een herstart of als er veel warm water werd gebruikt. Home Assistant toont alleen wat de E32 meldt.",
         "when_today": "Vandaag",
         "when_yesterday": "Gisteren",
         "when_date": "Op {date}",
@@ -360,6 +399,7 @@ TEXT = {
         "arrival_not_warm": "{when} niet warm binnen 3 uur na {time}.",
         "arrival_not_warm_earlier": "{when} niet warm binnen 3 uur na {time}; de volgende keer begint het iets eerder.",
         "arrival_not_warm_earlier_min": "{when} niet warm binnen 3 uur na {time}; de volgende keer begint het ongeveer {n} eerder.",
+        "arrival_not_warm_earlier_slow": "{when} niet warm binnen 3 uur na {time}; de volgende keer begint het iets eerder (hooguit een kwartier per ochtend).",
         "saving_eur_once": "ongeveer {m3} m³ gas ({eur})",
         "saving_once": "ongeveer {m3} m³ gas",
         "night_hold_until": "Tot {time} op {night} °C houden is goedkoper dan laten afkoelen: {saving}.",
@@ -590,14 +630,51 @@ def whole_minutes(minutes, lang):
 
 NOT_WARM_MIN = 180   # ArrivalLearner::Params::windowS: a room not warm within 3 h counts as 3 h late
 LATE_MIN, EARLY_MIN = 10, -15   # ArrivalLearner lateS (600 s) and earlyS (900 s): the factor changes beyond these
-FACTOR_LIMITS = (0.5, 2.0)      # ArrivalLearner minFactor and maxFactor
+FACTOR_LIMITS = (0.5, 2.0)      # ArrivalLearner minFactor and maxFactor (E32 1.4.5 and older)
+FACTOR_LIMITS_SLOW = (0.7, 1.5)  # E32 1.4.6 (learnbounds, the lead budget): the factor stays within these
 STEP_LIMITS = (0.5, 1.5)        # ArrivalLearner minStep and maxStep (E32 SL-A): one morning moves the lead at most so much
 PROPORTIONAL_FROM_MIN = 15      # below this lead (proportionalFromS is 10 min, plus margin) the E32 keeps small steps
 SAME_RISE_S = 3600              # the next rise is the judged one's on a later day when it is this close in clock time
+# E32 1.4.6 (ArrivalLearner::correct, review B1): an error within 10 min either way changes nothing; beyond it 30 % of the
+# rest moves the next start, at most 15 min a morning (and never more than an hour in all from the model's own lead,
+# which Home Assistant cannot see: the text says "at most a quarter of an hour").
+SLOW_DEAD_ZONE_MIN = 10
+SLOW_FROM_VERSION = (1, 4, 6, 0, 0)   # firmware_update.parse_tag of the first E32 with that rule (any 1.4.6 tag)
 
 
-def arrival_shift(minutes, start, at):
+def slow_correction(version):
+    """Which rule the E32 follows for a judged morning, from its firmware version (``hub.firmware_version``, the
+    version the room-plan link read): True from E32 1.4.6 (slow correction), False for an older E32 (proportional,
+    E32 SL-A), None while the version is not known (then the text claims neither: no figure, the old thresholds)."""
+    from .firmware_update import parse_tag
+    key = parse_tag(version)
+    return None if key is None else key >= SLOW_FROM_VERSION
+
+
+def factor_limits(slow):
+    """The (lowest, highest) factor the E32 allows itself: 0.7..1.5 from E32 1.4.6 (slow True), 0.5..2.0 before. While
+    the version is not known (None) the narrower of the two: the text then never claims a move the E32 cannot make."""
+    return FACTOR_LIMITS if slow is False else FACTOR_LIMITS_SLOW
+
+
+def _judged(minutes, factor, slow):
+    """(earlier, later): whether the E32 moves the next start after a morning that was ``minutes`` late (negative:
+    early), with its rule (slow_correction) and the factor not at its limit (factor_limits)."""
+    low, high = factor_limits(slow)
+    if slow is True:
+        late, early = minutes > SLOW_DEAD_ZONE_MIN, minutes < -SLOW_DEAD_ZONE_MIN
+    else:
+        late, early = minutes >= LATE_MIN, minutes <= EARLY_MIN
+    return (late and (factor is None or factor < high - 1e-3),
+            early and (factor is None or factor > low + 1e-3))
+
+
+def arrival_shift(minutes, start, at, slow=False):
     """About how many minutes the next warm-up starts earlier (late) or later (early) after this morning, or None.
+
+    ``slow`` (slow_correction): from E32 1.4.6 the move does not follow the lead and Home Assistant cannot see the
+    hour's budget, so it names no figure (None: "a little", at most a quarter of an hour); unknown (None): no figure.
+    The rest of this paragraph is the rule of E32 1.4.5 and older (``slow`` False).
 
     E32 SL-A (ArrivalLearner::resolve): the lead moves in proportion, to the lead that would have been right (lead +
     error), at most x0.5..x1.5 per morning. The E32 sends the new lead of the next rise (``optimum_start``
@@ -606,6 +683,8 @@ def arrival_shift(minutes, start, at):
     early (x0.5). Rounded to 5 minutes; None when
     the numbers do not tell it (another rise next, a short lead, firmware without them): then "a little".
     """
+    if slow is not False:
+        return None
     start = start if type(start) is dict else {}
     lead, switch = start.get("lead_minutes"), start.get("next_switch")
     rise = switch.get("utc") if type(switch) is dict else None
@@ -621,7 +700,7 @@ def arrival_shift(minutes, start, at):
     return shown if shown >= 5 else None
 
 
-def arrival_line(arrival, lang, clock, day=None, today=None, start=None):
+def arrival_line(arrival, lang, clock, day=None, today=None, start=None, slow=False):
     """(text, meaning) on how the room's last program step up turned out (E32 rc.4), or None.
 
     ``arrival`` (the room's plan): ``last_at_utc`` the program's switch time of the last judged morning,
@@ -631,10 +710,13 @@ def arrival_line(arrival, lang, clock, day=None, today=None, start=None):
     date; today: the local date now ("Yesterday warm at 09:12 (12 min late); next time it starts a little earlier.").
     start: the room's ``optimum_start``: with it the E32's numbers may say how much ("about 10 min earlier",
     arrival_shift).
+    slow: the rule of the E32's firmware (slow_correction): True (E32 1.4.6): more than 10 min either way moves the next
+    start a little, at most a quarter of an hour a morning; False (older): more than 10 min late, more than 15 min
+    early, with the numbers where it tells them; None (version unknown): the older thresholds, no figure.
 
-    What changes next time follows from this morning alone, with the E32's own thresholds (more than 10 min late:
-    earlier; more than 15 min early: later; not beyond its limits), not from the factor, which is the product of
-    every morning so far. A room not warm within 3 hours counts as 3 hours late on the E32: "not warm within 3
+    What changes next time follows from this morning alone, with the E32's own thresholds (1.4.5: more than 10 min late:
+    earlier; more than 15 min early: later; 1.4.6: more than 10 min either way; not beyond its limits), not from the
+    factor, which is the product of every morning so far. A room not warm within 3 hours counts as 3 hours late on the E32: "not warm within 3
     hours after 07:00", never a moment it was not warm.
     """
     t = TEXT[lang]
@@ -653,19 +735,91 @@ def arrival_line(arrival, lang, clock, day=None, today=None, start=None):
         when = t["when_date"].format(date=f"{on.day} {t['months'].split()[on.month - 1]}")
     minutes = round(error)
     factor = factor if _ok(factor) else None
-    earlier = minutes >= LATE_MIN and (factor is None or factor < FACTOR_LIMITS[1] - 1e-3)
-    later = minutes <= EARLY_MIN and (factor is None or factor > FACTOR_LIMITS[0] + 1e-3)
-    shift = arrival_shift(min(minutes, NOT_WARM_MIN), start, at) if earlier or later else None
+    earlier, later = _judged(minutes, factor, slow)
+    shift = arrival_shift(min(minutes, NOT_WARM_MIN), start, at, slow) if earlier or later else None
     n = whole_minutes(shift, lang) if shift is not None else None
+    suffix = "_slow" if slow is True else ""
+    meaning = t["arrival_mean" + suffix]
     if minutes >= NOT_WARM_MIN:
-        key = ("arrival_not_warm_earlier_min" if n else "arrival_not_warm_earlier") if earlier else "arrival_not_warm"
-        return t[key].format(when=when, time=clock(at), n=n), t["arrival_mean"]
+        key = (("arrival_not_warm_earlier_min" if n else "arrival_not_warm_earlier" + suffix) if earlier
+               else "arrival_not_warm")
+        return t[key].format(when=when, time=clock(at), n=n), meaning
     how = (t["how_late"].format(d=whole_minutes(minutes, lang)) if minutes > 0
            else t["how_early"].format(d=whole_minutes(-minutes, lang)) if minutes < 0 else t["how_on_time"])
     key = "arrival_earlier" if earlier else "arrival_later" if later else "arrival"
-    key += "_min" if n and key != "arrival" else ""
+    key += "_min" if n and key != "arrival" else suffix if key != "arrival" else ""
     # The moment the room was warm: the switch time plus the error (the E32's Home page shows the same moment).
-    return t[key].format(when=when, time=clock(at + minutes * 60), how=how, n=n), t["arrival_mean"]
+    return t[key].format(when=when, time=clock(at + minutes * 60), how=how, n=n), meaning
+
+
+# -- 1.4.6 (HA-LEARN-TEXTS part B): what the E32's lead guard says about the room's warm-up time ---------------------------
+LEAD_STATES = ("collecting", "checking", "learned", "held")   # LearnGuard::State, as the E32 names them
+LEAD_REASONS = ("evidence", "step", "range")                   # LearnGuard::Reason of a held lead ("outcome" is not used)
+LEAD_NEEDED = 5                                                # learnbounds::learnedMornings: mornings that must count
+LEAD_SHOWN = 5                                                 # ArrivalLearner::shownMornings
+
+
+def lead_guard(arrival):
+    """The lead guard of the room's ``plan.arrival`` as the E32 reports it, or None: {"state", "reason" (only when held,
+    else None), "mornings" (minutes, + late, 180: not warm within 3 h, oldest first), "clean" (same length: true when
+    the morning counts)}. E32 1.4.5 and older send no ``state``: None, and every caller then says what it said before
+    (decided by the key's presence). A state or reason the E32 does not name here, or arrays that do not belong
+    together, are not guessed at: an unknown state is None, unusable mornings are None (an empty list is the E32's own
+    "none judged yet"). Computes nothing."""
+    if type(arrival) is not dict or arrival.get("state") not in LEAD_STATES:
+        return None
+    state, reason = arrival["state"], arrival.get("reason")
+    mornings, clean = arrival.get("mornings"), arrival.get("clean")
+    usable = (type(mornings) is list and type(clean) is list and len(mornings) == len(clean) <= LEAD_SHOWN
+              and all(_ok(m) and -1440 <= m <= 1440 for m in mornings) and all(type(c) is bool for c in clean))
+    return {"state": state, "reason": reason if state == "held" and reason in LEAD_REASONS else None,
+            "mornings": [round(m) for m in mornings] if usable else None,
+            "clean": list(clean) if usable else None}
+
+
+def lead_counted(guard):
+    """(how many of the mornings the E32 lists count, how many it lists) of a lead_guard, for "n of its last m"."""
+    clean = guard["clean"] or []
+    return sum(clean), len(clean)
+
+
+def lead_sentence(guard, lang):
+    """The lead's state in a sentence: collecting (with how many of the listed mornings count), checking, learned, or
+    held with its reason. "Learned" only for the state ``learned``."""
+    t = TEXT[lang]
+    state = guard["state"]
+    if state == "collecting":
+        counted, listed = lead_counted(guard)
+        if counted >= LEAD_NEEDED or guard["clean"] is None:
+            return t["lead_collecting_plain"]
+        if listed == 0:
+            return t["lead_collecting_none"]
+        if listed == 1:
+            return t["lead_collecting_one" if counted else "lead_collecting_one_not"]
+        return t["lead_collecting"].format(n=counted, m=listed)
+    if state == "held":
+        return t["lead_held_" + guard["reason"]] if guard["reason"] else t["lead_held"]
+    return t["lead_" + state]
+
+
+def lead_mornings_text(guard, lang):
+    """"Last mornings, oldest first: 1 h 5 min early, 3 min late (not counted), not warm within 3 hours." or None."""
+    t = TEXT[lang]
+    words = []
+    for minutes, counts in zip(guard["mornings"] or [], guard["clean"] or []):
+        what = (t["lead_never"] if minutes >= NOT_WARM_MIN else t["how_late"].format(d=whole_minutes(minutes, lang)) if minutes > 0
+                else t["how_early"].format(d=whole_minutes(-minutes, lang)) if minutes < 0 else t["how_on_time"])
+        words.append(what if counts else t["lead_not_counted"].format(what=what))
+    return t["lead_mornings"].format(list=", ".join(words)) if words else None
+
+
+def lead_line(guard, lang):
+    """(text, meaning) of the lead's state with the last mornings, or None without a guard (E32 1.4.5 and older)."""
+    if guard is None:
+        return None
+    text = lead_sentence(guard, lang)
+    mornings = lead_mornings_text(guard, lang)
+    return (text + " " + mornings if mornings else text), TEXT[lang]["lead_mean"]
 
 
 FREE_HEAT_DAYPARTS = 6        # FreeHeat: six local dayparts of 4 hours from midnight
@@ -810,7 +964,7 @@ def model_line(name, learned, lang, planning=False):
 
 
 def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=None, room_id=None, comfort=None,
-                  trial=False, currency=None, now=None, planning=False, room_off=False, advice=None):
+                  trial=False, currency=None, now=None, planning=False, room_off=False, advice=None, slow=False):
     """{name, room_id, progress, summary, lines: [{text, meaning}], facts} of one room that is on; clock: utc -> "07:10"
     in local time.
 
@@ -820,6 +974,7 @@ def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=
     warms in a few words (the Learning tab's progress list); planning: the E32 plans the heating (heating_plan.py);
     model: the model line's text (None on firmware without the room models).
     advice: the room's heat-along advice (room_advice.learning_lines, the heating advice sensor's ``rooms``) or None.
+    slow: which rule the E32 follows for a judged morning (slow_correction of its firmware version; arrival_line).
     facts (1.4.3, CONTRACT-1.4.3 §3): the same figures as the lines, structured for the Learning view's room card,
     each from the input its line uses; a fact not learned yet is in ``waiting`` with what it needs (finish_facts).
     """
@@ -870,9 +1025,13 @@ def room_overview(name, learned, plan, lang, clock, smart=None, day=None, today=
     if (found := free_heat(learned, plan)) is not None:
         facts["free_heat"] = {"c_per_h": round(found[1], 1), "part": DAYPARTS[found[0]],
                               "later_min": found[2] if found[2] and smart is not False and not held else 0}
-    if (arrived := arrival_line(plan.get("arrival"), lang, clock, day, today, start)) is not None:
+    if (arrived := arrival_line(plan.get("arrival"), lang, clock, day, today, start, slow)) is not None:
         lines.append(_line(*arrived))
-        facts["arrival"] = arrival_fact(plan.get("arrival"), clock, day, today, start)
+        facts["arrival"] = arrival_fact(plan.get("arrival"), clock, day, today, start, slow)
+    # 1.4.6: what the E32's lead guard says (collecting / checking / learned / held), never from Home Assistant's own count
+    facts["lead"] = lead_guard(plan.get("arrival"))
+    if (guarded := lead_line(facts["lead"], lang)) is not None:
+        lines.append(_line(*guarded))
     night = plan.get("night") if type(plan.get("night")) is dict else {}
     if night.get("reason") == "estimated" and type(night.get("recommended")) is str:
         hold = night["recommended"] not in ("program", "thermostat_like") and _ok(night.get("recommended_night_c"))
@@ -935,7 +1094,7 @@ def new_facts(learned, status=None):
     return {"status": status, "progress": {"seen": seen, "of": WARMUPS_TO_LEARN,
                                            "periods": periods if type(periods) is int and periods >= 0 else None},
             "warmup": None, "cooling": None, "lowest_flow_c": None, "free_heat": None, "smart_start": None,
-            "arrival": None, "model": {key: model[key] for key in ("state", "good_days", "of")} if model else None,
+            "arrival": None, "lead": None, "model": {key: model[key] for key in ("state", "good_days", "of")} if model else None,
             "advice": None, "reach": None, "waiting": {}}
 
 
@@ -964,23 +1123,25 @@ def smart_start_fact(start, on, clock, trial=False, later_min=0, now=None, room_
             "now": bool(heating) and reason is None}
 
 
-def arrival_fact(arrival, clock, day=None, today=None, start=None):
+def arrival_fact(arrival, clock, day=None, today=None, start=None, slow=False):
     """The last judged morning, read as arrival_line reads it: {"at": when the room was warm (the switch time when it
     was not warm within 3 hours), "minutes_late" (negative: early; 180: not warm within 3 hours), "day": "today",
     "yesterday" or the local date (YYYY-MM-DD), "next": "earlier" | "later" | None, "next_min": about how many minutes,
-    or None}. Only called once arrival_line has a line."""
+    or None; "next_slow": True only with an E32 1.4.6, which moves the start at most a quarter of an hour a morning}.
+    Only called once arrival_line has a line."""
     at, error, factor = arrival.get("last_at_utc"), arrival.get("last_error_min"), arrival.get("factor")
     day = day or (lambda utc: datetime.fromtimestamp(utc, timezone.utc).date())
     today = today or day(time.time())
     on, minutes = day(at), round(error)
     factor = factor if _ok(factor) else None
-    earlier = minutes >= LATE_MIN and (factor is None or factor < FACTOR_LIMITS[1] - 1e-3)
-    later = minutes <= EARLY_MIN and (factor is None or factor > FACTOR_LIMITS[0] + 1e-3)
+    earlier, later = _judged(minutes, factor, slow)
     late = min(minutes, NOT_WARM_MIN)
     return {"at": clock(at if late >= NOT_WARM_MIN else at + minutes * 60), "minutes_late": late,
             "day": "today" if on == today else "yesterday" if on == today - timedelta(days=1) else on.isoformat(),
             "next": "earlier" if earlier else "later" if later else None,
-            "next_min": arrival_shift(late, start, at) if earlier or later else None}
+            "next_min": arrival_shift(late, start, at, slow) if earlier or later else None,
+            # E32 1.4.6: no figure, only the bound ("at most a quarter of an hour a morning")
+            **({"next_slow": True} if slow is True and (earlier or later) else {})}
 
 
 def advice_fact(advice):
@@ -1328,9 +1489,10 @@ class LearnedOverviewSensor(RestoreEntity, SensorEntity):
         planning = plan_state(self.hub) == "planning"
         # E32 1.4 (#8): each room's own Smart warm-up in effect (room_smart_warm_up), else the house switch.
         on_rooms = dict(active)
+        slow = slow_correction(getattr(self.hub, "firmware_version", None))  # 1.4.6: which rule the arrival line explains
         rooms = [room_overview(name, self.hub.learned.get(room_id), self.hub.warmup.get(room_id), lang, clock, on,
                                day, today, room_id, self.hub.rooms[room_id].get("comfort"), trial, currency,
-                               planning=planning, room_off=room_off, advice=advice.get(room_id))
+                               planning=planning, room_off=room_off, advice=advice.get(room_id), slow=slow)
                  if room_id in on_rooms else
                  idle_room_overview(name, room_id, self.hub.rooms[room_id].get("state"), self.hub.learned.get(room_id),
                                     lang, advice.get(room_id))

@@ -59,9 +59,10 @@ const TEXT = {
   on_back: 'Switches the room back to On', house_levels: 'Comfort, Eco and Night use the room defaults', switch_on: 'Switch on now', summer_refused: 'Summer mode is on: switch it off first.',
   today: 'Today', smart_start: 'Smart warm-up starts {time} · warm at {at}', smart_start_plain: 'Smart warm-up starts {time}',
   no_start_window: 'No early start: window open', no_start_away: 'No early start: away', no_program: 'No week program',
-  now: 'now', smart: 'Smart warm-up', last_day: 'Last 24 hours', measured: 'Measured', devices: 'Devices', week: 'Week program', settings: 'Settings',
+  now: 'now', smart: 'Smart warm-up', last_day: 'Last 24 hours', no_history: 'Not yet 24 hours of measurements.', measured: 'Measured', devices: 'Devices', week: 'Week program', settings: 'Settings',
   open_pct: '{n} % open', battery: 'battery {n} %', set_to: 'set to {t} °C', put_back: 'put back to {t} °C', put_back_plain: 'put back',
-  own_schedule: 'running its own program', off_by_user: 'switched off by you', gave_up: 'not responding to the E32',
+  own_schedule: 'running its own program', own_sensor: 'on its own sensor', own_sensor_note: 'The E32 is putting it back on the room\'s sensor.',
+  off_by_user: 'switched off by you', gave_up: 'not responding to the E32',
   offline: 'not reporting', low_battery: 'battery low', too_large: 'message too large ({kb} KB)', too_large_plain: 'message too large', open_since: 'open since {time}', is_open: 'open', closed: 'closed',
   home: 'home', away: 'away', setting_device: 'setting device · set to {t} °C', setting_plain: 'setting device', pump_on: 'on',
   pump_off: 'off', no_reading: 'no reading', thermometer: 'Thermometer', bluetooth: 'Bluetooth sensor', gateway: 'Valve {id} on BLU Gateway {n}',
@@ -77,9 +78,10 @@ const TEXT = {
   on_back: 'Zet de ruimte weer op Aan', house_levels: 'Comfort, Eco en Nacht gebruiken de standaardwaarden voor ruimtes', switch_on: 'Nu aanzetten', summer_refused: 'Zomerstand staat aan: zet die eerst uit.',
   today: 'Vandaag', smart_start: 'Slim opwarmen start {time} · warm om {at}', smart_start_plain: 'Slim opwarmen start {time}',
   no_start_window: 'Geen vroege start: raam open', no_start_away: 'Geen vroege start: afwezig', no_program: 'Geen weekprogramma',
-  now: 'nu', smart: 'Slim opwarmen', last_day: 'Afgelopen 24 uur', measured: 'Gemeten', devices: 'Apparaten', week: 'Weekprogramma', settings: 'Instellen',
+  now: 'nu', smart: 'Slim opwarmen', last_day: 'Afgelopen 24 uur', no_history: 'Nog geen 24 uur aan metingen.', measured: 'Gemeten', devices: 'Apparaten', week: 'Weekprogramma', settings: 'Instellen',
   open_pct: '{n} % open', battery: 'batterij {n} %', set_to: 'staat op {t} °C', put_back: 'teruggezet naar {t} °C', put_back_plain: 'teruggezet',
-  own_schedule: 'eigen programma', off_by_user: 'door jou uitgezet', gave_up: 'geeft niet thuis',
+  own_schedule: 'eigen programma', own_sensor: 'op eigen sensor', own_sensor_note: 'De E32 zet hem terug op de sensor van de ruimte.',
+  off_by_user: 'door jou uitgezet', gave_up: 'geeft niet thuis',
   offline: 'meldt zich niet', low_battery: 'batterij bijna leeg', too_large: 'bericht te groot ({kb} KB)', too_large_plain: 'bericht te groot', open_since: 'open sinds {time}', is_open: 'open', closed: 'dicht',
   home: 'thuis', away: 'weg', setting_device: 'instelapparaat · staat op {t} °C', setting_plain: 'instelapparaat', pump_on: 'aan',
   pump_off: 'uit', no_reading: 'geen meting', thermometer: 'Thermometer', bluetooth: 'Bluetooth-sensor', gateway: 'Kraan {id} aan BLU Gateway {n}',
@@ -96,7 +98,7 @@ const TYPE = {radiator: 'radiator', floor: 'heating-coil'};
 // The presets of the room thermostat, in the design's order (e32_comfort.PRESETS); Heat along only is the state menu's.
 const PRESETS = ['none', 'comfort', 'eco', 'sleep', 'boost'];
 // The E32's finding on a driven valve (e32_valves.HELD): its words and tone; "ok" says nothing.
-const HELD = {put_back: 'along', own_schedule: 'along', off_by_user: 'along', gave_up: 'attention'};
+const HELD = {put_back: 'along', own_schedule: 'along', own_sensor: 'along', off_by_user: 'along', gave_up: 'attention'};
 const GATEWAY = /^g([1-9][0-9]?):(2[0-9]{2})$/;
 const ICONS = {
  'fire': 'M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2M14.5 17.5C14.22 17.74 13.76 18 13.4 18.1C12.28 18.5 11.16 17.94 10.5 17.28C11.69 17 12.4 16.12 12.61 15.23C12.78 14.43 12.46 13.77 12.33 13C12.21 12.26 12.23 11.63 12.5 10.94C12.69 11.32 12.89 11.7 13.13 12C13.9 13 15.11 13.44 15.37 14.8C15.41 14.94 15.43 15.08 15.43 15.23C15.46 16.05 15.1 16.95 14.5 17.5H14.5Z',
@@ -811,6 +813,7 @@ class OpenThermostatRoom extends HTMLElement {
   const W = 300, H = 64, svg = make('svg:svg', {viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', 'aria-hidden': 'true'});
   svg.append(make('svg:rect', {class: 'base', x: 0, y: 0, width: W, height: H, rx: 6}));
   const h = this._history;
+  let drawn = false;
   if (h) {
    const clip = list => {
     const out = list.filter(p => p.t >= h.from && p.v !== null), before = [...list].reverse().find(p => p.t < h.from && p.v !== null);
@@ -833,8 +836,11 @@ class OpenThermostatRoom extends HTMLElement {
      + (list.length ? (stepped ? `H${W}` : `L${W},${y(list[list.length - 1].v)}`) : '');
     if (target.length) svg.append(make('svg:path', {class: 'target', d: line(target, true), 'data-line': 'target'}));
     if (measured.length) svg.append(make('svg:path', {class: 'measured', d: line(measured, false), 'data-line': 'measured'}));
+    drawn = measured.length > 1 || target.length > 0;
    }
   }
+  // A room without history yet (a new room): one sentence instead of an empty frame; the chart comes by itself.
+  if (h && !drawn) { keys.remove(); box.append(head, make('p', {class: 'muted', 'data-empty': ''}, this.t('no_history'))); return box; }
   button.append(svg);
   box.append(head, button);
   return box;
@@ -894,7 +900,7 @@ class OpenThermostatRoom extends HTMLElement {
     second = v.held === 'put_back' ? (to !== null ? this.t('put_back', {t: this.deg(to)}) : this.t('put_back_plain')) : this.t(v.held);
    }
    tile(c.valves, position !== null && position < 1 ? 'valve-closed' : 'valve', name, parts.join(' · '),
-    {battery: level, second, tone, warn: v.health === 'offline' || large || v.held === 'gave_up', kind: 'valve', held: v.held || null,
+    {battery: level, second, note: v.held === 'own_sensor' ? this.t('own_sensor_note') : '', tone, warn: v.health === 'offline' || large || v.held === 'gave_up', kind: 'valve', held: v.held || null,
      health: large ? v.health : null});
   }
   // Windows and doors: open since a time (red) or closed.
@@ -930,6 +936,7 @@ class OpenThermostatRoom extends HTMLElement {
    if (item.open) value.classList.add('low');
    txt.append(make('span', {class: 'tn'}, item.name), value);
    if (item.second) { txt.append(make('span', {class: 't2 tone-' + item.tone, 'data-second': ''}, item.second)); words.push(item.second); }
+   if (item.note) words.push(item.note);
    el.title = [item.name, ...words].join(' · ');
    el.append(svgIcon(item.glyph, 20), txt);
    el.addEventListener('click', () => this.moreInfo(item.entity));

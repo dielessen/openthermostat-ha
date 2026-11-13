@@ -136,13 +136,13 @@ class RoomPlanLink:
     clears_native_source: bool
 
 
-def room_plan_link(entry, *, version, status, updates, settings, etag, rooms, heating):
+def room_plan_link(entry, *, version, status, updates, settings, etag, heating):
     """Check the authenticated E32 reads and derive the settings to save; no I/O."""
     from .v1_wire import canonical
     from .room_plan import decode_plan
     from .v1_wire import identifier
     if (type(version) is not dict or type(status) is not dict or type(updates) is not dict
-            or type(settings) is not dict or type(rooms) is not list):
+            or type(settings) is not dict):
         raise ControllerLinkError("controller_response_invalid")
     if status.get("controlMode") not in ("legacy", "shadow"):
         raise ControllerLinkError("controller_response_invalid")
@@ -159,8 +159,6 @@ def room_plan_link(entry, *, version, status, updates, settings, etag, rooms, he
     if (updates.get("busy") is not False or updates.get("boot_pending") is not False
             or updates.get("reboot_required") is not False or updates.get("reboot_scheduled") is not False):
         raise ControllerLinkError("controller_busy_or_conflict")
-    if rooms:
-        raise ControllerLinkError("controller_legacy_rooms_present")
     mqtt = settings.get("mqtt")
     # The E32 only connects to a broker with its own login (user name and
     # password); it never sends the password back, so "" here means "stored".
@@ -209,8 +207,7 @@ async def async_prepare_room_plan_link(hass, entry, client):
     link._link_guard(hass, entry, before, private_entry_state=private_before)
     observed = {}
     for key, path in (("version", "/status/version"), ("status", "/status"),
-                      ("updates", "/updates/status"), ("settings", "/config/device"),
-                      ("rooms", "/config/rooms"), ("heating", link.HEATING_PLAN)):
+                      ("updates", "/updates/status"), ("settings", "/config/device"), ("heating", link.HEATING_PLAN)):
         try:
             value = await client.async_read(path)
         except ControllerLinkError as err:

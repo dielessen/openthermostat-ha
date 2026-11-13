@@ -30,7 +30,7 @@ English and in its Dutch (ui-messages-house.js), so the page and Home Assistant 
 
 What Home Assistant adds, all on the E32 device:
 
-- the sensor "Heating plan": state = the next planned start; attributes: the planner's state and its plain line,
+- the sensor "Heating plan": state = the next planned start, else a few words ("Not planning (still learning)"; never Unknown); attributes: the planner's state and its plain line,
   the next blocks (and one line each), the expected arrival, the confidence, the reason sentence, the last morning
   and the morning check ("This morning: 6 minutes early.", with the last seven mornings in minutes);
 - when the E32 reports ``ready``: the button "Let the E32 plan the heating", which exists only in that state, also
@@ -119,6 +119,10 @@ TEXT = {
         "confidence": "Confidence: {word}.",
         "confidence.fair": "fair", "confidence.good": "good", "confidence.high": "high",
         "your_home": "your home",
+        # 1.4.6: the sensor's state in a few words while there is no next start to show (never Unknown)
+        "word.collecting": "Not planning (still learning)", "word.checking": "Not planning (checking its plans)",
+        "word.ready": "Not planning (ready for your confirmation)", "word.demoted": "Not planning (checking again)",
+        "word.planning": "Planning (nothing to start)", "word.none": "Not planning", "word.waiting": "Waiting for the E32",
     },
     "nl": {
         "state.collecting": "De E32 plant de verwarming zelf zodra hij het model van {room} vertrouwt en je ketel "
@@ -161,6 +165,9 @@ TEXT = {
         "confidence": "Zekerheid: {word}.",
         "confidence.fair": "redelijk", "confidence.good": "goed", "confidence.high": "hoog",
         "your_home": "je huis",
+        "word.collecting": "Plant niet (leert nog)", "word.checking": "Plant niet (controleert zijn plannen)",
+        "word.ready": "Plant niet (klaar voor je bevestiging)", "word.demoted": "Plant niet (controleert opnieuw)",
+        "word.planning": "Plant (niets te starten)", "word.none": "Plant niet", "word.waiting": "Wacht op de E32",
     },
 }
 
@@ -392,6 +399,14 @@ def next_start(plan, now):
     return min(starts) if starts else None
 
 
+def state_word(plan, lang, fresh=True):
+    """The sensor's state in a few words while no next start is known: it is never Unknown (1.4.6)."""
+    t = TEXT[lang]
+    if plan is None:
+        return t["word.none" if fresh else "word.waiting"]
+    return t["word." + plan["state"]]
+
+
 def plan_view(plan, lang, names, local, today, now, lead=None):
     """The plan sensor's attributes in a language (local: utc -> local datetime; today: the local date)."""
     t = TEXT[lang]
@@ -439,7 +454,6 @@ def _local():
 class HeatingPlanSensor(HubEntity, SensorEntity):
     """The E32's heating plan: state = the next planned start; the plan in words as attributes."""
 
-    _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_translation_key = "heating_plan"
     _attr_icon = "mdi:calendar-clock"
     # The texts are shown, not kept in the history (the state and the plan's state are).
@@ -457,12 +471,25 @@ class HeatingPlanSensor(HubEntity, SensorEntity):
 
     @property
     def available(self):
-        return self.plan is not None
+        return True  # 1.4.6: a state in words while the E32 does not plan or is silent, never Unavailable
+
+    def _lang(self):
+        from .learned_overview import language
+        return language(getattr(self, "hass", None))
+
+    def _start(self):
+        plan = self.plan
+        return next_start(plan, self._clock()) if plan is not None else None
+
+    @property
+    def device_class(self):
+        """A timestamp only while a next start is shown; the words are no timestamp."""
+        return SensorDeviceClass.TIMESTAMP if self._start() is not None else None
 
     def _write_token(self):
         """Written when the plan, the next start or a room's name changes, not on every E32 message (R4-08)."""
         plan = self.plan
-        return (plan is not None, repr(plan), next_start(plan, self._clock()) if plan is not None else None,
+        return (plan is not None, repr(plan), self._start(), self._lang(), bool(self.hub.fresh),
                 tuple(sorted(self._names().items())), lead_room(self.hub))
 
     def _names(self):
@@ -472,18 +499,19 @@ class HeatingPlanSensor(HubEntity, SensorEntity):
 
     @property
     def native_value(self):
-        start = next_start(self.plan, self._clock())
-        return datetime.fromtimestamp(start, timezone.utc) if start is not None else None
+        start = self._start()
+        if start is not None:
+            return datetime.fromtimestamp(start, timezone.utc)
+        return state_word(self.plan, self._lang(), bool(self.hub.fresh))
 
     @property
     def extra_state_attributes(self):
         plan = self.plan
+        lang = self._lang()
         if plan is None:
-            return None
-        from .learned_overview import language
+            return {"plan_state": None, "plan_state_text": state_word(None, lang, bool(self.hub.fresh))}
         local, today = _local()
-        return plan_view(plan, language(getattr(self, "hass", None)), self._names(), local, today, self._clock(),
-                         lead_room(self.hub))
+        return plan_view(plan, lang, self._names(), local, today, self._clock(), lead_room(self.hub))
 
 
 class PlanConfirmButton(HubEntity, ButtonEntity):

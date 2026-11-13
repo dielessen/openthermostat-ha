@@ -150,6 +150,8 @@ PROBES_TOPIC = "fw/state/probes"
 PLAN_TOPIC = "fw/config/plan"
 ENTITIES_TOPIC = "fw/config/entities"
 LEARNED_TOPIC = "fw/telemetry/learned/"
+# E32 1.4.6 (FW-LEARN-TELEMETRY): the room's model on its own retained topic, so it survives a restart of Home Assistant.
+MODEL_TOPIC = "fw/telemetry/model/"
 SUMMARY_TOPIC = "fw/telemetry/summary"
 SHADOW_TOPIC = "fw/telemetry/shadow"
 READINESS_TOPIC = "fw/telemetry/readiness"
@@ -180,7 +182,7 @@ AVAILABILITY_TOPIC = "fw/availability"
 # drops these at once instead of decoding every E32 message a second time (R4-03).
 _HUB_ONLY = (HEATING_TOPIC, PLAN_TOPIC, ENTITIES_TOPIC, SUMMARY_TOPIC, FLOW_TOPIC, TUNING_TOPIC, SCOREBOARD_TOPIC,
              INSIGHT_TOPIC, SHADOW_TOPIC, READINESS_TOPIC, PROBES_TOPIC, HEATING_PLAN_TOPIC)
-_HUB_ONLY_PARTS = (ROOM_TOPIC, BLE_TOPIC, TRV_TOPIC, CIRCUIT_TOPIC, LEARNED_TOPIC, ENTITIES_TOPIC + "/")
+_HUB_ONLY_PARTS = (ROOM_TOPIC, BLE_TOPIC, TRV_TOPIC, CIRCUIT_TOPIC, LEARNED_TOPIC, MODEL_TOPIC, ENTITIES_TOPIC + "/")
 
 
 def hub_only_topic(suffix):
@@ -411,6 +413,11 @@ def decode_learned(topic_room, payload):
     if plan is not None and plan.get("id", topic_room) != topic_room:  # the plan may carry its room id
         return None
     room = {**learned, "id": topic_room}
+    # E32 1.4.6: "omitted" names what the message leaves out to keep its budget ("free_heat", "model.free_kw", "model"),
+    # always present (maybe empty) and then also the sign that the room's model has its own topic (decode_model).
+    omitted = value.get("omitted")
+    if type(omitted) is list and len(omitted) <= 8:
+        room["omitted"] = [part for part in omitted if type(part) is str and len(part) <= 24]
     # E32 rc.5 (FreeHeat): "free_heat" belongs to the room, also when it sits beside "learned".
     if "free_heat" not in room and type(value.get("free_heat")) is dict:
         room["free_heat"] = value["free_heat"]
@@ -421,6 +428,24 @@ def decode_learned(topic_room, payload):
     if "model" not in room and type(value.get("model")) is dict:
         room["model"] = value["model"]
     return room, ({**plan, "id": topic_room} if plan is not None else None)
+
+
+def decode_model(topic_room, payload):
+    """The room model of one ``model/<room id>`` message (E32 1.4.6), or None.
+
+    The payload's id must be the topic's room id; the model's own figures are checked where they are shown
+    (learned_overview.room_model).
+    """
+    if (not isinstance(payload, (str, bytes)) or len(payload) > MAX_STATUS_BYTES
+            or type(topic_room) is not str or not ROOM_ID.fullmatch(topic_room)):
+        return None
+    try:
+        value = json.loads(payload)
+    except (ValueError, TypeError, UnicodeError):
+        return None
+    if type(value) is not dict or value.get("schema") != 1 or value.get("id") != topic_room or type(value.get("model")) is not dict:
+        return None
+    return value["model"]
 
 
 def decode_insight(payload):
@@ -632,6 +657,12 @@ class HeatingHub:
         self.warmup = {}
         # {room id: (received, learned room, plan or None)} from learned/<room id>
         self.learned_messages = {}
+        # E32 1.4.6: {room id: (received, model)} from model/<room id>, kept until the E32 clears it (the room left the
+        # plan): a retained message is what a restarted Home Assistant shows, never "unknown". free_heat_kept: the rooms
+        # whose free heat is the previous one (their last message named it omitted); free_heat_at: when it arrived.
+        self.model_messages = {}
+        self.free_heat_kept = set()
+        self.free_heat_at = {}
         # The latest summary (decode_summary) and when it arrived (monotonic).
         self.summary = None
         self.summary_received = None
@@ -884,12 +915,41 @@ class HeatingHub:
         for room_id, (_, room, plan) in self.learned_messages.items():
             if plan_ids is not None and room_id not in plan_ids:
                 continue
-            learned[room_id] = room
+            learned[room_id] = self._with_model(room_id, room)
             if plan is not None:
                 warmup[room_id] = plan
             else:
                 warmup.pop(room_id, None)
         self.learned, self.warmup = learned, warmup
+
+    def _with_model(self, room_id, room):
+        """The learned room with its model from the model topic when the E32 sent the room's learned message in the
+        1.4.6 form (it names ``omitted``), else as it is (E32 1.4.5 and older carry the model in the message). Never both:
+        a model beside the message is dropped for the topic's. A downgraded E32 sends the old form again, so a retained
+        topic left from 1.4.6 is not read then."""
+        if type(room.get("omitted")) is not list:
+            return room
+        room = {key: value for key, value in room.items() if key != "model"}
+        message = self.model_messages.get(room_id)
+        if message is not None:
+            room["model"] = message[1]
+            self.models_seen = True
+        return room
+
+    def model_age_min(self, room_id):
+        """Whole minutes since the room's model arrived on its topic (E32 1.4.6), or None (older form or no model)."""
+        message = self.model_messages.get(room_id)
+        if message is None or type((self.learned.get(room_id) or {}).get("omitted")) is not list:
+            return None
+        return max(0, int((self.clock() - message[0]) // 60))
+
+    def free_heat_age_min(self, room_id):
+        """Whole minutes since the room's free heat arrived, only while it is the previous one (the latest message left
+        it out to keep its budget and said so); else None."""
+        at = self.free_heat_at.get(room_id)
+        if room_id not in self.free_heat_kept or at is None:
+            return None
+        return max(0, int((self.clock() - at) // 60))
 
     @callback
     def update(self, status):
@@ -984,6 +1044,8 @@ class HeatingHub:
                         del store[item]
                 for room_id in [r for r in self.learned_messages if r not in plan["rooms"]]:
                     del self.learned_messages[room_id]
+                for room_id in [r for r in self.model_messages if r not in plan["rooms"]]:
+                    del self.model_messages[room_id]
                 for part in [k for k in self.entity_parts if k >= plan["entity_parts"]]:
                     del self.entity_parts[part]
         elif suffix == ENTITIES_TOPIC or suffix.startswith(ENTITIES_TOPIC + "/"):
@@ -1036,7 +1098,16 @@ class HeatingHub:
                     return
                 if "model" in value[0]:
                     self.models_seen = True
-                self.learned_messages[room_id] = (self.clock(), *self._keep_free_heat(room_id, value))
+                self._store_learned(room_id, value)
+        elif suffix.startswith(MODEL_TOPIC):
+            room_id = suffix[len(MODEL_TOPIC):]
+            model = None if empty else decode_model(room_id, payload)
+            if empty:
+                self.model_messages.pop(room_id, None)
+            elif model is None:
+                return  # a broken message never drops the room's last model
+            else:
+                self.model_messages[room_id] = (self.clock(), model)
         elif suffix in (SUMMARY_TOPIC, FLOW_TOPIC, TUNING_TOPIC, SCOREBOARD_TOPIC, INSIGHT_TOPIC):
             if suffix == SUMMARY_TOPIC:
                 self.summary_doc = None if empty else decode_summary(payload)
@@ -1096,9 +1167,21 @@ class HeatingHub:
         """One room's learned message (decode_learned); None (invalid) is ignored."""
         if value is None:
             return
-        self.learned_messages[room_id] = (self.clock(), *self._keep_free_heat(room_id, value))
+        self._store_learned(room_id, value)
         self._merge_learned()
         self.notify()
+
+    def _store_learned(self, room_id, value):
+        """Keep one room's learned message with the previous free heat where it left it out (``_keep_free_heat``)."""
+        now = self.clock()
+        room, plan = self._keep_free_heat(room_id, value)
+        if "free_heat" in value[0] or "free_heat" not in room:
+            self.free_heat_kept.discard(room_id)
+            if "free_heat" in room:
+                self.free_heat_at[room_id] = now
+        else:
+            self.free_heat_kept.add(room_id)
+        self.learned_messages[room_id] = (now, room, plan)
 
     def _keep_free_heat(self, room_id, value):
         """(learned room, plan) with the room's previous ``free_heat`` when this message has no key at all.
@@ -2615,6 +2698,12 @@ class RoomLearningSensor(LearnedRoomEntity, SensorEntity):
                            "model_error_6h_c": model["error_6h_c"], "heat_loss_kw_per_c": model["heat_loss_kw_per_c"],
                            "house_time_constant_h": model["time_constant_h"], "heat_lag_min": model["lag_min"],
                            "hours_per_degree_at_50c": model["hours_per_degree"], "model_emitter": model["emitter"]})
+            age = self.hub.model_age_min(self.room_id)  # E32 1.4.6: the model comes from its own retained topic
+            if age is not None:
+                result["model_age_min"] = age
+        free_age = self.hub.free_heat_age_min(self.room_id)  # E32 1.4.6: the message left the free heat out and said so
+        if free_age is not None:
+            result["free_heat_age_min"] = free_age
         return result
 
 
@@ -3348,7 +3437,7 @@ async def async_setup_heating_link(hass, entry, async_add_entities, **options):
     entry.async_on_unload(hub.add_listener(follow, first=True))
     await async_subscribe_all(hass, entry, [base + topic for topic in (
         AVAILABILITY_TOPIC, HEARTBEAT_TOPIC, HEATING_TOPIC, ROOM_TOPIC + "+", BLE_TOPIC + "+", TRV_TOPIC + "+", PLAN_TOPIC,
-        ENTITIES_TOPIC, ENTITIES_TOPIC + "/+", LEARNED_TOPIC + "+", SUMMARY_TOPIC, FLOW_TOPIC, TUNING_TOPIC, SCOREBOARD_TOPIC,
+        ENTITIES_TOPIC, ENTITIES_TOPIC + "/+", LEARNED_TOPIC + "+", MODEL_TOPIC + "+", SUMMARY_TOPIC, FLOW_TOPIC, TUNING_TOPIC, SCOREBOARD_TOPIC,
         INSIGHT_TOPIC, SHADOW_TOPIC, READINESS_TOPIC, CIRCUIT_TOPIC + "+", PROBES_TOPIC, HEATING_PLAN_TOPIC)], receive)
     entry.async_on_unload(async_track_time_interval(hass, refresh, timedelta(seconds=REFRESH_SECONDS)))
     entry.async_on_unload(async_track_time_interval(hass, hub.check_stale, STALE_CHECK))

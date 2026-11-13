@@ -1,3 +1,102 @@
+# HA 1.4.6 — "runs its own program" at once, a Heating plan sensor that is never Unknown, no more surprise after a tado write
+<!-- user-release-notes:v2:en -->
+
+Companion of E32 1.4.6; also runs with E32 1.4.5 and older, with the limits
+under Updating. Needs Home Assistant 2026.10.0 or newer.
+
+## New
+
+- **A radiator valve or room thermostat that runs its own program says so at
+  once** (issue #15). The valve tile shows "running its own program" as soon as
+  the valve reports it, not up to an hour later, and the room screen's setting
+  device line shows "Running its own program" while the device reports it.
+- **The Heating plan sensor always says something.** While the E32 does not
+  plan (still learning, checking its plans, ready for your confirmation) or
+  Home Assistant waits for the E32, it shows a few words such as "Not planning
+  (still learning)" instead of Unknown or Unavailable. With a next start it
+  shows that time as before.
+- **A new room's "Last 24 hours" says what is missing.** A room that has no
+  measurements to draw yet says "Not yet 24 hours of measurements." instead of
+  showing an empty frame; the line appears by itself once there are some.
+- **A room's learned model is there at once after Home Assistant restarts**
+  (needs E32 1.4.6).
+- **The learning texts say what an E32 1.4.6 really does.** After a morning
+  more than 10 minutes early or late, a room says "next time it starts a
+  little earlier (at most a quarter of an hour a morning)", or later, instead
+  of a number of minutes. Home Assistant picks the wording from the E32's
+  firmware version: an older E32 keeps the old sentence, and while the version
+  is not known yet it says less, never more.
+- **The Learning tab says how far a room's warm-up time is** (needs E32
+  1.4.6): still learning, with how many of its last mornings count; adjusting;
+  learned; or not learned for now, with the reason. The last mornings follow
+  in words ("1 h 6 min early, on time, not warm within 3 hours"). "Warm on
+  time" turns green only when the E32 says learned; until 1.4.5 it did after
+  three judged mornings, whatever they were.
+- **A valve that fell back to its own sensor is shown** (needs E32 1.4.6).
+  The valve tile says "on its own sensor"; its tooltip says the E32 is putting
+  it back on the room's sensor. It is not a Repair.
+- **"Learned water temperature" is never Unknown.** While the E32 reports
+  none, it shows the last one it reported, with the time, or "Not learned
+  yet". It is still Unavailable while the E32 is silent, like the other
+  water sensors.
+
+## Fixed
+
+- **A setting device that falls back to its old target is no longer taken
+  for a person at the knob.** Some devices (a tado, for example) report their
+  old target for a moment after Home Assistant wrote a new one. Home Assistant
+  now writes the room's target once more instead of treating it as a manual
+  change; a person who turns the knob still wins.
+- **Connect E32 no longer reads the E32's old room list** when it checks the
+  link.
+
+## Updating
+
+Update under Settings → Updates (Marketplace) and restart Home Assistant. E32
+1.4.6 is installed from its file on the E32's own Firmware update page
+(Recovery); the Firmware entity offers no E32 update for now. You do not
+confirm the takeover again.
+
+- Entities, IDs and history stay; nothing of this integration is removed or
+  renamed.
+- The Heating plan sensor shows words, not a time, while nothing is to start.
+  An automation that uses its time should check that the state is a time.
+- With E32 1.4.5 everything works; the learned model after a restart, and the
+  items in the E32 notes, need E32 1.4.6.
+- With E32 1.4.6 on HA 1.4.5 everything works; Home Assistant 1.4.5 shows no
+  finding for a valve that is being put back on the room's sensor, a takeover
+  repair says "before its firmware was updated" whatever the reason, and its
+  line "next time it starts about 40 min earlier" is wrong for E32 1.4.6.
+
+## Not in this release
+
+- Several rooms on one boiler, a floor whose pump starts only at about 45
+  degC, and a room that has not learned how fast it warms: see the E32 notes.
+- Floor heating is not yet warm on time on most mornings; see the E32 notes.
+- The sentences "Smart warm-up: starts at 07:20 so it is 21 °C at 09:00" and
+  "warm on time" say what the E32 aims at. They are not a promise: floor
+  heating is often late, and a room can be early (see the E32 notes).
+
+## Limitations
+
+- A room shows its Smart warm-up start and its advice only when the E32 has
+  learned enough; until then the card says what it still needs.
+- Sentences in sensors (what the E32 learned, the advice) are in Home
+  Assistant's language; the cards use yours.
+- A Zigbee2MQTT valve gets "running its own program" at once only when Home
+  Assistant has a single climate entity with the valve's name; otherwise it
+  shows what the E32 reports, up to an hour later.
+- When a room's start is already an hour away from the E32's own estimate,
+  Home Assistant can still say "next time it starts a little earlier" where
+  the E32 1.4.6 cannot move the start further; Home Assistant cannot see that
+  estimate.
+- With E32 1.4.6 a room that is "not learned for now" can still show the
+  Learning card's "Learned" mark for its warm-up and cooling figures: those
+  are other facts than the warm-up time.
+- Boiler settings stay a preview until a real boiler has confirmed them.
+- Radiator valve control has run on a few real valves only; a Sonoff TRV Gen2
+  reports no valve position.
+
 # HA 1.4.5 — the hot water flow on the Boiler tab, a lighter settings panel, cards that fit a narrow phone
 <!-- user-release-notes:v2:en -->
 

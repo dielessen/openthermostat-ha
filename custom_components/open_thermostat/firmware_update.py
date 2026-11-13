@@ -347,6 +347,14 @@ class E32FirmwareUpdate(UpdateEntity):
                 and time.monotonic() - self._confirmed_at
                 < (VERSION_READ_INTERVAL - VERSION_READ_SLACK).total_seconds())
 
+    def _tell_hub(self, version):
+        """HA-VERSION-START: what was just read is the hub's firmware version too (learned_overview.slow_correction
+        reads it). The start-up read thus makes it known after a Home Assistant start, not only after an E32
+        restart. No listener is told: this entity has the version already."""
+        hub = self._hub()
+        if hub is not None and hasattr(hub, "firmware_version") and type(version) is str and version:
+            hub.firmware_version = version
+
     async def _read_version(self):
         """The installed version from the E32. Only a successful read changes it: an unreachable or busy E32
         (restarting, all web sessions in use) or a refused password keeps the last known one (and its channel).
@@ -360,6 +368,7 @@ class E32FirmwareUpdate(UpdateEntity):
             self._confirmed_at = time.monotonic()
             self._failures = 0
             self._cancel_retry()
+            self._tell_hub(version.get("version"))
         except ControllerLoginRejected:
             pass  # Repairs asks for the new password; no retries until then
         except (ControllerLinkError, TimeoutError) as err:

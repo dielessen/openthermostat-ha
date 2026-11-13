@@ -121,6 +121,9 @@ TEXT = {
         "path.plant": "Lowest flame of the boiler", "path.outlook": "Weather outlook",
         "detail.of": "{n} of {m}", "detail.days": "{n} of {m} days good", "detail.mornings": "{n} more mornings",
         "detail.morning": "1 more morning",
+        # 1.4.6: the lead guard's state (learned_overview.lead_guard), for the morning check "Warm on time {room}"
+        "detail.lead_collecting": "{n} of 5 mornings count", "detail.lead_none": "no morning counts yet",
+        "detail.lead_checking": "adjusting", "detail.lead_held": "not learned for now",
     },
     "nl": {
         "missing.warmup": "Hij moet nog zien hoe snel {room} opwarmt.",
@@ -186,6 +189,8 @@ TEXT = {
         "path.plant": "Kleinste vlam van de ketel", "path.outlook": "Weersverwachting",
         "detail.of": "{n} van {m}", "detail.days": "{n} van {m} dagen goed", "detail.mornings": "nog {n} ochtenden",
         "detail.morning": "nog 1 ochtend",
+        "detail.lead_collecting": "{n} van 5 ochtenden tellen mee", "detail.lead_none": "nog geen ochtend telt mee",
+        "detail.lead_checking": "past aan", "detail.lead_held": "voorlopig niet geleerd",
     },
 }
 
@@ -260,6 +265,18 @@ def _uses_models(hub, kinds):
     return any(type(item) is dict and type(item.get("model")) is dict for item in learned.values())
 
 
+def _lead_detail(guard, t):
+    """What the E32's lead guard still needs, in a few words, or None when it is learned."""
+    state = guard["state"]
+    if state == "collecting":
+        from .learned_overview import lead_counted
+        counted, listed = lead_counted(guard)
+        if guard["clean"] is None or counted >= 5:
+            return None
+        return t["detail.lead_none"] if listed == 0 else t["detail.lead_collecting"].format(n=counted)
+    return {"checking": t["detail.lead_checking"], "held": t["detail.lead_held"]}.get(state)
+
+
 def _detail(kind, room_id, hub, summary, lang):
     """What is still needed for a busy part, in the unit of its learning ("4 of 6", "2 more mornings"), or None."""
     t = TEXT[lang]
@@ -272,6 +289,9 @@ def _detail(kind, room_id, hub, summary, lang):
     if kind == "arrival":
         plan = (getattr(hub, "warmup", None) or {}).get(room_id) or {}
         arrival = plan.get("arrival") if type(plan) is dict and type(plan.get("arrival")) is dict else {}
+        from .learned_overview import lead_guard
+        if (guard := lead_guard(arrival)) is not None:  # E32 1.4.6: what its lead guard says, not a count of mornings
+            return _lead_detail(guard, t)
         events = arrival.get("events")
         if type(events) is int and 0 <= events < ARRIVAL_TRUSTED:
             left = ARRIVAL_TRUSTED - events
@@ -290,6 +310,13 @@ def _detail(kind, room_id, hub, summary, lang):
         if type(windows) is int and 0 <= windows < CURVE_STEPS:
             return t["detail.of"].format(n=windows, m=CURVE_STEPS)
     return None
+
+
+def _lead_guard(hub, room_id):
+    """The room's lead guard (learned_overview.lead_guard) from its plan, or None (E32 1.4.5 and older: no ``state``)."""
+    from .learned_overview import lead_guard
+    plan = (getattr(hub, "warmup", None) or {}).get(room_id) or {}
+    return lead_guard(plan.get("arrival") if type(plan) is dict else None)
 
 
 def knowledge_path(part, hub, summary, names, lang):
@@ -315,10 +342,15 @@ def knowledge_path(part, hub, summary, names, lang):
         for room_id in (rooms if per_room else [None]):
             key = f"{kind}:{room_id}" if room_id else kind
             name = t["path." + kind].format(room=names.get(room_id, room_id) if room_id else "")
+            guard = _lead_guard(hub, room_id) if kind == "arrival" else None
             if key in missing:
                 state, detail = "busy", _detail(kind, room_id, hub, summary, lang)
+            elif guard is not None and guard["state"] != "learned":
+                state, detail = "busy", _detail(kind, room_id, hub, summary, lang)  # the E32 says it is not learned
             elif not complete:
                 state, detail = "unknown", None  # the E32 left keys out of its list: this one may be among them
+            elif guard is not None:
+                state, detail = "learned", None  # the E32's lead guard says learned (and the room is not in its missing list)
             elif kind == "arrival":
                 plan = (getattr(hub, "warmup", None) or {}).get(room_id) or {}
                 arrival = plan.get("arrival") if type(plan) is dict and type(plan.get("arrival")) is dict else {}

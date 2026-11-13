@@ -48,7 +48,7 @@ import time
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.const import PERCENTAGE, EntityCategory
+from homeassistant.const import EVENT_STATE_CHANGED, PERCENTAGE, EntityCategory
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er, issue_registry as ir
@@ -443,8 +443,9 @@ def driven_text(count, lang="en"):
 # E32 1.4.2 (B21, TrvControl.h): the watch's finding on a driven valve, ``held`` = [state, corrections since start, unix
 # s | null], present only once there is one. ok: nothing wrong now; put_back: a turned setpoint was put back to the
 # room's; own_schedule: it shows its own program (being set to manual); off_by_user: someone switched it off (left
-# alone); gave_up: three tries did not hold.
-HELD = ("ok", "put_back", "own_schedule", "off_by_user", "gave_up")
+# alone); gave_up: three tries did not hold. E32 1.4.6 (FW-TRV-READBACK, issue #19): own_sensor: the valve fell back to
+# its own temperature sensor (a Sonoff TRV-ZBT after a restart) and the E32 is putting it back on the room's sensor.
+HELD = ("ok", "put_back", "own_schedule", "own_sensor", "off_by_user", "gave_up")
 
 
 def held(valve):
@@ -463,7 +464,36 @@ def _number(value):
     return value if type(value) in (int, float) else None
 
 
-def valve_attributes(room, status_room=None):
+@callback
+def _is_climate_event(data):
+    return str(data.get("entity_id", "")).startswith("climate.")
+
+
+def own_program_names(hass, room):
+    """The valves of a room document whose climate entity in Home Assistant reports its own program right now
+    (HA-OWN-PROGRAM, 1.4.6: hvac_mode "auto" or a schedule preset, e32_setting_device.schedule_mode): the valve named
+    by an entity id (Home Assistant's own valves), else the one climate entity whose friendly name is the valve's
+    name (a Zigbee2MQTT valve), if exactly one has it. Empty without hass (or a test stand-in without states)."""
+    if getattr(hass, "states", None) is None:
+        return set()
+    from .e32_setting_device import schedule_mode
+    out, states = set(), None
+    for v in (room or {}).get("valves", []):
+        name = v.get("name")
+        if type(name) is not str:
+            continue
+        state = hass.states.get(name) if name.startswith("climate.") else None
+        if state is None and not name.startswith("climate."):
+            if states is None:
+                states = hass.states.async_all("climate")
+            found = [s for s in states if str(s.attributes.get("friendly_name") or "").casefold() == name.casefold()]
+            state = found[0] if len(found) == 1 else None
+        if state is not None and schedule_mode(state) is not None:
+            out.add(name)
+    return out
+
+
+def valve_attributes(room, status_room=None, hass=None):
     """The Valve position sensor's attributes: per valve the E32's own keys (as reported) and, 1.4.3 (CONTRACT-1.4.3
     §2, the Rooms view's room card), ``position`` (0..100 or None), ``set_to_c`` (the temperature it was given, only
     for a valve driven by temperature), ``battery`` (% or None) and the watch's finding ``held``, ``held_count`` and
@@ -477,12 +507,25 @@ def valve_attributes(room, status_room=None):
 
     1.4.5 (FW-TRV-DOC-145): ``trimmed`` (True or False): the E32 shortened the room's valve document to fit its size
     limit (a moment, old readings, the model, a finding or readings left out, the valve heard least recently first);
-    only the Diagnostics valve list says so. False on firmware without it."""
+    only the Diagnostics valve list says so. False on firmware without it.
+
+    1.4.6 (HA-OWN-PROGRAM, issue #15): a valve whose climate entity reports its own program right now (own_program_names)
+    is shown as ``held`` "own_schedule" at once, instead of "ok", "put_back" or "own_sensor" (the E32 says it only at its
+    next write of the mode, up to an hour later); "off_by_user" and "gave_up" stay the E32's. It goes with the entity's
+    report.
+
+    1.4.6 (FW-TRV-READBACK, issue #19): ``held`` "own_sensor" is the E32's own finding that a valve fell back to its own
+    temperature sensor (and is being put back on the room's): shown, not dropped. The order where two findings could
+    show: gave_up and off_by_user (the E32's, as reported) first, then own_schedule (what the valve's climate entity
+    reports now), then own_sensor, put_back, ok."""
     found = {id(v) for v in driven(room)}
+    own_program = own_program_names(hass, room)
     given = set_to(room, status_room) if found else None
     out = []
     for v in room.get("valves", []):
         state, count, at = held(v)
+        if v.get("name") in own_program and state in (None, "ok", "put_back", "own_sensor"):
+            state, count = "own_schedule", count if count is not None else 0
         own = _number(v.get("setpoint_c")) if id(v) in found else None
         source = "valve" if own is not None else "room" if id(v) in found and given is not None else None
         size = v.get("bytes") if v.get("health") == TOO_LARGE and type(v.get("bytes")) is int and v["bytes"] > 0 else None
@@ -524,6 +567,22 @@ class ValvePositionSensor(ValveEntity, SensorEntity):
 
     def __init__(self, hub, room):
         super().__init__(hub, room, "valve_position")
+        self._own_program = frozenset()
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        # HA-OWN-PROGRAM (1.4.6): a valve's climate entity going to (or off) its own program shows at once, not with
+        # the E32's next report. Only a change of the set of such valves writes (_hub_changed does the rest).
+        self._own_program = frozenset(own_program_names(self.hass, self.valves))
+        self.async_on_remove(self.hass.bus.async_listen(
+            EVENT_STATE_CHANGED, self._climate_changed, event_filter=_is_climate_event))
+
+    @callback
+    def _climate_changed(self, _event):
+        now = frozenset(own_program_names(self.hass, self.valves))
+        if now != self._own_program:
+            self._own_program = now
+            self._hub_changed()
 
     @property
     def native_value(self):
@@ -532,7 +591,7 @@ class ValvePositionSensor(ValveEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        attributes = valve_attributes(self.valves or {}, self.room)
+        attributes = valve_attributes(self.valves or {}, self.room, getattr(self, "hass", None))
         lang = language(getattr(self, "hass", None))
         found = driven(self.valves)
         own = [shown_name(v["name"], lang) for v in found if v.get("model") != HA_MODEL]

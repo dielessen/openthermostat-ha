@@ -2690,7 +2690,6 @@
       "controller_unreachable": "De E32 is niet bereikbaar. Controleer het adres en de netwerkverbinding.",
       "controller_update_required": "De firmware op deze E32 is te oud voor deze versie van de integratie. Werk de E32 eerst bij: open op zijn webpagina Systeem → Firmware bijwerken en installeer de nieuwste release; verbind daarna opnieuw.",
       "controller_busy_or_conflict": "De E32 wordt bijgewerkt of herstart, of wacht op een herstart. Wacht tot zijn webpagina weer normaal opent (herstart hem daar via Systeem → Apparaat herstarten als hij daarom vraagt) en probeer het opnieuw.",
-      "controller_legacy_rooms_present": "De E32 heeft nog ruimtes uit zijn oudere zelfstandige opzet. Werk de E32 bij naar de nieuwste firmware (Instellingen → Updates → OpenThermostat E32 Firmware); die ruimt ze op. Verbind daarna opnieuw.",
       "controller_broker_setup_required": "De E32 heeft eerst een eigen MQTT-login nodig. Open op de E32 Systeem → Instellingen → Home Assistant → MQTT-broker, vink “Verbinding met de MQTT-broker” aan, vul het adres en de poort van de broker en een gebruikersnaam en wachtwoord voor de broker in, sla op en laat de E32 herstarten. Zonder login maakt de E32 via een broker geen verbinding met Home Assistant.",
       "controller_source_conflict": "Deze E32 is al gekoppeld aan een andere OpenThermostat-installatie, of deze installatie was eerder aan een andere E32 gekoppeld. Controleer eerst of het adres bij de juiste E32 hoort. Om deze E32 naar deze installatie te verhuizen: open op zijn webpagina Systeem → Instellingen, onderdeel Home Assistant: haal het vinkje weg bij “Koppeling met Home Assistant”, maak het installatieprofiel onder “Installatiekoppeling en regelgrenzen (geavanceerd)” leeg als dat er staat, kies Instellingen opslaan en laat de E32 herstarten; verbind daarna opnieuw.",
       "controller_settings_too_large": "De configuratie overschrijdt de opslagruimte van de E32. Er wordt niet automatisch opnieuw geprobeerd.",
@@ -4882,7 +4881,7 @@
         "step": {
           "reconfirm_takeover": {
             "title": "Bevestig opnieuw dat de E32 de ketel mag regelen",
-            "description": "De E32 regelde je ketel voordat zijn firmware werd bijgewerkt. Voor de veiligheid neemt de nieuwe firmware de regeling pas weer over als je nog een keer bevestigt dat er geen andere thermostaat op de ketel is aangesloten. Tot dan houdt de E32 alleen de vorstbeveiliging aan, en alleen zolang er geen andere thermostaat op de ketelbus te horen is.\n\nBevestig alleen als er geen andere thermostaat is aangesloten: sluit nooit twee thermostaten tegelijk op de ketel aan. Wil je de regeling in plaats daarvan teruggeven, open dan op de E32 de pagina Ruimtes → Actieve regeling."
+            "description": "De E32 regelde je ketel voordat zijn firmware werd bijgewerkt. Voor de veiligheid neemt de nieuwe firmware de regeling pas weer over als je nog een keer bevestigt dat er geen andere thermostaat op de ketel is aangesloten. Tot dan houdt de E32 alleen de vorstbeveiliging aan, en alleen zolang er geen andere thermostaat op de ketelbus te horen is.\n\nBevestig alleen als er geen andere thermostaat is aangesloten: sluit nooit twee thermostaten tegelijk op de ketel aan. Je kunt ook bevestigen op de E32 bij Ketel → Keteltest en overname. Wil je de regeling in plaats daarvan teruggeven, open dan op de E32 de pagina Ruimtes → Actieve regeling."
           }
         },
         "error": {
@@ -4897,7 +4896,7 @@
           "e32_rooms_unavailable": "De ruimtes zijn nu niet van de E32 te lezen. Probeer het zo opnieuw."
         }
       },
-      "description": "De E32 stuurde je ketel aan vóór de firmware-update. Hij wacht nu op jou voordat hij het weer overneemt, zodat nooit twee thermostaten tegelijk de ketel sturen. Tot dan houdt hij alleen vorstbeveiliging aan. Kies Oplossen en bevestig dat er geen andere thermostaat op de ketel is aangesloten."
+      "description": "De E32 stuurde je ketel aan vóór de firmware-update. Hij wacht nu op jou voordat hij het weer overneemt, zodat nooit twee thermostaten tegelijk de ketel sturen. Tot dan houdt hij alleen vorstbeveiliging aan. Kies Oplossen en bevestig dat er geen andere thermostaat op de ketel is aangesloten, of bevestig op de E32 bij Ketel → Keteltest en overname."
     },
     "reconfirm_takeover_thermostat": {
       "title": "Bevestig opnieuw dat de E32 de ketel mag regelen",
@@ -4905,7 +4904,7 @@
         "step": {
           "reconfirm_takeover": {
             "title": "Bevestig opnieuw dat de E32 de ketel mag regelen",
-            "description": "De E32 regelde je ketel voordat zijn firmware werd bijgewerkt. Voor de veiligheid neemt de nieuwe firmware de regeling pas weer over als je nog een keer bevestigt dat je oude thermostaat nog steeds van de ketel is losgekoppeld. Tot dan houdt de E32 alleen de vorstbeveiliging aan, en alleen zolang er geen andere thermostaat op de ketelbus te horen is.\n\nBevestig alleen als de oude thermostaat is losgekoppeld: sluit nooit twee thermostaten tegelijk op de ketel aan. Wil je de regeling in plaats daarvan teruggeven, open dan op de E32 de pagina Ruimtes → Actieve regeling → Regeling teruggeven aan mijn thermostaat."
+            "description": "De E32 regelde je ketel voordat zijn firmware werd bijgewerkt. Voor de veiligheid neemt de nieuwe firmware de regeling pas weer over als je nog een keer bevestigt dat je oude thermostaat nog steeds van de ketel is losgekoppeld. Tot dan houdt de E32 alleen de vorstbeveiliging aan, en alleen zolang er geen andere thermostaat op de ketelbus te horen is.\n\nBevestig alleen als de oude thermostaat is losgekoppeld: sluit nooit twee thermostaten tegelijk op de ketel aan. Je kunt ook bevestigen op de E32 bij Ketel → Keteltest en overname. Wil je de regeling in plaats daarvan teruggeven, open dan op de E32 de pagina Ruimtes → Actieve regeling → Regeling teruggeven aan mijn thermostaat."
           }
         },
         "error": {
@@ -4920,7 +4919,76 @@
           "e32_rooms_unavailable": "De ruimtes zijn nu niet van de E32 te lezen. Probeer het zo opnieuw."
         }
       },
-      "description": "De E32 stuurde je ketel aan vóór de firmware-update. Hij wacht nu op jou voordat hij het weer overneemt, zodat nooit twee thermostaten tegelijk de ketel sturen. Tot dan houdt hij alleen vorstbeveiliging aan. Kies Oplossen en bevestig dat je oude thermostaat nog van de ketel is losgekoppeld."
+      "description": "De E32 stuurde je ketel aan vóór de firmware-update. Hij wacht nu op jou voordat hij het weer overneemt, zodat nooit twee thermostaten tegelijk de ketel sturen. Tot dan houdt hij alleen vorstbeveiliging aan. Kies Oplossen en bevestig dat je oude thermostaat nog van de ketel is losgekoppeld, of bevestig op de E32 bij Ketel → Keteltest en overname."
+    },
+    "reconfirm_takeover_boiler": {
+      "title": "Andere ketel: bevestig de overname opnieuw",
+      "fix_flow": {
+        "step": {
+          "reconfirm_takeover": {
+            "title": "Andere ketel: bevestig de overname opnieuw",
+            "description": "De E32 hoort een andere ketel dan de ketel waarvoor je de overname bevestigde (een ander model of een andere versie), bijvoorbeeld nadat de ketel of zijn regelprint is vervangen. Voor de veiligheid regelt hij deze ketel pas als je bevestigt dat er geen andere thermostaat op is aangesloten. Tot dan houdt de E32 alleen de vorstbeveiliging aan, en alleen zolang er geen andere thermostaat op de ketelbus te horen is.\n\nBevestig alleen als er geen andere thermostaat is aangesloten: sluit nooit twee thermostaten tegelijk op de ketel aan. Je kunt ook bevestigen op de E32 bij Ketel → Keteltest en overname. Wil je de regeling in plaats daarvan teruggeven, open dan op de E32 de pagina Ruimtes → Actieve regeling."
+          }
+        },
+        "error": {
+          "reconfirm_not_released": "Deze E32-firmware laat de E32 de ketel niet regelen. Er is niets gewijzigd.",
+          "reconfirm_unconfirmed": "De E32 heeft het niet bevestigd. Kijk op de E32 bij Ruimtes → Actieve regeling.",
+          "e32_unreachable": "De E32 is nu niet bereikbaar. Probeer het zo opnieuw.",
+          "e32_password_change_required": "De E32 gebruikt nog het standaardwachtwoord en accepteert geen wijzigingen. Kies eerst een nieuw E32-wachtwoord (Instellingen → Reparaties → “E32 gebruikt nog het standaardwachtwoord”) en bevestig dan hier."
+        },
+        "abort": {
+          "reconfirm_done": "De E32 wacht niet meer op een bevestiging.",
+          "reconfirm_plan_not_active": "Het ruimteplan is niet meer actief, dus er valt niets te bevestigen.",
+          "e32_rooms_unavailable": "De ruimtes zijn nu niet van de E32 te lezen. Probeer het zo opnieuw."
+        }
+      },
+      "description": "De E32 stuurde je ketel aan, maar na zijn herstart hoort hij een andere ketel (een ander model of een andere versie) dan de ketel waarvoor je de overname bevestigde. Hij regelt deze ketel pas als je opnieuw bevestigt. Tot dan houdt hij alleen vorstbeveiliging aan. Controleer dat er geen andere thermostaat op de ketel is aangesloten en kies Oplossen, of bevestig op de E32 bij Ketel → Keteltest en overname."
+    },
+    "reconfirm_takeover_route": {
+      "title": "De E32 praat anders met de ketel: bevestig de overname opnieuw",
+      "fix_flow": {
+        "step": {
+          "reconfirm_takeover": {
+            "title": "De E32 praat anders met de ketel: bevestig de overname opnieuw",
+            "description": "De E32 praat nu op een andere manier met je ketel dan toen je de overname bevestigde: de ketel meldt zich in een ander protocol, of deze firmware vraagt hem op een andere manier om warmte. Voor de veiligheid regelt hij de ketel zo pas als je opnieuw bevestigt dat er geen andere thermostaat is aangesloten. Tot dan houdt de E32 alleen de vorstbeveiliging aan, en alleen zolang er geen andere thermostaat op de ketelbus te horen is.\n\nBevestig alleen als er geen andere thermostaat is aangesloten: sluit nooit twee thermostaten tegelijk op de ketel aan. Je kunt ook bevestigen op de E32 bij Ketel → Keteltest en overname. Wil je de regeling in plaats daarvan teruggeven, open dan op de E32 de pagina Ruimtes → Actieve regeling."
+          }
+        },
+        "error": {
+          "reconfirm_not_released": "Deze E32-firmware laat de E32 de ketel niet regelen. Er is niets gewijzigd.",
+          "reconfirm_unconfirmed": "De E32 heeft het niet bevestigd. Kijk op de E32 bij Ruimtes → Actieve regeling.",
+          "e32_unreachable": "De E32 is nu niet bereikbaar. Probeer het zo opnieuw.",
+          "e32_password_change_required": "De E32 gebruikt nog het standaardwachtwoord en accepteert geen wijzigingen. Kies eerst een nieuw E32-wachtwoord (Instellingen → Reparaties → “E32 gebruikt nog het standaardwachtwoord”) en bevestig dan hier."
+        },
+        "abort": {
+          "reconfirm_done": "De E32 wacht niet meer op een bevestiging.",
+          "reconfirm_plan_not_active": "Het ruimteplan is niet meer actief, dus er valt niets te bevestigen.",
+          "e32_rooms_unavailable": "De ruimtes zijn nu niet van de E32 te lezen. Probeer het zo opnieuw."
+        }
+      },
+      "description": "De E32 stuurde je ketel aan, maar hij praat nu op een andere manier met de ketel dan toen je de overname bevestigde. Hij regelt de ketel zo pas als je opnieuw bevestigt. Tot dan houdt hij alleen vorstbeveiliging aan. Controleer dat er geen andere thermostaat op de ketel is aangesloten en kies Oplossen, of bevestig op de E32 bij Ketel → Keteltest en overname."
+    },
+    "reconfirm_takeover_unchecked": {
+      "title": "De E32 kon de ketel niet controleren: bevestig de overname opnieuw",
+      "fix_flow": {
+        "step": {
+          "reconfirm_takeover": {
+            "title": "De E32 kon de ketel niet controleren: bevestig de overname opnieuw",
+            "description": "Na zijn herstart kon de E32 niet nagaan of het nog dezelfde ketel is als die waarvoor je de overname bevestigde: de ketel gaf zijn model en versie niet door, of de bewaarde bevestiging was niet te lezen. Voor de veiligheid regelt hij de ketel pas als je opnieuw bevestigt dat er geen andere thermostaat is aangesloten. Tot dan houdt de E32 alleen de vorstbeveiliging aan, en alleen zolang er geen andere thermostaat op de ketelbus te horen is.\n\nBevestig alleen als er geen andere thermostaat is aangesloten: sluit nooit twee thermostaten tegelijk op de ketel aan. Je kunt ook bevestigen op de E32 bij Ketel → Keteltest en overname. Wil je de regeling in plaats daarvan teruggeven, open dan op de E32 de pagina Ruimtes → Actieve regeling."
+          }
+        },
+        "error": {
+          "reconfirm_not_released": "Deze E32-firmware laat de E32 de ketel niet regelen. Er is niets gewijzigd.",
+          "reconfirm_unconfirmed": "De E32 heeft het niet bevestigd. Kijk op de E32 bij Ruimtes → Actieve regeling.",
+          "e32_unreachable": "De E32 is nu niet bereikbaar. Probeer het zo opnieuw.",
+          "e32_password_change_required": "De E32 gebruikt nog het standaardwachtwoord en accepteert geen wijzigingen. Kies eerst een nieuw E32-wachtwoord (Instellingen → Reparaties → “E32 gebruikt nog het standaardwachtwoord”) en bevestig dan hier."
+        },
+        "abort": {
+          "reconfirm_done": "De E32 wacht niet meer op een bevestiging.",
+          "reconfirm_plan_not_active": "Het ruimteplan is niet meer actief, dus er valt niets te bevestigen.",
+          "e32_rooms_unavailable": "De ruimtes zijn nu niet van de E32 te lezen. Probeer het zo opnieuw."
+        }
+      },
+      "description": "De E32 stuurde je ketel aan, maar na zijn herstart kon hij niet nagaan of het nog de ketel is waarvoor je de overname bevestigde. Hij regelt de ketel pas als je opnieuw bevestigt. Tot dan houdt hij alleen vorstbeveiliging aan. Controleer dat er geen andere thermostaat op de ketel is aangesloten en kies Oplossen, of bevestig op de E32 bij Ketel → Keteltest en overname."
     },
     "device_own_schedule": {
       "title": "{device} lijkt een eigen programma te draaien",

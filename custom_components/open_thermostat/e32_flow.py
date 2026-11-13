@@ -37,7 +37,9 @@ only once the E32 reports its part:
 - "Flow source": what sets the flow now (room control, heating curve, learned
   flow, optimum start), with yesterday's comparison in the attributes;
 - "Heating curve flow" and "Learned flow" (diagnostic): what each would ask
-  for now, in use or as advice; "Room control flow" and "Heating curve slope"
+  for now, in use or as advice (1.4.6: "Learned water temperature" is never Unknown: while the E32 reports none it
+  keeps the last value it reported, kept over a restart, with ``last_reported`` and a sentence, and before there has
+  been one it says "Not learned yet" in words); "Room control flow" and "Heating curve slope"
   (diagnostic, disabled by default);
 - "Gas calibration" (diagnostic): no meter / calibrating / calibrated (with its
   confidence) / meter not reporting, and "Boiler power at full burner"
@@ -65,6 +67,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import logging
+import time
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
@@ -73,6 +76,7 @@ from homeassistant.const import EntityCategory, UnitOfPower, UnitOfTemperature, 
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN
 from .heating_link import HubEntity, add_options, heating_hub, number, track_entities
@@ -97,13 +101,13 @@ SOURCES = ["rule", "curve", "learned", "optimum_start", "plan"]  # "plan": the E
 GAS_STATUSES = ["no_meter", "collecting", "calibrated", "meter_stale"]
 # The Learning view's cards (E32 rc.5), the sixth card module (week_planner.card_modules), versioned with the
 # manifest like the other card URLs: "Water temperature by outdoor temperature" and what the E32 knows (a ring).
-CURVE_CARD_URL = "/open_thermostat/heating-curve-card-1.4.5.js"
+CURVE_CARD_URL = "/open_thermostat/heating-curve-card-1.4.6.js"
 CURVE_CARD_TYPE = "custom:openthermostat-heating-curve"
 KNOWLEDGE_CARD_TYPE = "custom:openthermostat-knowledge"
 # 1.4.3 (LEARN-TAB, CONTRACT-1.4.3 §3): what the E32 learned from the boiler, as tiles (the same module as the curve).
 BOILER_LEARNED_CARD_TYPE = "custom:openthermostat-boiler-learned"
 # 1.4.3: the Learning view's card per room (frontend/learning-room-card.js), its own module, versioned like the others.
-LEARNING_ROOM_CARD_URL = "/open_thermostat/learning-room-card-1.4.5.js"
+LEARNING_ROOM_CARD_URL = "/open_thermostat/learning-room-card-1.4.6.js"
 LEARNING_ROOM_CARD_TYPE = "custom:openthermostat-learning-room"
 # WeatherCurve (src/control/WeatherCurve.h): the standard slope follows the water temperature in hard frost
 # (−10 °C outside) for a 20 °C room; automatic is floor heating 40 °C, radiators 55 °C; the slope's limits.
@@ -741,7 +745,19 @@ class FlowSourceSensor(FlowSummarySensor):
         return attributes
 
 
-class FlowTemperatureSensor(FlowSummarySensor):
+# 1.4.6 (HA-LEARN-TEXTS): "Learned water temperature" is never Unknown. The E32 leaves ``learned.flow_c`` out until it has
+# learned one (and after a demotion): the sensor then keeps the last value it reported (``last_reported``, a sentence
+# saying so), and says "Not learned yet" in words before the first one. The same unique id and entity id as before.
+KEEPS = ("flow_learned",)
+LEARNED_TEXT = {
+    "en": {"word": "Not learned yet", "none": "The E32 has not learned a water temperature yet.",
+           "kept": "The E32 does not report a learned water temperature right now; this is the last one it reported."},
+    "nl": {"word": "Nog niet geleerd", "none": "De E32 heeft nog geen watertemperatuur geleerd.",
+           "kept": "De E32 meldt nu geen geleerde watertemperatuur; dit is de laatste die hij meldde."},
+}
+
+
+class FlowTemperatureSensor(RestoreEntity, FlowSummarySensor):
     """A flow in °C: the heating curve's, the learned one or the room control's (what each asks for now)."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -755,6 +771,56 @@ class FlowTemperatureSensor(FlowSummarySensor):
         super().__init__(hub, key)
         self.block, self.field = self.PATHS[key]
         self._attr_entity_registry_enabled_default = key != "flow_rule"
+        self._kept = None  # (°C, unix s) the last learned value reported (KEEPS only)
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        if self.key_kept and self._kept is None:
+            last = await self.async_get_last_state()
+            try:
+                value = float(last.state) if last is not None else None
+            except (TypeError, ValueError):
+                value = None
+            if value is not None and 0 <= value <= 90:
+                # The moment the state was last changed: never newer than the truth (an unchanged value is older still).
+                self._kept = (_flow(value), last.last_updated.timestamp())
+
+    @property
+    def key_kept(self):
+        return self.block == "learned"
+
+    def _reported(self):
+        return _flow((self._block() or {}).get(self.field))
+
+    def _value(self):
+        """What the sensor shows: the E32's value; for KEEPS the last one reported while it reports none; else None."""
+        value = self._reported()
+        if not self.key_kept:
+            return value
+        if value is not None:
+            self._kept = (value, time.time())
+            return value
+        return self._kept[0] if self._kept is not None else None
+
+    def _words(self):
+        """KEEPS: no value now and none ever kept: the state is a few words, not a number."""
+        return self.key_kept and self._value() is None
+
+    def _lang(self):
+        from .learned_overview import language
+        return language(getattr(self, "hass", None))
+
+    @property
+    def device_class(self):
+        return None if self._words() else SensorDeviceClass.TEMPERATURE
+
+    @property
+    def state_class(self):
+        return None if self._words() else SensorStateClass.MEASUREMENT
+
+    @property
+    def native_unit_of_measurement(self):
+        return None if self._words() else UnitOfTemperature.CELSIUS
 
     def _chart(self, curve):
         """The heating-curve card's figures (curve_chart) from the E32's curve, options, plan, rooms and outdoor and
@@ -780,14 +846,24 @@ class FlowTemperatureSensor(FlowSummarySensor):
 
     @property
     def native_value(self):
-        return _flow((self._block() or {}).get(self.field))
+        value = self._value()
+        if value is None and self.key_kept:
+            return LEARNED_TEXT[self._lang()]["word"]
+        return value
 
     @property
     def extra_state_attributes(self):
         block = self._block()
-        if block is None or self.block is None:
+        if (block is None and not self.key_kept) or self.block is None:
             return None
         attributes = {"state": _text(block, "state")}
+        if self.key_kept and self._reported() is None:
+            text = LEARNED_TEXT[self._lang()]
+            if self._kept is None:
+                attributes["learned_text"] = text["none"]
+            else:
+                attributes["last_reported"] = datetime.fromtimestamp(self._kept[1], timezone.utc).isoformat()
+                attributes["learned_text"] = text["kept"]
         if self.block == "curve":
             # windows (E32 rc.3): the steady periods seen so far; the E32 uses the learned line from 6 (the Overview's
             # Today says so, dashboard._weather_line).

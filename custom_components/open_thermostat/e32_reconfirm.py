@@ -1,18 +1,30 @@
-"""Repairs: "Confirm the takeover again" after an E32 firmware update (beta.23, review S3).
+"""Repairs: "Confirm the takeover again" (beta.23, review S3; reasons since E32 1.4.6).
 
-The E32 controlled the boiler before the update; the new firmware does not take
-over again until the owner confirms once more that the E32 may control the
-boiler (``active.reconfirm_required`` in the heating status). Until then it keeps
-only frost protection. This issue offers that one confirmation
-(``POST /config/heating/handover``); the E32 checks it again (its firmware gate,
-the plan active) and answers with its active-control status. Handing back stays
-on the E32 Rooms page (Active control).
+The E32 controlled the boiler, but its stored confirmation no longer holds, so it
+does not take over again until the owner confirms once more that the E32 may
+control the boiler (``active.reconfirm_required`` in the heating status). Until
+then it keeps only frost protection. This is a fault that needs the owner (the
+house is not heated), so it is a Repair; it clears by itself once confirmed.
+This issue offers that one confirmation (``POST /config/heating/handover``); the
+E32 checks it again (its firmware gate, the plan active) and answers with its
+active-control status. The E32 Boiler page (Boiler test and takeover) confirms
+too; handing back stays on the E32 Rooms page (Active control).
 
-No existing thermostat is assumed (E32 rc.3): the words mention an old
+Up to E32 1.4.5 every firmware update asked again. Since 1.4.6 the confirmation
+is kept over an update while the boiler, its protocol and the route are the same
+(FW-TAKEOVER-KEEP), and the E32 says why it asks (``active.reconfirm_reason``):
+``boiler_changed`` -> ``reconfirm_takeover_boiler``, ``route_changed`` ->
+``reconfirm_takeover_route``, ``boiler_not_identified`` and
+``record_unreadable`` -> ``reconfirm_takeover_unchecked``. ``firmware`` (other
+takeover rules, or older firmware asked), no reason (E32 1.4.5 and older) or an
+unknown one keep the update words below.
+
+No existing thermostat is assumed (E32 rc.3): the update words mention an old
 thermostat only when the E32 ever heard another controller ask the boiler for
 heat (``active.thermostat_seen``, kept by the E32), with the translation key
 ``reconfirm_takeover_thermostat``; otherwise ``reconfirm_takeover`` says
-"confirm again that the E32 may control the boiler".
+"confirm again that the E32 may control the boiler". The reason words never
+assume one.
 """
 from __future__ import annotations
 
@@ -25,6 +37,9 @@ from .const import DOMAIN
 RECONFIRM_ISSUE = "reconfirm_takeover"
 # The same issue in the words of a home whose E32 once heard another thermostat on the boiler bus.
 RECONFIRM_THERMOSTAT_KEY = "reconfirm_takeover_thermostat"
+# E32 1.4.6: why it asks again -> the issue's words (any other reason: the update words).
+REASON_KEYS = {"boiler_changed": "reconfirm_takeover_boiler", "route_changed": "reconfirm_takeover_route",
+               "boiler_not_identified": "reconfirm_takeover_unchecked", "record_unreadable": "reconfirm_takeover_unchecked"}
 # The E32's refusals -> this flow's errors (plan_not_active ends it); anything else: not reachable.
 REFUSALS = {"active_mode_not_released": "reconfirm_not_released"}
 
@@ -53,8 +68,18 @@ def thermostat_seen(hub):
     return active is not None and active.get("thermostat_seen") is True
 
 
+def reconfirm_reason(hub):
+    """Why the E32 asks again (E32 1.4.6); None from older firmware or while it does not ask."""
+    active = _active(hub)
+    reason = active.get("reconfirm_reason") if active is not None else None
+    return reason if type(reason) is str else None
+
+
 def translation_key(hub):
-    """The issue's words: with the old thermostat only when the E32 heard one."""
+    """The issue's words: the E32's reason, else the update words, with the old thermostat only when it heard one."""
+    reason_key = REASON_KEYS.get(reconfirm_reason(hub))
+    if reason_key:
+        return reason_key
     return RECONFIRM_THERMOSTAT_KEY if thermostat_seen(hub) else RECONFIRM_ISSUE
 
 
@@ -69,7 +94,7 @@ def update_reconfirm_issue(hass, entry, hub):
             ir.async_delete_issue(hass, DOMAIN, key)
         return
     words, existing = translation_key(hub), registry.async_get_issue(DOMAIN, key)
-    if existing is None or existing.translation_key != words:  # new, or the E32 has heard a thermostat since
+    if existing is None or existing.translation_key != words:  # new, another reason, or a thermostat heard since
         ir.async_create_issue(hass, DOMAIN, key, is_fixable=True, is_persistent=False,
                               severity=ir.IssueSeverity.WARNING, translation_key=words,
                               data={"entry_id": entry.entry_id})

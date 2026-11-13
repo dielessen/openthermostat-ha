@@ -427,7 +427,7 @@ class InitialControllerLink:
     needs_reboot: bool
 
 
-def initial_controller_link(hass, entry, *, version, status, updates, settings, etag, rooms):
+def initial_controller_link(hass, entry, *, version, status, updates, settings, etag):
     """Derive one normal HA installation link from actual authenticated reads.
 
     Existing NativePlanSource selects logical policy only. Unknown measurement,
@@ -446,7 +446,7 @@ def initial_controller_link(hass, entry, *, version, status, updates, settings, 
             or entry.options.get(CONF_ENABLED, False) or actual_runtime_active(hass, entry)):
         raise ControllerLinkError("controller_runtime_off_required")
     if (type(version) is not dict or type(status) is not dict or type(updates) is not dict
-            or type(settings) is not dict or type(rooms) is not list):
+            or type(settings) is not dict):
         raise ControllerLinkError("controller_response_invalid")
     if status.get("controlMode") not in ("legacy", "shadow"):
         raise ControllerLinkError("controller_response_invalid")
@@ -474,8 +474,6 @@ def initial_controller_link(hass, entry, *, version, status, updates, settings, 
     if (updates.get("busy") is not False or updates.get("boot_pending") is not False
             or updates.get("reboot_required") is not False or updates.get("reboot_scheduled") is not False):
         raise ControllerLinkError("controller_busy_or_conflict")
-    if rooms:
-        raise ControllerLinkError("controller_legacy_rooms_present")
     mqtt = settings.get("mqtt")
     if (type(mqtt) is not dict or mqtt.get("enabled") is not True
             or type(mqtt.get("brokerAddress")) is not str or not mqtt["brokerAddress"]
@@ -559,8 +557,7 @@ async def async_prepare_controller_link(hass, entry, client):
     _link_guard(hass, entry, before, private_entry_state=private_before)
     observed = {}
     for key, path in (("version", "/status/version"), ("status", "/status"),
-                      ("updates", "/updates/status"), ("settings", "/config/device"),
-                      ("rooms", "/config/rooms")):
+                      ("updates", "/updates/status"), ("settings", "/config/device")):
         value = await client.async_read(path)
         _link_guard(hass, entry, before, private_entry_state=private_before)
         if key == "settings":
@@ -701,7 +698,7 @@ class ControllerClient:
     """One scoped operation using the existing firmware cookie/CSRF contract."""
 
     _reads = frozenset(("/auth/session", "/status/version", "/status", "/updates/status",
-                        "/config/device", "/config/rooms", HEATING_PLAN, HEATING_COMFORT, HEATING_FLOW,
+                        "/config/device", HEATING_PLAN, HEATING_COMFORT, HEATING_FLOW,
                         HEATING_TRV, "/status/heating", LOGGING, BOILER_DISPLAY, BLUETOOTH, BOILER_SETTINGS,
                         SHELLY_CONFIG, SHELLY_STATUS, *TESTER_READS))
     _writes = frozenset(("/auth/login", "/auth/logout", "/auth/password", "/config/device", "/updates/reboot",

@@ -44,6 +44,20 @@ const OWN = {
   arrival: '{when} warm at {at} ({how}).', arrival_never: '{when} not warm within 3 hours after {at}.',
   next_earlier: 'Next time it starts a little earlier.', next_later: 'Next time it starts a little later.',
   next_earlier_min: 'Next time it starts about {n} earlier.', next_later_min: 'Next time it starts about {n} later.',
+  next_earlier_slow: 'Next time it starts a little earlier (at most a quarter of an hour a morning).',
+  next_later_slow: 'Next time it starts a little later (at most a quarter of an hour a morning).',
+  lead_collecting: 'Still learning its warm-up time. {n} of its last {m} mornings count; it needs 5 that count.',
+  lead_collecting_one: 'Still learning its warm-up time. Its last morning counts; it needs 5 that count.',
+  lead_collecting_one_not: 'Still learning its warm-up time. Its last morning did not count; it needs 5 that count.',
+  lead_collecting_none: 'Still learning its warm-up time. No morning counts yet; it needs 5 that count.',
+  lead_collecting_plain: 'Still learning its warm-up time; it needs 5 mornings that count.',
+  lead_checking: 'Adjusting its warm-up time. It has 5 mornings that count, but fewer than 4 of them are within a quarter of an hour of the switch time.',
+  lead_learned: 'Learned. At least 4 of its last 5 mornings that count were within a quarter of an hour of the switch time.',
+  lead_held: 'Not learned for now. The E32 is watching its warm-up time.',
+  lead_held_evidence: 'Not learned for now. Too few of its recent mornings counted, so the E32 is watching its warm-up time.',
+  lead_held_step: 'Not learned for now. The correction moved a lot in one day, so the E32 is watching it.',
+  lead_held_range: 'Not learned for now. The correction is at its limit, so the E32 is watching it.',
+  lead_never: 'not warm within 3 hours', lead_mornings: 'Last mornings, oldest first: {list}.', lead_not_counted: '{what} (not counted)',
   model: 'Room model', model_collecting: 'collecting readings', model_checking: 'predictions {n} of {m} days good',
   model_trusted: 'trusted: its predictions hold', model_demoted: 'checking again: {n} of {m} days good',
   advice: 'Advice', advice_only: 'Advice only: your week program stays as it is.',
@@ -75,6 +89,20 @@ const OWN = {
   arrival: '{when} warm om {at} ({how}).', arrival_never: '{when} niet warm binnen 3 uur na {at}.',
   next_earlier: 'De volgende keer begint het iets eerder.', next_later: 'De volgende keer begint het iets later.',
   next_earlier_min: 'De volgende keer begint het ongeveer {n} eerder.', next_later_min: 'De volgende keer begint het ongeveer {n} later.',
+  next_earlier_slow: 'De volgende keer begint het iets eerder (hooguit een kwartier per ochtend).',
+  next_later_slow: 'De volgende keer begint het iets later (hooguit een kwartier per ochtend).',
+  lead_collecting: 'Leert zijn opwarmtijd nog. {n} van zijn laatste {m} ochtenden tellen mee; hij heeft er 5 nodig die meetellen.',
+  lead_collecting_one: 'Leert zijn opwarmtijd nog. Zijn laatste ochtend telt mee; hij heeft er 5 nodig die meetellen.',
+  lead_collecting_one_not: 'Leert zijn opwarmtijd nog. Zijn laatste ochtend telde niet mee; hij heeft er 5 nodig die meetellen.',
+  lead_collecting_none: 'Leert zijn opwarmtijd nog. Nog geen ochtend telt mee; hij heeft er 5 nodig die meetellen.',
+  lead_collecting_plain: 'Leert zijn opwarmtijd nog; hij heeft 5 ochtenden nodig die meetellen.',
+  lead_checking: 'Past zijn opwarmtijd aan. Hij heeft 5 ochtenden die meetellen, maar minder dan 4 daarvan liggen binnen een kwartier van de schakeltijd.',
+  lead_learned: 'Geleerd. Minstens 4 van zijn laatste 5 ochtenden die meetellen lagen binnen een kwartier van de schakeltijd.',
+  lead_held: 'Voorlopig niet geleerd. De E32 let op zijn opwarmtijd.',
+  lead_held_evidence: 'Voorlopig niet geleerd. Te weinig van zijn recente ochtenden telden mee, dus de E32 let op zijn opwarmtijd.',
+  lead_held_step: 'Voorlopig niet geleerd. De bijstelling veranderde in één dag flink, dus de E32 let erop.',
+  lead_held_range: 'Voorlopig niet geleerd. De bijstelling zit aan haar grens, dus de E32 let erop.',
+  lead_never: 'niet warm binnen 3 uur', lead_mornings: 'Laatste ochtenden, oudste eerst: {list}.', lead_not_counted: '{what} (telt niet mee)',
   model: 'Ruimtemodel', model_collecting: 'verzamelt metingen', model_checking: 'voorspellingen {n} van {m} dagen goed',
   model_trusted: 'betrouwbaar: zijn voorspellingen kloppen', model_demoted: 'controleert opnieuw: {n} van {m} dagen goed',
   advice: 'Advies', advice_only: 'Alleen advies: je weekprogramma blijft zoals het is.',
@@ -377,7 +405,7 @@ class OpenThermostatLearningRoom extends HTMLElement {
     const tiles = this.tiles(facts);
     if (tiles) wrap.append(tiles);
     const rows = make('div', {class: 'rows'});
-    for (const row of [this.smartRow(facts), this.morningRow(facts), this.modelRow(facts), this.adviceRow(facts)]) if (row) rows.append(row);
+    for (const row of [this.smartRow(facts), this.morningRow(facts), this.leadRow(facts), this.modelRow(facts), this.adviceRow(facts)]) if (row) rows.append(row);
     if (rows.childElementCount) wrap.append(rows);
    }
   }
@@ -555,10 +583,31 @@ class OpenThermostatLearningRoom extends HTMLElement {
    const line = m >= NOT_WARM_MIN ? this.t('arrival_never', {when, at})
     : this.t('arrival', {when, at, how: m > 0 ? this.t('late', {d: this.whole(m)}) : m < 0 ? this.t('early', {d: this.whole(m)}) : this.t('on_time')});
    const next = a.next === 'earlier' || a.next === 'later'
-    ? (finite(a.next_min) ? this.t('next_' + a.next + '_min', {n: this.whole(a.next_min)}) : this.t('next_' + a.next)) : '';
+    ? (finite(a.next_min) ? this.t('next_' + a.next + '_min', {n: this.whole(a.next_min)}) : this.t('next_' + a.next + (a.next_slow === true ? '_slow' : ''))) : '';
    parts.push(make('p', {class: 'sub', 'data-arrival': ''}, next ? line + ' ' + next : line));
   }
   return this.row('mornings', 'calendar-check-outline', parts, this._config.warm_on_time);
+ }
+ // 1.4.6: what the E32's lead guard says about the warm-up time (facts.lead, learned_overview.lead_guard): its state in
+ // a sentence and the last mornings; nothing is worked out here, and "Learned" only for the state "learned".
+ leadRow(facts) {
+  const g = facts.lead;
+  if (facts.status === 'follow' || facts.status === 'off' || !g || typeof g !== 'object') return null;
+  const mornings = Array.isArray(g.mornings) ? g.mornings : null, clean = Array.isArray(g.clean) ? g.clean : null;
+  const ok = !!mornings && !!clean && mornings.length === clean.length && mornings.length <= 5 && mornings.every(finite) && clean.every(c => typeof c === 'boolean');
+  const list = ok ? mornings : [], counts = ok ? clean : [], n = counts.filter(Boolean).length;
+  let key;
+  if (g.state === 'collecting') key = n >= 5 || !ok ? 'lead_collecting_plain' : !list.length ? 'lead_collecting_none' : list.length === 1 ? (n ? 'lead_collecting_one' : 'lead_collecting_one_not') : 'lead_collecting';
+  else if (g.state === 'held') key = ['evidence', 'step', 'range'].includes(g.reason) ? 'lead_held_' + g.reason : 'lead_held';
+  else if (g.state === 'checking' || g.state === 'learned') key = 'lead_' + g.state;
+  else return null;
+  const words = list.map((v, i) => {
+   const what = v >= NOT_WARM_MIN ? this.t('lead_never') : v > 0 ? this.t('late', {d: this.whole(v)}) : v < 0 ? this.t('early', {d: this.whole(v)}) : this.t('on_time');
+   return counts[i] ? what : this.t('lead_not_counted', {what});
+  });
+  const parts = [make('p', {class: 'text', 'data-lead': g.state}, this.t(key, {n: this.number(n), m: this.number(list.length)}))];
+  if (words.length) parts.push(make('p', {class: 'sub', 'data-lead-mornings': ''}, this.t('lead_mornings', {list: words.join(', ')})));
+  return this.row('lead', g.state === 'learned' ? 'check' : 'clock-outline', parts);
  }
  date(iso) {
   const m = typeof iso === 'string' ? iso.match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;

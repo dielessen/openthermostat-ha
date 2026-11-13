@@ -8,6 +8,7 @@
 const TEXTS = {
  nl: {
   'Set to manual by Home Assistant at {time}': 'Door Home Assistant op handmatig gezet om {time}',
+  'Running its own program': 'Eigen programma',
   'Valve control': 'Radiatorkranen aansturen',
   'Use limits between {range} with the minimum not above the maximum, and a temperature without a week program within them.': 'Gebruik grenzen tussen {range} met het minimum niet boven het maximum, en een temperatuur zonder weekprogramma daartussen.',
   'A temperature of the week program is outside the room\'s temperature limits.': 'Een temperatuur van het weekprogramma ligt buiten de temperatuurgrenzen van de ruimte.',
@@ -555,6 +556,8 @@ function settingLine(ctx) {
   if (!lines.length) lines.push(t('Nothing written to it yet.'));
   // HA-SETDEV (V4): when Home Assistant last set the device to manual (it ran its own schedule).
   if (a.setting_device_set_to_manual) lines.push(t('Set to manual by Home Assistant at {time}', {time: kit.time.moment(hass, a.setting_device_set_to_manual)}));
+  // HA-OWN-PROGRAM (1.4.6): the device reports its own program right now (live from its state).
+  if (a.setting_device_own_schedule === true) lines.push(t('Running its own program'));
   if (a.setting_device_error) lines.push(String(a.setting_device_error));
   el.hidden = false; el.textContent = kit.together(lines.join(' · '));
  };
