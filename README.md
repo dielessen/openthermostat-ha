@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/brand/logo.svg" alt="OpenThermostat" width="420">
+  <img src="https://raw.githubusercontent.com/dielessen/openthermostat-ha/main/docs/brand/logo.svg" alt="OpenThermostat" width="420">
 </p>
 
 # OpenThermostat for Home Assistant
@@ -10,8 +10,8 @@ program, and the thermostat learns how fast each room warms up, so it is warm
 when you want it. Everything stays in your own home, without a cloud account.
 
 This integration brings OpenThermostat into Home Assistant: a thermostat per
-room, a week planner card, your boiler's values, energy figures, daily backups
-and firmware updates with one click.
+room, a week planner card, your boiler's values, energy figures and daily
+backups.
 
 ## What you need
 
@@ -19,11 +19,12 @@ This integration does not work on its own. You need:
 
 - A **[BBQKees Gateway E32 V2](https://bbqkees-electronics.nl/product/gateway-e32-v2-ethernet-wifi-edition-v2/)**,
   connected to your boiler.
-- The **OpenThermostat firmware** on that gateway. You install it once over USB;
-  the Marketplace does not do that for you. See
-  [installing the firmware](https://github.com/dielessen/open_thermostat/blob/main/docs/INSTALL.md#2-install-the-firmware-on-the-e32-first-time-over-usb).
+- The **OpenThermostat firmware** on that gateway. The firmware is not available
+  for public download at the moment, and the Marketplace does not install it
+  for you. The installation guide describes
+  [installing the firmware](https://github.com/dielessen/openthermostat-ha/blob/main/docs/INSTALL.md#2-install-the-firmware-on-the-e32-first-time-over-usb).
   The gateway usually comes with EMS-ESP, which the firmware replaces, so
-  [make a backup first](https://github.com/dielessen/open_thermostat/blob/main/docs/FLASHING.md#make-a-full-backup-first).
+  [make a backup first](https://github.com/dielessen/openthermostat-ha/blob/main/docs/FLASHING.md#make-a-full-backup-first).
 - A boiler that speaks **EMS Classic (EMS 1.0)**: most Nefit, Buderus, Bosch,
   Junkers and Worcester boilers. Newer EMS+ boilers are read, and controlled once
   their model is verified.
@@ -43,7 +44,6 @@ This integration does not work on its own. You need:
   display code in words. Problems show up under Repairs.
 - Gas use for heating and hot water, if you have a gas meter in Home Assistant.
 - A daily backup of all E32 settings, which you can put back on a new E32.
-- Firmware updates for the E32 under Settings → Updates.
 - A ready-made dashboard, if you want one.
 - English and Dutch.
 
@@ -54,27 +54,27 @@ program when Home Assistant is offline.
 
 These use made-up example data, not a real home.
 
-![The OpenThermostat dashboard in Home Assistant: the house card, the rooms, today and the house](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-144.png)
+![The OpenThermostat dashboard in Home Assistant: the house card, the rooms, today and the house](https://raw.githubusercontent.com/dielessen/openthermostat-ha/main/docs/img/screenshots/ha-dashboard-144.png)
 
-![The week planner card in Home Assistant](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-week-card-144.png)
+![The week planner card in Home Assistant](https://raw.githubusercontent.com/dielessen/openthermostat-ha/main/docs/img/screenshots/ha-week-card-144.png)
 
-![What the thermostat has learned, per room](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-home-learned-144.png)
+![What the thermostat has learned, per room](https://raw.githubusercontent.com/dielessen/openthermostat-ha/main/docs/img/screenshots/e32-home-learned-144.png)
 
 <details>
 <summary>More screenshots</summary>
 
-![The Boiler tab: what the boiler does now, then what you need first](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-boiler-144.png)
+![The Boiler tab: what the boiler does now, then what you need first](https://raw.githubusercontent.com/dielessen/openthermostat-ha/main/docs/img/screenshots/ha-dashboard-boiler-144.png)
 
-![The Learning tab: what the E32 knows, the heating curve and yesterday in figures](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-learning-144.png)
+![The Learning tab: what the E32 knows, the heating curve and yesterday in figures](https://raw.githubusercontent.com/dielessen/openthermostat-ha/main/docs/img/screenshots/ha-dashboard-learning-144.png)
 
-![The E32 Overview with rooms and the boiler](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-overview-144.png)
+![The E32 Overview with rooms and the boiler](https://raw.githubusercontent.com/dielessen/openthermostat-ha/main/docs/img/screenshots/e32-overview-144.png)
 
-![A room with its week program on the E32](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-rooms-144.png)
+![A room with its week program on the E32](https://raw.githubusercontent.com/dielessen/openthermostat-ha/main/docs/img/screenshots/e32-rooms-144.png)
 
-![The E32 Boiler page](https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-boiler-144.png)
+![The E32 Boiler page](https://raw.githubusercontent.com/dielessen/openthermostat-ha/main/docs/img/screenshots/e32-boiler-144.png)
 
-<img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/ha-dashboard-phone-dark-144.png" alt="The dashboard on a phone in the dark theme" width="320">
-<img src="https://raw.githubusercontent.com/dielessen/open_thermostat/main/docs/img/screenshots/e32-overview-phone-dark-144.png" alt="The E32 Overview on a phone in the dark theme" width="320">
+<img src="https://raw.githubusercontent.com/dielessen/openthermostat-ha/main/docs/img/screenshots/ha-dashboard-phone-dark-144.png" alt="The dashboard on a phone in the dark theme" width="320">
+<img src="https://raw.githubusercontent.com/dielessen/openthermostat-ha/main/docs/img/screenshots/e32-overview-phone-dark-144.png" alt="The E32 Overview on a phone in the dark theme" width="320">
 
 </details>
 
@@ -82,7 +82,7 @@ These use made-up example data, not a real home.
 
 1. Put the OpenThermostat firmware on the E32 and connect it to your Wi-Fi and
    your MQTT broker. The
-   [installation guide](https://github.com/dielessen/open_thermostat/blob/main/docs/INSTALL.md#2-install-the-firmware-on-the-e32-first-time-over-usb)
+   [installation guide](https://github.com/dielessen/openthermostat-ha/blob/main/docs/INSTALL.md#2-install-the-firmware-on-the-e32-first-time-over-usb)
    explains how.
 2. In Home Assistant, open **Settings → Marketplace**, choose **Add from
    link** at the top right and enter `https://github.com/dielessen/openthermostat-ha`
@@ -105,24 +105,23 @@ version?**.
 
 ## Help and more information
 
-- [Installation guide](https://github.com/dielessen/open_thermostat/blob/main/docs/INSTALL.md)
-- [User guide](https://github.com/dielessen/open_thermostat/blob/main/docs/USER-GUIDE.md)
-- [Switching over from your old thermostat](https://github.com/dielessen/open_thermostat/blob/main/docs/SWITCHOVER.md)
-- [Release notes](https://github.com/dielessen/open_thermostat/blob/main/docs/modern-thermostat/HA-RELEASE-NOTES.md)
-- [The main project](https://github.com/dielessen/open_thermostat): the firmware, all documentation and the source code
+- [Installation guide](https://github.com/dielessen/openthermostat-ha/blob/main/docs/INSTALL.md)
+- [User guide](https://github.com/dielessen/openthermostat-ha/blob/main/docs/USER-GUIDE.md) and its [reference](https://github.com/dielessen/openthermostat-ha/blob/main/docs/USER-GUIDE-REFERENCE.md)
+- [Devices it works with](https://github.com/dielessen/openthermostat-ha/blob/main/docs/DEVICES.md)
+- [Release notes](https://github.com/dielessen/openthermostat-ha/blob/main/RELEASE-NOTES.md)
 
-Questions or problems? [Open an issue](https://github.com/dielessen/open_thermostat/issues) in the main project. It
-helps to add the integration's diagnostics (Settings → Devices & services →
-OpenThermostat → ⋮ → Download diagnostics) and the E32's firmware version.
+Questions or problems? [Open an issue](https://github.com/dielessen/openthermostat-ha/issues). It helps to add the
+integration's diagnostics (Settings → Devices & services → OpenThermostat → ⋮ →
+Download diagnostics) and the E32's firmware version.
 
 OpenThermostat is an independent project. It is not made or supported by
 BBQKees Electronics.
 
 ## Versions and licence
 
-Each version here is exactly the released package `ha-v<version>` of the main
-project, checked against its SHA-256 list.
+Each version here is exactly the released package of that version, checked
+against its SHA-256 list.
 
-MIT licence (see [LICENSE](LICENSE)). OpenThermostat started as
+MIT licence (see [LICENSE](https://github.com/dielessen/openthermostat-ha/blob/main/LICENSE)). OpenThermostat started as
 [OpenThermostat by Pawel Filipczak / intuibase](https://github.com/intuibase/open_thermostat).
 Further development and releases are by Mark Dielessen.

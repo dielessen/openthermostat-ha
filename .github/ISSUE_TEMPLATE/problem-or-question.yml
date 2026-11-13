@@ -1,0 +1,34 @@
+name: Problem or question
+description: Something does not work, or you are not sure how it is meant to work.
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please look at the user guide first (docs/USER-GUIDE.md, "Something is not right?"). Everything you post
+        here is public: leave out passwords, Wi-Fi names and addresses.
+  - type: input
+    id: firmware
+    attributes:
+      label: E32 firmware
+      placeholder: v1.2.0-e32v2
+    validations:
+      required: true
+  - type: input
+    id: integration
+    attributes:
+      label: Home Assistant integration
+      description: The version, or "none" without Home Assistant.
+      placeholder: "1.2.0"
+  - type: textarea
+    id: what
+    attributes:
+      label: What is the matter
+      description: What you see, what you expected, and when it started.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Your boiler, a screenshot, the diagnostics download from Home Assistant.

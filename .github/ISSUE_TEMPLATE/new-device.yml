@@ -1,0 +1,85 @@
+name: Add or fix a device
+description: A radiator valve, thermostat, sensor or boiler that OpenThermostat does not read well, or one you want to add. Send what it reports, so it can become a test.
+title: "Device: "
+labels: ["device"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. What a device really sends is the best test there is: your capture goes into the project's
+        device collection, and every build is checked against it from then on. How to capture it, step by step:
+        [Add a device: send a capture](https://github.com/dielessen/openthermostat-ha/blob/main/docs/ADD-A-DEVICE.md).
+        Everything you post here is public. A device state holds no passwords, but check it for names you would
+        rather not share (you can rename them before you paste).
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: Make and model as on the box or in Zigbee2MQTT, for example "Sonoff TRV-ZBT" or "Bosch Room thermostat II".
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of device
+      options:
+        - Radiator valve
+        - Thermostat or setting device
+        - Temperature sensor
+        - Boiler
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: connection
+    attributes:
+      label: How it is connected
+      description: For example "Zigbee2MQTT on the same MQTT broker as the E32", "ZHA in Home Assistant", "Bluetooth", "EMS bus behind a Bosch EasyControl Adapter".
+    validations:
+      required: true
+  - type: input
+    id: z2m_version
+    attributes:
+      label: Zigbee2MQTT version
+      description: Zigbee2MQTT → Settings → About. Write "none" without Zigbee2MQTT.
+      placeholder: "2.14.3"
+  - type: input
+    id: firmware
+    attributes:
+      label: Device firmware
+      description: The device's own firmware version (Zigbee2MQTT → the device → About, or Home Assistant's device page).
+  - type: textarea
+    id: z2m_state
+    attributes:
+      label: Zigbee2MQTT state
+      description: |
+        The raw state as Zigbee2MQTT publishes it, as text (not a screenshot). Either the device's **State** tab in
+        the Zigbee2MQTT frontend (copy everything), or one message of
+        `mosquitto_sub -h <broker> -u <user> -P <password> -t 'zigbee2mqtt/<device name>' -C 1`.
+      render: json
+  - type: textarea
+    id: ha_state
+    attributes:
+      label: Home Assistant entity attributes
+      description: |
+        Home Assistant → Developer tools → States → the device's entity (for a thermostat or valve its `climate.`
+        entity): its entity ID, its state and the attributes, as text.
+      render: yaml
+  - type: input
+    id: diagnostics
+    attributes:
+      label: E32 Diagnostics line
+      description: |
+        "Messages the E32 could not read" on the E32's Diagnostics page, or in Home Assistant under Diagnostics →
+        Connection with the E32 (E32 1.4.4 and newer). Write "none" when it is not there.
+  - type: input
+    id: versions
+    attributes:
+      label: E32 firmware and Home Assistant integration
+      description: As the E32's About page and Settings → Devices & services → OpenThermostat show them.
+      placeholder: "v1.4.4-e32v2, 1.4.4"
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What works, what does not, and what you expected (for example "no battery on the room card").

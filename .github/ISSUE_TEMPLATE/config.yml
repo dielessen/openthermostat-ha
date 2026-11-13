@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: User guide
+    url: https://github.com/dielessen/openthermostat-ha/blob/main/docs/USER-GUIDE.md
+    about: Installing, setting up and living with OpenThermostat, step by step.
+  - name: Installation guide
+    url: https://github.com/dielessen/openthermostat-ha/blob/main/docs/INSTALL.md
+    about: The first installation over USB, the Home Assistant integration and updates.
